@@ -1,4 +1,5 @@
 use std::fmt;
+use std::ops::Range;
 use std::sync::atomic::Ordering;
 use std::time::SystemTime;
 use crate::fifo::fifo_cnt::{counter_len, LockFreeIndexStore, LockIndexStore};
@@ -10,14 +11,12 @@ mod fifo_cnt;
 /// It is a mask for the index for the ring buffer
 ///
 /// Size is mask + 1
-const RINGBUF_IND_MASK: usize = 255;
-const RINGBUF_IND_CLEANUP: usize = 230;
-const RINGBUF_IND_CLEANUP_SIZE: usize = 50;
+const RINGBUF_IND_MASK: usize = 1023;
+const RINGBUF_IND_CLEANUP_SIZE: usize = 500;
 const MAX_IN_PROGRESS_BYTES_WRITE: u8 = 6;
 
 pub struct AtomicTimestampsRing {
     buf: *mut [u8],
-    start: SystemTime,
     write_ind : LockFreeIndexStore,
     read_ind: LockIndexStore,
 }
@@ -28,23 +27,15 @@ unsafe impl Sync for AtomicTimestampsRing {}
 impl AtomicTimestampsRing {
 
     pub fn new() -> Self {
-        let now = SystemTime::now();
 
         let mut vec = Vec::with_capacity(RINGBUF_IND_MASK + 1);
         unsafe { vec.set_len(RINGBUF_IND_MASK + 1); }
         let buf = Box::into_raw(vec.into_boxed_slice());
         Self {
             buf,
-            start: now,
             read_ind: LockIndexStore::new(),
             write_ind: LockFreeIndexStore::new(),
         }
-    }
-    pub fn put_event(&self, id: u8) {
-        let t = SystemTime::now().duration_since(self.start).unwrap().as_nanos();
-        //take 7 LSB
-        let t = t as u8 & 0b0111_1111 | 0b1000_0000;
-        self.put_two(t, id);
     }
 
     #[inline]
@@ -82,18 +73,22 @@ impl AtomicTimestampsRing {
         (*self.buf).get_unchecked_mut(index)
         //&mut (*self.mem)[index]
     }
-
-    /// write two bytes into fifo
-    fn put_two(&self, v1: u8, v2: u8) {
-        unimplemented!()
-    }
+    //
+    // /// write two bytes into fifo
+    // fn put_two(&self, v1: u8, v2: u8) {
+    //     unimplemented!()
+    // }
 
     pub fn try_push(&self, v: u8) -> Option<()> {
-        let n = 1;
+        self.try_push_with(1, |_, _| v)
+    }
+
+    pub fn try_push_with<W>(&self, n: u8, mut writer: W) -> Option<()>
+        where W: FnMut(usize, usize) -> u8 {
         /// Error condition is when the next index is the read index
         let error_condition = |to_write_index: usize, _: u8| {
             let read_ind = self.read_ind.load(Ordering::SeqCst).index();
-            !can_push(read_ind, to_write_index, 1, RINGBUF_IND_MASK)
+            !can_push(read_ind, to_write_index, n, RINGBUF_IND_MASK)
 
             // to_write_index.wrapping_add(1) & RINGBUF_IND_MASK == self.read_ind.load(Ordering::SeqCst).index()
         };
@@ -103,7 +98,7 @@ impl AtomicTimestampsRing {
 
             // write mem
             unsafe {
-                *self.cell(to_write_index) = v;
+                *self.cell(to_write_index) = writer(to_write_index, (to_write_index + n as usize) & RINGBUF_IND_MASK);
             };
 
             // Mark write as done
