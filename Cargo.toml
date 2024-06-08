@@ -7,4 +7,5 @@ edition = "2021"
 log = "0.4.21"
 simple_logger = "5.0.0"
 
-
+[[bench]]
+name="tracing_bench"
