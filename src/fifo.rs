@@ -1,23 +1,20 @@
-use std::fmt;
-use std::ops::Range;
 use std::sync::atomic::Ordering;
-use std::time::SystemTime;
-use crate::fifo::fifo_cnt::{counter_len, LockFreeIndexStore, LockIndexStore};
+use crate::{fifo::fifo_cnt::{LockFreeIndexStore, LockIndexStore}, tracing::SharedTraceBufferTrait};
 
 mod fifo_cnt;
+
 
 /// Must be 2^n - 1
 ///
 /// It is a mask for the index for the ring buffer
 ///
 /// Size is mask + 1
-const RINGBUF_IND_MASK: usize = 8191;
-const RINGBUF_IND_CLEANUP_SIZE: usize = 500;
-const MAX_IN_PROGRESS_BYTES_WRITE: u8 = 6;
+const RINGBUF_IND_MASK: usize = 255;
+const MAX_IN_PROGRESS_BYTES_WRITE: u8 = 80;
 
 pub struct AtomicTimestampsRing {
     buf: *mut [u8],
-    write_ind : LockFreeIndexStore,
+    write_ind: LockFreeIndexStore,
     read_ind: LockIndexStore,
 }
 
@@ -25,68 +22,19 @@ unsafe impl Send for AtomicTimestampsRing {}
 unsafe impl Sync for AtomicTimestampsRing {}
 
 impl AtomicTimestampsRing {
-
-    pub fn new() -> Self {
-
-        let mut vec = Vec::with_capacity(RINGBUF_IND_MASK + 1);
-        unsafe { vec.set_len(RINGBUF_IND_MASK + 1); }
-        let buf = Box::into_raw(vec.into_boxed_slice());
-        Self {
-            buf,
-            read_ind: LockIndexStore::new(),
-            write_ind: LockFreeIndexStore::new(),
-        }
-    }
-
-    #[inline]
-    pub fn len(&self) -> usize {
-        let read_counters = self.read_ind.load(Ordering::SeqCst);
-        let write_counters = self.write_ind.load(Ordering::SeqCst);
-        counter_len(read_counters, write_counters, self.capacity())
-    }
-
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    #[inline(always)]
-    pub fn capacity(&self) -> usize {
-        unsafe { (*self.buf).len() }
-    }
-
-    #[inline]
-    pub fn remaining_cap(&self) -> usize {
-        let read_counters = self.read_ind.load(Ordering::SeqCst);
-        let write_counters = self.write_ind.load(Ordering::SeqCst);
-        let cap = self.capacity();
-        let read_index = read_counters.index();
-        let write_index = write_counters.index();
-        let len = if read_index <= write_index { write_index - read_index } else { write_index + cap - read_index };
-        //len is from read_index to write_index, but we have to substract write_in_process_count for a better remaining capacity approximation
-        cap - 1 - len - write_counters.in_process_count() as usize
-    }
-
     /// Returns a *mut T pointer to an indexed cell
     #[inline(always)]
     unsafe fn cell(&self, index: usize) -> *mut u8 {
         (*self.buf).get_unchecked_mut(index)
         //&mut (*self.mem)[index]
     }
-    //
-    // /// write two bytes into fifo
-    // fn put_two(&self, v1: u8, v2: u8) {
-    //     unimplemented!()
-    // }
+}
 
-    pub fn try_push(&self, v: u8) -> Option<()> {
-        self.try_push_with(1, |_| v)
-    }
+impl SharedTraceBufferTrait for AtomicTimestampsRing {
+    fn try_push(&self, v: &[u8]) -> Option<()> {
+        let n = v.len() as u8;
 
-    /// Writer is called n times, and each time should return a new value
-    pub fn try_push_with<W>(&self, n: u8, mut writer: W) -> Option<()>
-        where W: FnMut(usize) -> u8 {
-        /// Error condition is when the next index is the read index
+        // Error condition is when the next index is the read index
         let error_condition = |to_write_index: usize, _: u8| {
             let read_ind = self.read_ind.load(Ordering::SeqCst).index();
             !can_push(read_ind, to_write_index, n, RINGBUF_IND_MASK)
@@ -97,13 +45,9 @@ impl AtomicTimestampsRing {
         if let Ok((write_counters, to_write_index)) = self.write_ind.increment_in_progress(error_condition, n) {
             // n bytes are available for writing starting from to_write_index
 
-            let mut index = to_write_index;
             // write mem
-            for _ in 0..n {
-                unsafe {
-                    *self.cell(index) = writer(index);
-                };
-                index = index.wrapping_add(1) & RINGBUF_IND_MASK;
+            for (i, &v) in v.iter().enumerate() {
+                unsafe { *self.cell((to_write_index + i) & RINGBUF_IND_MASK) = v };
             }
 
             // Mark write as done
@@ -114,11 +58,10 @@ impl AtomicTimestampsRing {
         }
     }
 
-    pub fn try_pop<const N: u8>(&self) -> Option<[u8; N as usize]> {
-        let n = N;
+    fn try_pop<const N: u8>(&self) -> Option<[u8; N as usize]> {
         let error_condition = |to_read_index: usize, _: bool| {
             let write_index = self.write_ind.load(Ordering::SeqCst).index();
-            !can_pop(to_read_index, write_index, n, RINGBUF_IND_MASK)
+            !can_pop(to_read_index, write_index, N, RINGBUF_IND_MASK)
             // to_read_index == self.write_ind.load(Ordering::SeqCst).index()
         };
 
@@ -126,14 +69,24 @@ impl AtomicTimestampsRing {
             let mut popped = [0; N as usize];
             // read mem
             unsafe {
-                for i in 0..n as usize {
+                for i in 0..N as usize {
                     popped[i] = *self.cell((to_read_index + i) & RINGBUF_IND_MASK);
                 }
             }
-            self.read_ind.increment_done(read_counters, n);
+            self.read_ind.increment_done(read_counters, N);
             Some(popped)
         } else {
             None
+        }
+    }
+    fn new() -> Self {
+        let mut vec = Vec::with_capacity(RINGBUF_IND_MASK + 1);
+        unsafe { vec.set_len(RINGBUF_IND_MASK + 1); }
+        let buf = Box::into_raw(vec.into_boxed_slice());
+        Self {
+            buf,
+            read_ind: LockIndexStore::new(),
+            write_ind: LockFreeIndexStore::new(),
         }
     }
 }
@@ -152,21 +105,6 @@ impl Drop for AtomicTimestampsRing {
     fn drop(&mut self) {
         unsafe {
             let _ = Box::from_raw(self.buf);
-        }
-    }
-}
-
-impl fmt::Debug for AtomicTimestampsRing {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if f.alternate() {
-            let cap = self.capacity();
-            let read_counters = self.read_ind.load(Ordering::Relaxed);
-            let write_counters = self.write_ind.load(Ordering::Relaxed);
-            write!(f, "AtomicRingBuffer cap: {} len: {} write_index: {}, write_in_process_count: {}, write_done_count: {}, read_index: {}, read_is_locked: {}", cap, self.len(),
-                   write_counters.index(), write_counters.in_process_count(), write_counters.done_count(),
-                   read_counters.index(), read_counters.is_locked())
-        } else {
-            write!(f, "AtomicRingBuffer cap: {} len: {}", self.capacity(), self.len())
         }
     }
 }

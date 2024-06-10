@@ -9,3 +9,6 @@ simple_logger = "5.0.0"
 
 [[bench]]
 name="tracing_bench"
+
+[[example]]
+name="tracing_dense"

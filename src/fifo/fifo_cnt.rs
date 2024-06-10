@@ -34,14 +34,6 @@ impl From<LockFreeIndex> for usize {
     }
 }
 
-pub fn counter_len(read_counters: LockIndex, write_counters: LockFreeIndex, cap: usize) -> usize {
-    let read_index = read_counters.index();
-    let write_index = write_counters.index();
-    let len = if read_index <= write_index { write_index - read_index } else { write_index + cap - read_index };
-    //len is from read_index to write_index, but we have to subtract read_in_process_count for a better approximation
-    len
-}
-
 
 #[cfg_attr(target_arch = "x86_64", repr(align(128)))]
 #[cfg_attr(not(target_arch = "x86_64"), repr(align(64)))]
