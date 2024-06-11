@@ -1,61 +1,52 @@
-use std::hint::black_box;
-use std::{mem, thread};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
-use std::thread::JoinHandle;
-use std::time::{Duration, SystemTime};
+use core::hint::black_box;
+use core::mem;
+use alloc::sync::Arc;
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
+use core::time::Duration;
 use log::{info, warn};
 
-pub static IS_FINISHED: AtomicBool = AtomicBool::new(false);
-pub static FAILED_LOCKS: AtomicUsize = AtomicUsize::new(0);
-
-pub trait SharedTraceBufferTrait {
+pub trait SharedTraceBufferTrait: Send + Sync + 'static {
     fn try_push(&self, v: &[u8]) -> Option<()>;
     fn try_pop<const N: u8>(&self) -> Option<[u8; N as usize]>;
     fn new() -> Self;
 }
 
-fn recv_thread<F: SharedTraceBufferTrait + Sync + Send + 'static>(rx: Arc<F>) -> JoinHandle<()> {
-    let mut accum: u64 = 0;
-    thread::spawn(move || {
-        while !IS_FINISHED.load(Ordering::Relaxed) {
-            let bytes = rx.try_pop::<50>();
-            if bytes.is_some() {
-                accum += 50;
-            }
-            else {
-                FAILED_LOCKS.fetch_add(1, Ordering::Relaxed);
-            }
-            // std::thread::sleep(Duration::from_nanos(1));
-            thread::yield_now();
-        }
-        info!("Finished! Total received bytes: {}", accum);
-        info!("Failed try_pop calls: {}", FAILED_LOCKS.load(Ordering::Relaxed));
-    })
+pub trait TraceCollector<F: SharedTraceBufferTrait> {
+    fn spawn(ringbuf: Arc<F>, is_finished: Arc<AtomicBool>) -> Self;
+    fn wait_for_finish(self);
 }
 
-pub struct Tracer<F: SharedTraceBufferTrait> {
-    handle: Option<JoinHandle<()>>,
+pub trait TimestampImpl {
+    fn now() -> Self;
+    fn elapsed_ns(&self) -> u64;
+}
+
+pub struct Tracer<F: SharedTraceBufferTrait, I: TraceCollector<F>, T: TimestampImpl> {
     ringbuf: Arc<F>,
-    start: SystemTime,
+    start: T,
+    trace_collector: Option<I>,
 
     // 24 bits are significant
     prev_period: AtomicU32,
+
+    is_finished: Arc<AtomicBool>
 }
 
-impl<F: SharedTraceBufferTrait + Send + Sync + 'static> Tracer<F> {
+impl<F: SharedTraceBufferTrait + Send + Sync + 'static, I, T> Tracer<F, I, T>
+    where I: TraceCollector<F>, T: TimestampImpl {
     pub fn new() -> Self {
-        IS_FINISHED.store(false, Ordering::Relaxed);
-        let now = SystemTime::now();
+        let now = T::now();
 
         let ringbuf = Arc::new(F::new());
+        let is_finished = Arc::new(AtomicBool::new(false));
 
-        let handle = recv_thread(ringbuf.clone());
+        let trace_collector = Some(I::spawn(ringbuf.clone(), is_finished.clone()));
         Self {
             ringbuf,
-            handle: Some(handle),
             start: now,
             prev_period: AtomicU32::new(0),
+            trace_collector,
+            is_finished
         }
     }
     pub fn event(&self, v: u8) {
@@ -85,7 +76,7 @@ impl<F: SharedTraceBufferTrait + Send + Sync + 'static> Tracer<F> {
     fn capture_timestamp(&self) -> (u32, u8) {
         let mut prev_pr = self.prev_period.load(Ordering::Relaxed);
         loop {
-            let now = self.start.elapsed().unwrap().as_nanos() as u64; // takes 24ns
+            let now = self.start.elapsed_ns();
             // let now = 8234721;
             let now_pr = (now >> 8) as u32;
             let dif_pr = now_pr.saturating_sub(prev_pr);
@@ -105,9 +96,11 @@ impl<F: SharedTraceBufferTrait + Send + Sync + 'static> Tracer<F> {
     }
 }
 
-impl<F: SharedTraceBufferTrait> Drop for Tracer<F> {
+impl<F: SharedTraceBufferTrait, I, T> Drop for Tracer<F, I, T>
+    where I: TraceCollector<F>, T: TimestampImpl {
     fn drop(&mut self) {
+        self.is_finished.store(true, Ordering::Relaxed);
         let _ = mem::replace(&mut self.ringbuf, Arc::new(F::new()));
-        self.handle.take().unwrap().join().unwrap()
+        self.trace_collector.take().unwrap().wait_for_finish();
     }
 }

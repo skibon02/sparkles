@@ -1,5 +1,5 @@
-use std::hint::spin_loop;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use core::hint::spin_loop;
+use core::sync::atomic::{AtomicUsize, Ordering};
 use crate::fifo::RINGBUF_IND_MASK;
 
 #[derive(Eq, PartialEq, Copy, Clone)]

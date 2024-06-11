@@ -1,5 +1,9 @@
-use std::sync::atomic::Ordering;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+use core::sync::atomic::Ordering;
 use crate::{fifo::fifo_cnt::{LockFreeIndexStore, LockIndexStore}, tracing::SharedTraceBufferTrait};
+
+extern crate alloc;
 
 mod fifo_cnt;
 

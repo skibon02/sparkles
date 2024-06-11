@@ -1,4 +1,6 @@
-use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+use core::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 use log::info;
 
 use crate::tracing::SharedTraceBufferTrait;
