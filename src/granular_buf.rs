@@ -1,5 +1,6 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::ptr;
 use core::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 use log::info;
 
@@ -10,6 +11,7 @@ use crate::tracing::SharedTraceBufferTrait;
 
 const SPLITS: usize = 4;
 
+
 pub struct GranularBuf {
     buf: *mut [u8],
     counters: [AtomicU8; 4],
@@ -17,14 +19,10 @@ pub struct GranularBuf {
 
 impl GranularBuf {
     #[inline(always)]
-    fn slice_buf_mut(&self, index: usize) -> &mut[u8] {
-        &mut (unsafe { &mut *self.buf })[index*128..]
-        //&mut (*self.mem)[index]
+    fn slice_buf_raw(&self, index: usize) -> *mut u8 {
+        unsafe { self.buf.as_mut_ptr().add(index << 7) }
     }
 }
-
-static TRY_PUSH_CNT: AtomicUsize = AtomicUsize::new(0);
-static TRY_POP_CNT: AtomicUsize = AtomicUsize::new(0);
 
 unsafe impl Send for GranularBuf {}
 unsafe impl Sync for GranularBuf {}
@@ -47,16 +45,12 @@ impl SharedTraceBufferTrait for GranularBuf {
 
                 // We got access to range from [index * 128] to [(index+1) * 128]
                 // write values
-                let buf = self.slice_buf_mut(slice_index);
-                for (i, &v) in val.iter().enumerate() {
-                    buf[buf_index as usize + i] = v;
-                }
+                unsafe { ptr::copy_nonoverlapping(val.as_ptr(), self.slice_buf_raw(slice_index).add(buf_index as usize), n as usize); }
 
                 // release lock and update counters 0x80 & !0x7f
                 let new_counters = buf_index.wrapping_add(n);
                 c.store(new_counters, Ordering::Relaxed);
 
-                TRY_PUSH_CNT.fetch_add(1, Ordering::Relaxed);
 
                 return Some(())
             }
@@ -65,7 +59,6 @@ impl SharedTraceBufferTrait for GranularBuf {
     }
 
     fn try_pop<const N: u8>(&self) -> Option<[u8; N as usize]> {
-
         // 4 attempts to write
         for (slice_index, c) in self.counters.iter().enumerate() {
             if let Ok(v) = c.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |c| {
@@ -78,19 +71,14 @@ impl SharedTraceBufferTrait for GranularBuf {
             }) {
                 let buf_index = v & 0x7F;
 
+                let mut res = [0; N as usize];
                 // We got access to range from [index * 128] to [(index+1) * 128]
                 // pop values
-                let mut res = [0; N as usize];
-                let buf = self.slice_buf_mut(slice_index);
-                for (i, v) in res.iter_mut().enumerate() {
-                    *v = buf[buf_index as usize - 1 - i];
-                }
+                unsafe { ptr::copy_nonoverlapping(self.slice_buf_raw(slice_index).add((buf_index - N) as usize), res.as_mut_ptr(), N as usize); }
 
                 // release lock and update counter
                 let new_counters = buf_index.wrapping_sub(N);
                 c.store(new_counters, Ordering::Relaxed);
-
-                TRY_POP_CNT.fetch_add(1, Ordering::Relaxed);
 
                 return Some(res)
             }
@@ -111,9 +99,24 @@ impl SharedTraceBufferTrait for GranularBuf {
     }
 }
 
-impl Drop for GranularBuf {
-    fn drop(&mut self) {
-        info!("try_push calls: {}", TRY_PUSH_CNT.load(Ordering::Relaxed));
-        info!("try_pop calls: {}", TRY_POP_CNT.load(Ordering::Relaxed));
+pub mod test {
+    #[test]
+    pub fn buf_operations() {
+        use crate::granular_buf::GranularBuf;
+        use crate::tracing::SharedTraceBufferTrait;
+
+        let buf = GranularBuf::new();
+
+        let data = [1, 2, 3, 4, 5, 6, 7, 8];
+        let data2 = [9, 10, 11, 12, 13, 14, 15, 16];
+
+        buf.try_push(&data).unwrap();
+        buf.try_push(&data2).unwrap();
+
+        let res = buf.try_pop::<8>().unwrap();
+        assert_eq!(res, data2);
+
+        let res = buf.try_pop::<8>().unwrap();
+        assert_eq!(res, data);
     }
 }

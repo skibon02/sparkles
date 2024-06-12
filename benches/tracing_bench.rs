@@ -3,7 +3,6 @@ extern crate test;
 
 use std::sync::{Arc, Mutex};
 use test::{Bencher, black_box};
-use tracer::{granular_buf::GranularBuf, tracing::Tracer};
 use tracer::r#impl::std_impl::LockFreeTracer;
 use tracer::tracing::{SharedTraceBufferTrait, TraceCollector};
 
@@ -115,7 +114,7 @@ fn bench_arithmetic_operations(b: &mut Bencher) {
 
 #[bench]
 fn bench_arithmetic_operations_with_tracing(b: &mut Bencher) {
-    let tracer = Arc::new(Tracer::new());
+    let tracer = Arc::new(LockFreeTracer::new());
 
     b.iter(|| {
         perform_work_with_tracing(tracer.clone());
@@ -125,7 +124,7 @@ fn bench_arithmetic_operations_with_tracing(b: &mut Bencher) {
 
 #[bench]
 fn bench_arithmetic_operations_with_tracing_2threads(b: &mut Bencher) {
-    let tracer = Arc::new(Tracer::new());
+    let tracer = Arc::new(LockFreeTracer::new());
 
     b.iter(|| {
         perform_work_with_tracing_2_threads(tracer.clone());
@@ -135,7 +134,7 @@ fn bench_arithmetic_operations_with_tracing_2threads(b: &mut Bencher) {
 
 #[bench]
 fn bench_arithmetic_operations_with_tracing_4threads(b: &mut Bencher) {
-    let tracer = Arc::new(Tracer::new());
+    let tracer = Arc::new(LockFreeTracer::new());
 
     b.iter(|| {
         perform_work_with_tracing_4_threads(tracer.clone());
@@ -145,7 +144,7 @@ fn bench_arithmetic_operations_with_tracing_4threads(b: &mut Bencher) {
 
 #[bench]
 fn bench_empty_tracing(b: &mut Bencher) {
-    let tracer = Arc::new(Tracer::new());
+    let tracer = Arc::new(LockFreeTracer::new());
 
     b.iter(|| {
         perform_only_tracing(tracer.clone());

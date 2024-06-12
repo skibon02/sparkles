@@ -1,4 +1,5 @@
 #![feature(generic_const_exprs)]
+#![feature(slice_ptr_get)]
 #![no_std]
 
 extern crate alloc;

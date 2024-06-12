@@ -1,4 +1,3 @@
-use core::hint::black_box;
 use core::mem;
 use alloc::sync::Arc;
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
@@ -50,8 +49,8 @@ impl<F: SharedTraceBufferTrait + Send + Sync + 'static, I, T> Tracer<F, I, T>
         }
     }
     pub fn event(&self, v: u8) {
-        let (mut dif_pr, now) = black_box(self.capture_timestamp());
-        let mut buf = [0; 20];
+        let (mut dif_pr, now) = self.capture_timestamp();
+        let mut buf = [0; 8];
         buf[0] = v | 0x80;
         buf[1] = now;
 
@@ -72,27 +71,28 @@ impl<F: SharedTraceBufferTrait + Send + Sync + 'static, I, T> Tracer<F, I, T>
         }
     }
 
-    /// returns dif_pr and 8 last bits of timestamp
+    /// Timings:
+    /// In normal case (low contention) cost of this function is 1-2 ns + cost of self.start.elapsed_ns()
     fn capture_timestamp(&self) -> (u32, u8) {
         let mut prev_pr = self.prev_period.load(Ordering::Relaxed);
-        loop {
-            let now = self.start.elapsed_ns();
-            // let now = 8234721;
-            let now_pr = (now >> 8) as u32;
-            let dif_pr = now_pr.saturating_sub(prev_pr);
-            if dif_pr > 0 {
-                match self.prev_period.compare_exchange(prev_pr, now_pr, Ordering::Relaxed, Ordering::Relaxed) {
-                    Ok(_) => {
-                        return (dif_pr, now as u8);
-                    },
-                    Err(x) => prev_pr = x
+        unsafe {
+            loop {
+                let now = self.start.elapsed_ns();
+                // let now = 8234721;
+                let now_pr = (now >> 8) as u32;
+                let dif_pr = now_pr.unchecked_sub(prev_pr);
+                if dif_pr > 0 {
+                    match self.prev_period.compare_exchange(prev_pr, now_pr, Ordering::Relaxed, Ordering::Relaxed) {
+                        Ok(_) => {
+                            return (dif_pr, now as u8);
+                        },
+                        Err(x) => prev_pr = x
+                    }
+                } else {
+                    return (0, now as u8);
                 }
             }
-            else {
-                return (0, now as u8);
-            }
         }
-        // (1, 27)
     }
 }
 

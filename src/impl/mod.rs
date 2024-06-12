@@ -4,6 +4,7 @@ pub mod std_impl {
     extern crate std;
 
     use alloc::sync::Arc;
+    use core::ops::Sub;
     use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use log::info;
     use crate::fifo::AtomicTimestampsRing;
@@ -39,17 +40,17 @@ pub mod std_impl {
         }
     }
 
-    pub struct SystemTimeTimestamp(std::time::SystemTime);
+    pub struct SystemTimeTimestamp(std::time::Instant);
 
     impl TimestampImpl for SystemTimeTimestamp {
         fn now() -> Self {
-            SystemTimeTimestamp(std::time::SystemTime::now())
+            SystemTimeTimestamp(std::time::Instant::now())
         }
 
         fn elapsed_ns(&self) -> u64 {
-            self.0.elapsed().unwrap().as_nanos() as u64
+            std::time::Instant::now().sub(self.0).as_nanos() as u64
         }
     }
 
-    pub type LockFreeTracer = Tracer<AtomicTimestampsRing, ThreadTraceCollector, SystemTimeTimestamp>;
+    pub type LockFreeTracer = Tracer<GranularBuf, ThreadTraceCollector, SystemTimeTimestamp>;
 }
