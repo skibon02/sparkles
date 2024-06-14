@@ -1,0 +1,17 @@
+[package]
+name = "tracer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+log = { version = "0.4.21", default-features = false }
+
+[dev-dependencies]
+simple_logger = "5.0.0"
+tracing = "0.1.40"
+puffin_http = "0.16.0"
+puffin = { version = "0.19.0", features = ["packing"] }
+tracing-timing = "0.6.0"
+
+[profile.release]
+debug=2

@@ -1,17 +1,6 @@
-[package]
-name = "tracer"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-log = { version = "0.4.21", default-features = false }
-[dev-dependencies]
-simple_logger = "5.0.0"
-
-
-[features]
-default = ["std"]
-std = []
-
-[profile.release]
-debug=2
+[workspace]
+resolver="2"
+members = [
+"trace_collector",
+"trace_acceptor"
+]
