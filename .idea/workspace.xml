@@ -68,7 +68,7 @@
     "org.rust.first.attach.projects": "true"
   }
 }]]></component>
-  <component name="RunManager" selected="Cargo.Run tracing_dense">
+  <component name="RunManager" selected="Cargo.Run tracing_lib">
     <configuration name="Run listen_and_print" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
       <option name="command" value="run --package trace_acceptor --example listen_and_print" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
@@ -103,6 +103,23 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
+    <configuration name="Run tracing_lib" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="run --package tracer --example tracing_lib" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="Test tracer" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
       <option name="command" value="test --workspace" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
@@ -122,6 +139,7 @@
     </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Cargo.Run tracing_lib" />
         <item itemvalue="Cargo.Run tracing_dense" />
         <item itemvalue="Cargo.Run listen_and_print" />
       </list>
