@@ -8,22 +8,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="0ca26552-0624-4319-9af1-31909bf6c144" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/trace_acceptor/examples/listen_and_print.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/sandbox.iml" beforeDir="false" />
+      <change afterPath="$PROJECT_DIR$/trace_acceptor/src/perfetto_format.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/benches/tracing_bench.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/examples/tracing_dense.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/fifo.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/fifo/fifo_cnt.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/granular_buf.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/impl/mod.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/lib.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/tracing.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_acceptor/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/trace_acceptor/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_acceptor/examples/listen_and_print.rs" beforeDir="false" afterPath="$PROJECT_DIR$/trace_acceptor/examples/listen_and_print.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_acceptor/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/trace_acceptor/src/lib.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -43,32 +33,33 @@
   <component name="MacroExpansionManager">
     <option name="directoryName" value="b44lo88v" />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "customColor": "",
-  "associatedIndex": 2
-}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;customColor&quot;: &quot;&quot;,
+  &quot;associatedIndex&quot;: 2
+}</component>
   <component name="ProjectId" id="2ht7bsFBXkvGXeg4j8T6D6hl6oJ" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Cargo.Run listen_and_print.executor": "Run",
-    "Cargo.Run tracing_dense.executor": "Run",
-    "Cargo.Test tracer.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.rust.reset.selective.auto.import": "true",
-    "git-widget-placeholder": "main",
-    "node.js.detected.package.eslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
-    "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
-    "org.rust.first.attach.projects": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Cargo.Run listen_and_print.executor&quot;: &quot;Run&quot;,
+    &quot;Cargo.Run tracing_dense.executor&quot;: &quot;Run&quot;,
+    &quot;Cargo.Test tracer.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/skygrel19/projects/tracer-embedded&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;org.rust.cargo.project.model.PROJECT_DISCOVERY&quot;: &quot;true&quot;,
+    &quot;org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon&quot;: &quot;&quot;,
+    &quot;org.rust.first.attach.projects&quot;: &quot;true&quot;
   }
-}]]></component>
-  <component name="RunManager" selected="Cargo.Run tracing_lib">
+}</component>
+  <component name="RunManager" selected="Cargo.Run listen_and_print">
     <configuration name="Run listen_and_print" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
       <option name="command" value="run --package trace_acceptor --example listen_and_print" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
@@ -139,9 +130,9 @@
     </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Cargo.Run listen_and_print" />
         <item itemvalue="Cargo.Run tracing_lib" />
         <item itemvalue="Cargo.Run tracing_dense" />
-        <item itemvalue="Cargo.Run listen_and_print" />
       </list>
     </recent_temporary>
   </component>
@@ -157,6 +148,8 @@
       <option name="presentableId" value="Default" />
       <updated>1718401594550</updated>
       <workItem from="1718401595748" duration="3388000" />
+      <workItem from="1718456850483" duration="3915000" />
+      <workItem from="1718464657353" duration="414000" />
     </task>
     <servers />
   </component>
