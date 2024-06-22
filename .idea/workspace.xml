@@ -7,13 +7,21 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="0ca26552-0624-4319-9af1-31909bf6c144" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/trace_acceptor/src/perfetto_format.rs" afterDir="false" />
+    <list default="true" id="0ca26552-0624-4319-9af1-31909bf6c144" name="Changes" comment="workspace.xml">
+      <change afterPath="$PROJECT_DIR$/trace_collector/examples/timestamp_tests.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/trace_collector/src/id_mapping.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/tracer.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/tracer.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/trace_acceptor/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/trace_acceptor/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/trace_acceptor/examples/listen_and_print.rs" beforeDir="false" afterPath="$PROJECT_DIR$/trace_acceptor/examples/listen_and_print.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/trace_acceptor/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/trace_acceptor/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_collector/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/trace_collector/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_collector/benches/tracing_bench.rs" beforeDir="false" afterPath="$PROJECT_DIR$/trace_collector/benches/tracing_bench.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_collector/examples/tracing_dense.rs" beforeDir="false" afterPath="$PROJECT_DIR$/trace_collector/examples/tracing_dense.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_collector/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/trace_collector/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_collector/src/thread_local_storage.rs" beforeDir="false" afterPath="$PROJECT_DIR$/trace_collector/src/thread_local_storage.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_collector/src/timestamp.rs" beforeDir="false" afterPath="$PROJECT_DIR$/trace_collector/src/timestamp.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -44,7 +52,9 @@
   </component>
   <component name="PropertiesComponent">{
   &quot;keyToString&quot;: {
+    &quot;Cargo.Bench bench_hashtable_lookup.executor&quot;: &quot;Run&quot;,
     &quot;Cargo.Run listen_and_print.executor&quot;: &quot;Run&quot;,
+    &quot;Cargo.Run timestamp_tests.executor&quot;: &quot;Run&quot;,
     &quot;Cargo.Run tracing_dense.executor&quot;: &quot;Run&quot;,
     &quot;Cargo.Test tracer.executor&quot;: &quot;Run&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
@@ -59,9 +69,43 @@
     &quot;org.rust.first.attach.projects&quot;: &quot;true&quot;
   }
 }</component>
-  <component name="RunManager" selected="Cargo.Run listen_and_print">
+  <component name="RunManager" selected="Cargo.Run tracing_dense">
+    <configuration name="Bench bench_hashtable_lookup" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="bench --package tracer --bench tracing_bench bench_hashtable_lookup -- --exact" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="Run listen_and_print" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
       <option name="command" value="run --package trace_acceptor --example listen_and_print" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Run timestamp_tests" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="run --package tracer --example timestamp_tests" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <envs />
       <option name="emulateTerminal" value="true" />
@@ -130,9 +174,11 @@
     </configuration>
     <recent_temporary>
       <list>
-        <item itemvalue="Cargo.Run listen_and_print" />
-        <item itemvalue="Cargo.Run tracing_lib" />
         <item itemvalue="Cargo.Run tracing_dense" />
+        <item itemvalue="Cargo.Run listen_and_print" />
+        <item itemvalue="Cargo.Bench bench_hashtable_lookup" />
+        <item itemvalue="Cargo.Run timestamp_tests" />
+        <item itemvalue="Cargo.Run tracing_lib" />
       </list>
     </recent_temporary>
   </component>
@@ -150,10 +196,21 @@
       <workItem from="1718401595748" duration="3388000" />
       <workItem from="1718456850483" duration="3915000" />
       <workItem from="1718464657353" duration="414000" />
+      <workItem from="1718495551473" duration="1493000" />
+      <workItem from="1718535437957" duration="5765000" />
+      <workItem from="1718832575653" duration="2294000" />
+      <workItem from="1718836021603" duration="5000" />
+      <workItem from="1719007112640" duration="3404000" />
+      <workItem from="1719042834499" duration="9750000" />
+      <workItem from="1719089004447" duration="4702000" />
     </task>
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="workspace.xml" />
+    <option name="LAST_COMMIT_MESSAGE" value="workspace.xml" />
   </component>
 </project>

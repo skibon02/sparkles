@@ -1,6 +1,10 @@
 [workspace]
 resolver="2"
 members = [
-"trace_collector",
-"trace_acceptor"
+    "trace_collector",
+    "trace_acceptor",
+    "tracer-macro"
 ]
+
+[profile.release]
+debug=2

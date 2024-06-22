@@ -1,6 +1,6 @@
 mod perfetto_format;
 
-use std::mem;
+use std::{mem, thread};
 use std::net::UdpSocket;
 use std::sync::Mutex;
 use std::time::Instant;
@@ -12,8 +12,8 @@ pub struct TraceAcceptor {
     stream_parser: ParsingStateMachine,
 }
 
-const MEASURE_DUR_NS: usize = 115 * 5; // 115 cycles * 5ns
-const TRANSMIT_DUR_NS: usize = 5648 * 5; // 5648 cycles * 5ns
+const MEASURE_DUR_NS: usize = 20;
+const TRANSMIT_DUR_NS: usize = 200;
 
 lazy_static! {
     pub static ref TRACE_RESULT_FILE: Mutex<PerfettoTraceFile> = Mutex::new(PerfettoTraceFile::new());
@@ -60,6 +60,17 @@ pub enum TracingEventId {
 
     DmaWakerCall,
     DmaPollFn,
+
+    Unknown, // 28
+}
+
+impl From<u8> for TracingEventId {
+    fn from(val: u8) -> Self {
+        match val {
+            0..28 => unsafe { mem::transmute(val) },
+            _ => Unknown,
+        }
+    }
 }
 use TracingEventId::*;
 
@@ -78,7 +89,6 @@ impl TraceAcceptor {
         let mut total_pr = 0;
         let mut first = true;
         info!("Listening for incoming packets...");
-
 
         {
             let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
@@ -117,27 +127,42 @@ impl TraceAcceptor {
         let mut bytes_cnt = 0;
         let mut events_cnt = 0;
         let mut packets_cnt = 0;
+
+        let (mut tx, mut rx) = std::sync::mpsc::channel::<Vec<TracingEvent>>();
+        let parsing_thread = thread::spawn(move || {
+            while let Ok(events) = rx.recv() {
+                for event in events {
+                    if first {
+                        first = false;
+                    }
+                    else {
+                        total_pr += event.2;
+                    }
+                    // add to trace file
+                    let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
+                    trace_res_file.add_point_event(format!("{:?}", event.0), event.0 as u8, ((event.1 as u64 | (total_pr << 16)) as f64 / 2.495) as u64);
+                }
+            }
+        });
+        let mut events = Vec::new();
         loop {
             let c = udp_socket.recv(&mut buf).unwrap();
             if c == 0 {
                 break;
             }
             let new_events = self.stream_parser.parse_many(&buf[..c]);
-            debug!("Parsed {} events", new_events.len());
-            for event in &new_events {
-                if first {
-                    first = false;
-                }
-                else {
-                    total_pr += event.2 as u64;
-                }
+            let new_events_len = new_events.len();
+            debug!("Parsed {} events", new_events_len);
 
-                // add to trace file
-                let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
-                trace_res_file.add_point_event(format!("{:?}", event.0), event.0 as u8, (event.1 as u64 | (total_pr << 8)) * 5);
+            for event in new_events {
+                events.push(event);
+                if events.len() > 100_000 {
+                    // info!("Sending {} events", events.len());
+                    tx.send(mem::replace(&mut events, Vec::new())).unwrap();
+                }
             }
             bytes_cnt += c;
-            events_cnt += new_events.len();
+            events_cnt += new_events_len;
             packets_cnt += 1;
 
             if start.elapsed().as_secs() > last_sec_print {
@@ -158,42 +183,48 @@ impl TraceAcceptor {
                 packets_cnt = 0;
             }
         }
+        parsing_thread.join().unwrap();
         info!("Disconnected!");
 
     }
 }
 
 /// event, timestamp end (cpu cycles), dif_pr (24 bits)
-#[derive(Debug)]
-pub struct TracingEvent(TracingEventId, u8, u32);
+#[derive(Debug, Copy, Clone)]
+pub struct TracingEvent(TracingEventId, u16, u64);
 
 #[derive(Copy,Clone, Default)]
 pub enum ParsingStateMachine {
     #[default]
     EventId,
-    Timestamp(TracingEventId),
-    TimestampPrOrEventId(TracingEventId, u8, u32),
+    TimestampHigh(TracingEventId),
+    TimestampLow(TracingEventId, u8),
+    TimestampPrOrEventId(TracingEventId, u16, u64, u8),
 }
 
 impl ParsingStateMachine {
     pub fn next_byte(&mut self, b: u8) -> Option<TracingEvent> {
         match *self {
             ParsingStateMachine::EventId => unsafe {
-                *self = ParsingStateMachine::Timestamp(mem::transmute(b & 0x7F));
+                *self = ParsingStateMachine::TimestampHigh(TracingEventId::from(b & 0x7F));
                 None
             }
-            ParsingStateMachine::Timestamp(event_id) => {
-                *self = ParsingStateMachine::TimestampPrOrEventId(event_id, b, 0);
+            ParsingStateMachine::TimestampHigh(event_id) => {
+                *self = ParsingStateMachine::TimestampLow(event_id, b);
                 None
             }
-            ParsingStateMachine::TimestampPrOrEventId(event_id, now, pr) => unsafe {
+            ParsingStateMachine::TimestampLow(event_id, now) => {
+                *self = ParsingStateMachine::TimestampPrOrEventId(event_id, ((now as u16) << 8) | b as u16, 0, 0);
+                None
+            }
+            ParsingStateMachine::TimestampPrOrEventId(event_id, now, pr, cur_shift) => unsafe {
                 if b & 0x80 != 0 {
                     // new event start, finalize current event
-                    *self = ParsingStateMachine::Timestamp(mem::transmute(b & 0x7F));
+                    *self = ParsingStateMachine::TimestampHigh(TracingEventId::from(b & 0x7F));
                     Some(TracingEvent(event_id, now, pr))
                 }
                 else {
-                    *self = ParsingStateMachine::TimestampPrOrEventId(event_id, now, (pr << 7) | (b as u32 & 0x7F));
+                    *self = ParsingStateMachine::TimestampPrOrEventId(event_id, now, ((b as u64) << cur_shift as u64) | pr, cur_shift + 7);
                     None
                 }
             }

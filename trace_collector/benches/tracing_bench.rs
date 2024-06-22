@@ -1,11 +1,16 @@
 #![feature(test)]
 extern crate test;
 
+use std::arch::x86_64::__cpuid;
 use std::cell::RefCell;
+use std::hash::{DefaultHasher, RandomState};
+use std::net::UdpSocket;
 use std::sync::{Arc, Mutex};
 use test::{Bencher, black_box};
+// use gxhash::HashMapExt;
+use std::collections::HashMap;
 use tracing::{Dispatch, dispatcher, instrument};
-use tracing_timing::Histogram;
+use tracing_timing::{Histogram};
 
 const N: usize = 10_000;
 
@@ -129,7 +134,11 @@ fn bench_arithmetic_operations(b: &mut Bencher) {
     b.iter(|| {
         perform_work();
     });
-    tracer::flush();
+
+    let mut udp_socket = UdpSocket::bind("0.0.0.0:4303").unwrap();
+    udp_socket.connect("127.0.0.1:4302").unwrap();
+
+    tracer::flush(&mut udp_socket);
 }
 
 #[bench]
@@ -137,7 +146,11 @@ fn bench_arithmetic_operations_with_tracing(b: &mut Bencher) {
     b.iter(|| {
         perform_work_with_tracing();
     });
-    tracer::flush();
+
+    let mut udp_socket = UdpSocket::bind("0.0.0.0:4303").unwrap();
+    udp_socket.connect("127.0.0.1:4302").unwrap();
+
+    tracer::flush(&mut udp_socket);
 }
 
 
@@ -146,7 +159,11 @@ fn bench_arithmetic_operations_with_tracing_2threads(b: &mut Bencher) {
     b.iter(|| {
         perform_work_with_tracing_2_threads();
     });
-    tracer::flush();
+
+    let mut udp_socket = UdpSocket::bind("0.0.0.0:4303").unwrap();
+    udp_socket.connect("127.0.0.1:4302").unwrap();
+
+    tracer::flush(&mut udp_socket);
 }
 
 
@@ -155,7 +172,11 @@ fn bench_arithmetic_operations_with_tracing_4threads(b: &mut Bencher) {
     b.iter(|| {
         perform_work_with_tracing_4_threads();
     });
-    tracer::flush();
+
+    let mut udp_socket = UdpSocket::bind("0.0.0.0:4303").unwrap();
+    udp_socket.connect("127.0.0.1:4302").unwrap();
+
+    tracer::flush(&mut udp_socket);
 }
 
 
@@ -165,7 +186,11 @@ fn bench_empty_tracing(b: &mut Bencher) {
     b.iter(|| {
         perform_only_tracing();
     });
-    tracer::flush();
+
+    let mut udp_socket = UdpSocket::bind("0.0.0.0:4303").unwrap();
+    udp_socket.connect("127.0.0.1:4302").unwrap();
+
+    tracer::flush(&mut udp_socket);
 }
 
 #[bench]
@@ -194,4 +219,43 @@ fn bench_tls(b: &mut Bencher) {
     });
 
     log::info!("TLS counter: {}", CNT.with(|v| *v.borrow()));
+}
+
+
+#[bench]
+fn bench_hashtable_lookup(b: &mut Bencher) {
+    let mut hm = fxhash::FxHashMap::default();
+    // hm.reserve(256);
+    hm.insert(72389471293487i64, 1);
+    hm.insert(23412344123412, 2);
+    hm.insert(53142512341234, 3);
+    hm.insert(34232421141234, 4);
+    hm.insert(78037480232123, 5);
+
+    hm.insert(4123412341234, 3);
+    hm.insert(1235213412334, 4);
+    hm.insert(1234123523424, 5);
+
+    hm.insert(723894712934871i64, 13);
+    hm.insert(234123441234121, 23);
+    hm.insert(531425123412341, 34);
+    hm.insert(342324211412341, 42);
+    hm.insert(780374802321231, 51);
+
+    hm.insert(41234123412341, 35);
+    hm.insert(12352134123341, 43);
+    hm.insert(12341235234241, 52);
+
+    let vals = [23412344123412, 78037480232123, 72389471293487, 53142512341234, 34232421141234,
+        23412344123412, 78037480232123, 72389471293487, 53142512341234, 34232421141234];
+    let mut iter = vals.iter();
+    b.iter(|| {
+        match iter.next() {
+            Some(v) =>  {
+                black_box(hm.get(&v));
+            },
+            None => iter = vals.iter()
+        }
+
+    });
 }

@@ -1,24 +1,24 @@
+#![feature(effects)]
+
 use std::net::UdpSocket;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc::Sender;
 
 pub mod thread_local_storage;
 mod timestamp;
+mod id_mapping;
 
-pub fn event(v: u8) {
+pub fn event(hash: u32, string: &str) {
     thread_local_storage::with_thread_local_tracer(|tracer| {
-        tracer.event(v);
+        tracer.event(hash, string);
     });
 }
 
-pub fn flush() {
+pub fn flush(tx: &mut Sender<Box<[u8]>>) {
     thread_local_storage::with_thread_local_tracer(|tracer| {
-        let udp_socket = UdpSocket::bind("127.0.0.1:4303").unwrap();
-        udp_socket.connect("127.0.0.1:4302").unwrap();
-
         let bytes = tracer.flush();
         //split bytes into chunks of 1024 bytes
-        let mut chunks = bytes.chunks(5000);
-        for chunk in chunks {
-            udp_socket.send(chunk).unwrap();
-        }
+        tx.send(bytes).unwrap();
+        // println!("Packets sent: {}", PACKET_NUM.load(Ordering::Relaxed));
     });
 }
