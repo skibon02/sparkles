@@ -1,8 +1,10 @@
 #![feature(effects)]
 
+use std::io::{BufWriter, Write};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::Sender;
+use interprocess::local_socket::Stream;
 
 pub mod thread_local_storage;
 mod timestamp;
@@ -14,11 +16,14 @@ pub fn event(hash: u32, string: &str) {
     });
 }
 
-pub fn flush(tx: &mut Sender<Box<[u8]>>) {
+static PACKET_NUM: AtomicUsize = AtomicUsize::new(0);
+
+pub fn flush(writer: &mut Stream) {
     thread_local_storage::with_thread_local_tracer(|tracer| {
         let bytes = tracer.flush();
-        //split bytes into chunks of 1024 bytes
-        tx.send(bytes).unwrap();
+
+        writer.write_all(&bytes).unwrap();
+        PACKET_NUM.fetch_add(1, Ordering::Relaxed);
         // println!("Packets sent: {}", PACKET_NUM.load(Ordering::Relaxed));
     });
 }

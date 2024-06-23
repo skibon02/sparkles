@@ -7,21 +7,16 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="0ca26552-0624-4319-9af1-31909bf6c144" name="Changes" comment="workspace.xml">
-      <change afterPath="$PROJECT_DIR$/trace_collector/examples/timestamp_tests.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/trace_collector/src/id_mapping.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/tracer.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/tracer.iml" afterDir="false" />
+    <list default="true" id="0ca26552-0624-4319-9af1-31909bf6c144" name="Changes" comment="Faster tracing, sending+parting buffer (mpsc)&#10;string -&gt; hash -&gt; u8 implemented">
+      <change afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_acceptor/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/trace_acceptor/Cargo.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/trace_acceptor/examples/listen_and_print.rs" beforeDir="false" afterPath="$PROJECT_DIR$/trace_acceptor/examples/listen_and_print.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/trace_acceptor/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/trace_acceptor/src/lib.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/trace_collector/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/trace_collector/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/trace_collector/benches/tracing_bench.rs" beforeDir="false" afterPath="$PROJECT_DIR$/trace_collector/benches/tracing_bench.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/trace_collector/examples/tracing_dense.rs" beforeDir="false" afterPath="$PROJECT_DIR$/trace_collector/examples/tracing_dense.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/trace_collector/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/trace_collector/src/lib.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/trace_collector/src/thread_local_storage.rs" beforeDir="false" afterPath="$PROJECT_DIR$/trace_collector/src/thread_local_storage.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/trace_collector/src/timestamp.rs" beforeDir="false" afterPath="$PROJECT_DIR$/trace_collector/src/timestamp.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -202,8 +197,18 @@
       <workItem from="1718836021603" duration="5000" />
       <workItem from="1719007112640" duration="3404000" />
       <workItem from="1719042834499" duration="9750000" />
-      <workItem from="1719089004447" duration="4702000" />
+      <workItem from="1719089004447" duration="4886000" />
+      <workItem from="1719157647083" duration="11621000" />
     </task>
+    <task id="LOCAL-00001" summary="Faster tracing, sending+parting buffer (mpsc)&#10;string -&gt; hash -&gt; u8 implemented">
+      <option name="closed" value="true" />
+      <created>1719093793779</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1719093793779</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -211,6 +216,7 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="workspace.xml" />
-    <option name="LAST_COMMIT_MESSAGE" value="workspace.xml" />
+    <MESSAGE value="Faster tracing, sending+parting buffer (mpsc)&#10;string -&gt; hash -&gt; u8 implemented" />
+    <option name="LAST_COMMIT_MESSAGE" value="Faster tracing, sending+parting buffer (mpsc)&#10;string -&gt; hash -&gt; u8 implemented" />
   </component>
 </project>

@@ -3,17 +3,17 @@ mod perfetto_format;
 use std::{mem, thread};
 use std::net::UdpSocket;
 use std::sync::Mutex;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+use interprocess::local_socket::traits::ListenerExt;
 use lazy_static::lazy_static;
-use log::{debug, info};
+use log::{debug, error, info};
 use crate::perfetto_format::PerfettoTraceFile;
 
 pub struct TraceAcceptor {
     stream_parser: ParsingStateMachine,
 }
 
-const MEASURE_DUR_NS: usize = 20;
-const TRANSMIT_DUR_NS: usize = 200;
+const MEASURE_DUR_NS: usize = 19;
 
 lazy_static! {
     pub static ref TRACE_RESULT_FILE: Mutex<PerfettoTraceFile> = Mutex::new(PerfettoTraceFile::new());
@@ -82,9 +82,7 @@ impl TraceAcceptor {
     }
 
     pub fn listen(&mut self)  {
-        let udp_socket = UdpSocket::bind("0.0.0.0:4302").unwrap();
-
-        let mut buf = [0; 10_000];
+        // let udp_socket = UdpSocket::bind("0.0.0.0:4302").unwrap();
 
         let mut total_pr = 0;
         let mut first = true;
@@ -122,45 +120,49 @@ impl TraceAcceptor {
             trace_res_file.set_thread_name(DmaPollFn as u8, format!("{:?}", DmaPollFn));
         }
 
+
+        use interprocess::local_socket::{prelude::*, GenericNamespaced, ListenerOptions, Stream};
+        use std::io::{self, prelude::*, BufReader};
+
+        let printname = "tracer.sock";
+        let name = printname.to_ns_name::<GenericNamespaced>().unwrap();
+        let opts = ListenerOptions::new().name(name);
+
+        let listener = match opts.create_sync() {
+            Err(e) if e.kind() == io::ErrorKind::AddrInUse => {
+                error!(
+                    "Error: could not start server because the socket file is occupied. Please check if
+				{printname} is in use by another process and try again."
+                );
+                return;
+            }
+            x => x.unwrap(),
+        };
+        info!("Server running at {printname}");
+        info!("Waiting for connection...");
+        let mut buf = vec![0; 1_000_000];
+        let mut con = listener.incoming().next().unwrap().unwrap();
+        // let mut reader = BufReader::with_capacity(5_000_000, con);
+        info!("Client connected!");
+
         let start = Instant::now();
         let mut last_sec_print = 0;
         let mut bytes_cnt = 0;
         let mut events_cnt = 0;
         let mut packets_cnt = 0;
 
-        let (mut tx, mut rx) = std::sync::mpsc::channel::<Vec<TracingEvent>>();
-        let parsing_thread = thread::spawn(move || {
-            while let Ok(events) = rx.recv() {
-                for event in events {
-                    if first {
-                        first = false;
-                    }
-                    else {
-                        total_pr += event.2;
-                    }
-                    // add to trace file
-                    let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
-                    trace_res_file.add_point_event(format!("{:?}", event.0), event.0 as u8, ((event.1 as u64 | (total_pr << 16)) as f64 / 2.495) as u64);
-                }
-            }
-        });
-        let mut events = Vec::new();
+        let mut events = Vec::with_capacity(10_000_000);
         loop {
-            let c = udp_socket.recv(&mut buf).unwrap();
+            let c = con.read(&mut buf).unwrap();
             if c == 0 {
+                info!("Client disconnected! Exiting...");
                 break;
             }
             let new_events = self.stream_parser.parse_many(&buf[..c]);
             let new_events_len = new_events.len();
-            debug!("Parsed {} events", new_events_len);
+            events.extend(new_events);
 
-            for event in new_events {
-                events.push(event);
-                if events.len() > 100_000 {
-                    // info!("Sending {} events", events.len());
-                    tx.send(mem::replace(&mut events, Vec::new())).unwrap();
-                }
-            }
+            debug!("Got {} bytes, Parsed {} events", c, new_events_len);
             bytes_cnt += c;
             events_cnt += new_events_len;
             packets_cnt += 1;
@@ -169,22 +171,35 @@ impl TraceAcceptor {
                 last_sec_print = start.elapsed().as_secs();
 
                 info!("");
-                info!("Total PR: {}", total_pr);
                 info!("Packets per second: {}", packets_cnt);
                 info!("Bytes per second: {}", bytes_cnt);
                 info!("Events per second: {}", events_cnt);
                 info!("Avg bytes per event: {}", bytes_cnt as f64 / events_cnt as f64);
                 let ovh_ms = events_cnt * MEASURE_DUR_NS / 1_000;
                 info!("Total measuring overhead: {}us per second ({}%)", ovh_ms, ovh_ms as f64 / 1_000_000.0 * 100.0);
-                let ovh_us = packets_cnt * TRANSMIT_DUR_NS / 1_000;
-                info!("Total transmit overhead: {}us per second ({}%)", ovh_us, ovh_us as f64 / 1_000_000.0 * 100.0);
                 bytes_cnt = 0;
                 events_cnt = 0;
                 packets_cnt = 0;
             }
         }
-        parsing_thread.join().unwrap();
-        info!("Disconnected!");
+
+        info!("Disconnected... Start parsing");
+
+        for event in events {
+            if first {
+                first = false;
+            }
+            else {
+                total_pr += event.2;
+            }
+            // add to trace file
+            let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
+            trace_res_file.add_point_event(format!("{:?}", event.0), event.0 as u8, ((event.1 as u64 | (total_pr << 16)) as f64 / 2.495) as u64);
+        }
+
+        info!("Total PR: {}", total_pr);
+
+        info!("Finished!");
 
     }
 }
