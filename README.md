@@ -21,6 +21,7 @@
 | 8. Viewer memory limit: dynamically save/load to/from files                                                                 | 🔴     |
 | 9. Multi-app sync                                                                                                           | 🔴     |
 | 10. Global ranges                                                                                                           | 🔴     |
+| 11. Measuring overhead self-test                                                                                            | 🔴     |
 
 - 🔴 Requirement Not Met
 - 🟡 Work in Progress

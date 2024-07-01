@@ -6,22 +6,22 @@ use std::hint::black_box;
 use std::io::BufWriter;
 use interprocess::local_socket::ToNsName;
 use simple_logger::SimpleLogger;
-use tracer_macro::id_map;
+use tracer_macro::tracing_event;
 
 fn calc_sqrt(val: f64) -> f64 {
     val.sqrt()
 }
 fn perform_tracing() {
     let mut v = 0.0f64;
-    tracer::event(id_map!("meow"), "meow");
-    tracer::event(id_map!("meow1"), "meow");
-    tracer::event(id_map!("meow2"), "meow");
-    tracer::event(id_map!("meow3"), "meow");
-    tracer::event(id_map!("meow4"), "meow");
-    tracer::event(id_map!("meow5"), "meow");
+    tracing_event!("meow");
+    tracing_event!("meow1");
+    tracing_event!("meow2");
+    tracing_event!("meow3");
+    tracing_event!("meow4");
+    tracing_event!("meow5");
     for i in 0..100_000 {
         v += calc_sqrt(i as f64 + 234.532);
-        tracer::event(id_map!("haha"), "haha");
+        tracing_event!("haha");
     }
     black_box(v);
 }
