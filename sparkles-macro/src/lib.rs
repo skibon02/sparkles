@@ -2,7 +2,6 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{LitStr, parse_macro_input};
 
-
 #[proc_macro]
 pub fn tracing_event(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as LitStr);
@@ -10,7 +9,7 @@ pub fn tracing_event(input: TokenStream) -> TokenStream {
     let id = get_hash(&s) as u32;
 
     let expanded = quote! {
-        tracer::event(#id, #s)
+        sparkles::event(#id, #s)
     };
 
     TokenStream::from(expanded)

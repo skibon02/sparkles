@@ -509,6 +509,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ringbuf"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c65e4c865bc3d2e3294493dff0acf7e6c259d066e34e22059fa9c39645c3636"
+dependencies = [
+ "crossbeam-utils",
+]
+
+[[package]]
 name = "ryu"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -588,6 +597,46 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 
 [[package]]
+name = "sparkles"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "fxhash",
+ "interprocess",
+ "log",
+ "puffin",
+ "puffin_http",
+ "ringbuf",
+ "serde",
+ "simple_logger",
+ "sparkles-macro",
+ "tracing",
+ "tracing-timing",
+]
+
+[[package]]
+name = "sparkles-macro"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "sparkles-receiver"
+version = "0.1.0"
+dependencies = [
+ "ctrlc",
+ "interprocess",
+ "lazy_static",
+ "log",
+ "serde",
+ "serde_json",
+ "simple_logger",
+]
+
+[[package]]
 name = "syn"
 version = "2.0.67"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -639,43 +688,6 @@ checksum = "3f252a68540fde3a3877aeea552b832b40ab9a69e318efd078774a01ddee1ccf"
 dependencies = [
  "num-conv",
  "time-core",
-]
-
-[[package]]
-name = "trace_acceptor"
-version = "0.1.0"
-dependencies = [
- "ctrlc",
- "interprocess",
- "lazy_static",
- "log",
- "serde",
- "serde_json",
- "simple_logger",
-]
-
-[[package]]
-name = "tracer"
-version = "0.1.0"
-dependencies = [
- "fxhash",
- "interprocess",
- "log",
- "puffin",
- "puffin_http",
- "simple_logger",
- "tracer-macro",
- "tracing",
- "tracing-timing",
-]
-
-[[package]]
-name = "tracer-macro"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]

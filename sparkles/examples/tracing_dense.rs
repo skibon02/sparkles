@@ -6,7 +6,7 @@ use std::hint::black_box;
 use std::io::BufWriter;
 use interprocess::local_socket::ToNsName;
 use simple_logger::SimpleLogger;
-use tracer_macro::tracing_event;
+use sparkles_macro::tracing_event;
 
 fn calc_sqrt(val: f64) -> f64 {
     val.sqrt()
@@ -29,19 +29,11 @@ fn perform_tracing() {
 fn main() {
     SimpleLogger::new().init().unwrap();
 
-    use interprocess::local_socket::{prelude::*, GenericNamespaced, Stream};
-    use std::io::prelude::*;
-
-    let name = "tracer.sock";
-    let mut conn = Stream::connect(name.to_ns_name::<GenericNamespaced>().unwrap()).unwrap();
-    // let mut writer = BufWriter::with_capacity(10_000, conn);
-
 
     for _ in 0..10_000 {
         perform_tracing();
         // let start = Instant::now();
-
-        tracer::flush(&mut conn);
+        // sparkles::flush();
         // info!("Time taken to send all packets: {:?}", start.elapsed());
     }
 

@@ -8,8 +8,29 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="0ca26552-0624-4319-9af1-31909bf6c144" name="Changes" comment="add new requirements">
+      <change afterPath="$PROJECT_DIR$/sparkles/src/global_storage.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/tracer.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/tracer.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/trace_collector/examples/tracing_dense.rs" beforeDir="false" afterPath="$PROJECT_DIR$/trace_collector/examples/tracing_dense.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_acceptor/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_acceptor/examples/listen_and_print.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/examples/listen_and_print.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_acceptor/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_acceptor/src/perfetto_format.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/src/perfetto_format.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_collector/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/Cargo.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_collector/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_collector/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_collector/benches/tracing_bench.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/benches/tracing_bench.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_collector/examples/timestamp_tests.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/examples/timestamp_tests.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_collector/examples/tracing_dense.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/examples/tracing_dense.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_collector/examples/tracing_lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/examples/tracing_lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_collector/src/id_mapping.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/id_mapping.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_collector/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_collector/src/thread_local_storage.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/thread_local_storage.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/trace_collector/src/timestamp.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/timestamp.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tracer-macro/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-macro/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tracer-macro/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-macro/src/lib.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -48,7 +69,7 @@
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/skygrel19/projects/tracer-embedded&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/skygrel19/projects/sparkles&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
     &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
@@ -194,6 +215,9 @@
       <workItem from="1719157647083" duration="11953000" />
       <workItem from="1719254663155" duration="1393000" />
       <workItem from="1719428791257" duration="907000" />
+      <workItem from="1720048600354" duration="1547000" />
+      <workItem from="1720131355139" duration="95000" />
+      <workItem from="1720131453314" duration="5785000" />
     </task>
     <task id="LOCAL-00001" summary="Faster tracing, sending+parting buffer (mpsc)&#10;string -&gt; hash -&gt; u8 implemented">
       <option name="closed" value="true" />

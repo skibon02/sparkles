@@ -3,6 +3,10 @@
 //! 256 id variants => 1280 bytes
 //!
 //! get overhead ~10ns
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone)]
 struct U32U8Map {
     keys: [Option<u32>; 256],
     values: [Option<u8>; 256],
@@ -49,9 +53,24 @@ impl U32U8Map {
     }
 }
 
+#[derive(Clone)]
 pub struct IdStore {
     id_map: U32U8Map,
     last_id: u8,
+    tags: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct IdStoreMap {
+    id_map: Vec<String>,
+}
+
+impl From<IdStore> for IdStoreMap {
+    fn from(id_store: IdStore) -> Self {
+        Self {
+            id_map: id_store.tags
+        }
+    }
 }
 
 impl IdStore {
@@ -59,6 +78,7 @@ impl IdStore {
         Self {
             id_map: U32U8Map::new(),
             last_id: 0,
+            tags: Vec::new()
         }
     }
 
@@ -71,6 +91,7 @@ impl IdStore {
             None => {
                 self.last_id += 1;
                 self.id_map.insert(hash, self.last_id).unwrap();
+                self.tags.push(tag.to_string());
                 self.last_id
             }
         }

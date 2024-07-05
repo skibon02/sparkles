@@ -1,4 +1,4 @@
-# Tracer: tracing library
+# Sparkles: tracing library
 
 ### Implementation status
 
@@ -9,7 +9,7 @@
 | 2. Events flow up to 40kk/s in long run with no data loss (localhost environment / IPC)                                     | 🟢     |
 | 3. Events flow up to 10kk/s in long run with no data loss (real conditions: ethernet/wifi)                                  | 🟡     |
 | 4. Capture and transfer loss detection with no corruption to other captured and transmitted data                            | 🟡     |
-| 5. Configurable limit of memory consumption for trace buffer in capturing client (static/dynamic with limit)                | 🔴     |
+| 5. Configurable limit of memory consumption for trace buffer in capturing client (static/dynamic with limit)                | 🟡     |
 | **Other requirements**                                                                                                      |        |
 | 1. Event name dynamic encoding: send literal id instead of string data. Should work "on the fly" without predefined mapping | 🟡     |
 | 2. Additional simple data, attached to event. (list of integers)                                                            | 🔴     |

@@ -1,10 +1,7 @@
 [workspace]
 resolver="2"
 members = [
-    "trace_collector",
-    "trace_acceptor",
-    "tracer-macro"
+    "sparkles-receiver",
+    "sparkles-macro",
+    "sparkles"
 ]
-
-[profile.release]
-debug=2
