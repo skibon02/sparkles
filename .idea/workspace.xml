@@ -7,30 +7,19 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="0ca26552-0624-4319-9af1-31909bf6c144" name="Changes" comment="add new requirements">
-      <change afterPath="$PROJECT_DIR$/sparkles/src/global_storage.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/tracer.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/tracer.iml" afterDir="false" />
+    <list default="true" id="0ca26552-0624-4319-9af1-31909bf6c144" name="Changes" comment="Global storage implemented&#10;Renamed to sparkles">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/trace_acceptor/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/trace_acceptor/examples/listen_and_print.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/examples/listen_and_print.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/trace_acceptor/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/src/lib.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/trace_acceptor/src/perfetto_format.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/src/perfetto_format.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/trace_collector/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/Cargo.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/trace_collector/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/trace_collector/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/trace_collector/benches/tracing_bench.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/benches/tracing_bench.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/trace_collector/examples/timestamp_tests.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/examples/timestamp_tests.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/trace_collector/examples/tracing_dense.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/examples/tracing_dense.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/trace_collector/examples/tracing_lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/examples/tracing_lib.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/trace_collector/src/id_mapping.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/id_mapping.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/trace_collector/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/lib.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/trace_collector/src/thread_local_storage.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/thread_local_storage.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/trace_collector/src/timestamp.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/timestamp.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tracer-macro/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-macro/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tracer-macro/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-macro/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles-receiver/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles-receiver/examples/listen_and_print.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/examples/listen_and_print.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles-receiver/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles-receiver/src/perfetto_format.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/src/perfetto_format.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles/examples/tracing_dense.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/examples/tracing_dense.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles/src/global_storage.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/global_storage.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles/src/id_mapping.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/id_mapping.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles/src/thread_local_storage.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/thread_local_storage.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -59,28 +48,28 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Cargo.Bench bench_hashtable_lookup.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Run listen_and_print.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Run timestamp_tests.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Run tracing_dense.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Test tracer.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/skygrel19/projects/sparkles&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;org.rust.cargo.project.model.PROJECT_DISCOVERY&quot;: &quot;true&quot;,
-    &quot;org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon&quot;: &quot;&quot;,
-    &quot;org.rust.first.attach.projects&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Cargo.Bench bench_hashtable_lookup.executor": "Debug",
+    "Cargo.Run listen_and_print.executor": "Run",
+    "Cargo.Run timestamp_tests.executor": "Run",
+    "Cargo.Run tracing_dense.executor": "Debug",
+    "Cargo.Test tracer.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.rust.reset.selective.auto.import": "true",
+    "git-widget-placeholder": "main",
+    "last_opened_file_path": "/home/skygrel19/projects/sparkles",
+    "node.js.detected.package.eslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
+    "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
+    "org.rust.first.attach.projects": "true"
   }
-}</component>
+}]]></component>
   <component name="RunManager" selected="Cargo.Run tracing_dense">
     <configuration name="Bench bench_hashtable_lookup" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="command" value="bench --package tracer --bench tracing_bench bench_hashtable_lookup -- --exact" />
+      <option name="command" value="bench --package sparkles --bench tracing_bench bench_hashtable_lookup -- --exact" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <envs />
       <option name="emulateTerminal" value="true" />
@@ -97,7 +86,7 @@
       </method>
     </configuration>
     <configuration name="Run listen_and_print" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="command" value="run --package trace_acceptor --example listen_and_print" />
+      <option name="command" value="run --package sparkles --example listen_and_print" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <envs />
       <option name="emulateTerminal" value="true" />
@@ -114,7 +103,7 @@
       </method>
     </configuration>
     <configuration name="Run timestamp_tests" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="command" value="run --package tracer --example timestamp_tests" />
+      <option name="command" value="run --package sparkles --example timestamp_tests" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <envs />
       <option name="emulateTerminal" value="true" />
@@ -131,7 +120,7 @@
       </method>
     </configuration>
     <configuration name="Run tracing_dense" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="command" value="run --package tracer --example tracing_dense" />
+      <option name="command" value="run --package sparkles --example tracing_dense" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <envs />
       <option name="emulateTerminal" value="true" />
@@ -148,7 +137,7 @@
       </method>
     </configuration>
     <configuration name="Run tracing_lib" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="command" value="run --package tracer --example tracing_lib" />
+      <option name="command" value="run --package sparkles --example tracing_lib" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <envs />
       <option name="emulateTerminal" value="true" />
@@ -181,11 +170,19 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
+    <list>
+      <item itemvalue="Cargo.Test tracer" />
+      <item itemvalue="Cargo.Bench bench_hashtable_lookup" />
+      <item itemvalue="Cargo.Run listen_and_print" />
+      <item itemvalue="Cargo.Run timestamp_tests" />
+      <item itemvalue="Cargo.Run tracing_dense" />
+      <item itemvalue="Cargo.Run tracing_lib" />
+    </list>
     <recent_temporary>
       <list>
         <item itemvalue="Cargo.Run tracing_dense" />
-        <item itemvalue="Cargo.Run listen_and_print" />
         <item itemvalue="Cargo.Bench bench_hashtable_lookup" />
+        <item itemvalue="Cargo.Run listen_and_print" />
         <item itemvalue="Cargo.Run timestamp_tests" />
         <item itemvalue="Cargo.Run tracing_lib" />
       </list>
@@ -217,7 +214,9 @@
       <workItem from="1719428791257" duration="907000" />
       <workItem from="1720048600354" duration="1547000" />
       <workItem from="1720131355139" duration="95000" />
-      <workItem from="1720131453314" duration="5785000" />
+      <workItem from="1720131453314" duration="5825000" />
+      <workItem from="1720203982479" duration="6719000" />
+      <workItem from="1720257442673" duration="6012000" />
     </task>
     <task id="LOCAL-00001" summary="Faster tracing, sending+parting buffer (mpsc)&#10;string -&gt; hash -&gt; u8 implemented">
       <option name="closed" value="true" />
@@ -243,7 +242,15 @@
       <option name="project" value="LOCAL" />
       <updated>1719255358430</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="Global storage implemented&#10;Renamed to sparkles">
+      <option name="closed" value="true" />
+      <created>1720138751404</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1720138751404</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -255,6 +262,7 @@
     <MESSAGE value="Implement IPC&#10;remove mpsc&#10;Trace parser: process parsing separately from receiving" />
     <MESSAGE value="Implement IPC&#10;remove mpsc&#10;Trace parser: process parsing separately from receiving&#10;Add README.md" />
     <MESSAGE value="add new requirements" />
-    <option name="LAST_COMMIT_MESSAGE" value="add new requirements" />
+    <MESSAGE value="Global storage implemented&#10;Renamed to sparkles" />
+    <option name="LAST_COMMIT_MESSAGE" value="Global storage implemented&#10;Renamed to sparkles" />
   </component>
 </project>

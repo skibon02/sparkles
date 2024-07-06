@@ -4,7 +4,7 @@ use crate::global_storage::{GLOBAL_STORAGE, LocalPacketHeader};
 use crate::id_mapping::IdStore;
 use crate::timestamp::capture_timestamp;
 
-pub const FLUSH_THRESHOLD: usize = 10_000_000;
+pub const FLUSH_THRESHOLD: usize = 10_000;
 
 pub struct ThreadLocalStorage {
     start_timestamp: u64,
@@ -33,7 +33,9 @@ impl ThreadLocalStorage {
         if self.start_timestamp == 0 {
             self.start_timestamp = crate::timestamp::now();
         }
-        self.accum_pr += dif_pr;
+        else {
+            self.accum_pr += dif_pr;
+        }
         self.last_now = now;
 
         buf[0] = v | 0x80;
@@ -52,11 +54,13 @@ impl ThreadLocalStorage {
         // Write event packet
         self.buf.extend_from_slice(&buf[..ind]);
 
+        // Automatic flush
         if self.buf.len() > FLUSH_THRESHOLD {
             self.flush();
         }
     }
 
+    /// Flush whole event buffer data to the global storage
     pub fn flush(&mut self) {
         let data = self.buf.clone().into_boxed_slice();
         self.buf.clear();

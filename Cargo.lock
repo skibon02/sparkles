@@ -627,13 +627,14 @@ dependencies = [
 name = "sparkles-receiver"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "ctrlc",
- "interprocess",
  "lazy_static",
  "log",
  "serde",
  "serde_json",
  "simple_logger",
+ "sparkles",
 ]
 
 [[package]]

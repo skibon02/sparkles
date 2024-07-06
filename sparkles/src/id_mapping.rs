@@ -62,7 +62,7 @@ pub struct IdStore {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct IdStoreMap {
-    id_map: Vec<String>,
+    pub id_map: Vec<String>,
 }
 
 impl From<IdStore> for IdStoreMap {
@@ -89,10 +89,11 @@ impl IdStore {
                 v
             },
             None => {
+                let last_id = self.last_id;
                 self.last_id += 1;
-                self.id_map.insert(hash, self.last_id).unwrap();
+                self.id_map.insert(hash, last_id).unwrap();
                 self.tags.push(tag.to_string());
-                self.last_id
+                last_id
             }
         }
     }

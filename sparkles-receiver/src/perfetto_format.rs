@@ -16,15 +16,15 @@ impl PerfettoTraceFile {
         }
     }
 
-    pub fn add_range_event(&mut self, name: String, event_id: u8, timestamp: u64, duration: u32) {
+    pub fn add_range_event(&mut self, name: String, event_id: usize, timestamp: u64, duration: u32) {
         self.trace_events.push(PerfettoTraceEvent::Range(RangeEvent::new(name, event_id, timestamp, duration)));
     }
 
-    pub fn add_point_event(&mut self, name: String, event_id: u8, timestamp: u64) {
-        self.trace_events.push(PerfettoTraceEvent::Point(PointEvent::new(name, event_id, timestamp)));
+    pub fn add_point_event(&mut self, name: String, event_id: usize, timestamp: u64) {
+        self.trace_events.push(PerfettoTraceEvent::Point(PointEvent::new(name, event_id as usize, timestamp)));
     }
 
-    pub fn set_thread_name(&mut self, event_id: u8, thread_name: String) {
+    pub fn set_thread_name(&mut self, event_id: usize, thread_name: String) {
         self.trace_events.push(PerfettoTraceEvent::ThreadName(ThreadNameMeta::new(event_id, thread_name)));
     }
 }
@@ -49,7 +49,7 @@ pub struct RangeEvent {
 }
 
 impl RangeEvent {
-    pub fn new(name: String, event_id: u8, timestamp: u64, duration: u32) -> Self {
+    pub fn new(name: String, event_id: usize, timestamp: u64, duration: u32) -> Self {
         Self {
             name,
             cat: "Range".to_string(),
@@ -71,7 +71,7 @@ pub struct PointEvent {
 }
 
 impl PointEvent {
-    pub fn new(name: String, event_id: u8, timestamp: u64) -> Self {
+    pub fn new(name: String, event_id: usize, timestamp: u64) -> Self {
         Self {
             name,
             cat: "Point".to_string(),
@@ -92,7 +92,7 @@ pub struct ThreadNameMeta {
 }
 
 impl ThreadNameMeta {
-    pub fn new(event_id: u8, thread_name: String) -> Self {
+    pub fn new(event_id: usize, thread_name: String) -> Self {
         Self {
             name: "thread_name".to_string(),
             ph: "M".to_string(),

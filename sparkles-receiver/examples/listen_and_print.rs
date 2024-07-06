@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use log::{error, info, LevelFilter};
 use simple_logger::SimpleLogger;
-use trace_acceptor::{TRACE_RESULT_FILE, TraceAcceptor};
+use sparkles_receiver::{TRACE_RESULT_FILE, TraceAcceptor};
 
 fn save_res_and_exit() {
     //save as trace.json
@@ -34,8 +34,8 @@ fn main() {
     }).unwrap();
 
     SimpleLogger::new().with_level(LevelFilter::Info).init().unwrap();
-    TraceAcceptor::new().listen();
-    if !IS_EXITING.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed).is_err() {
+    TraceAcceptor::new().listen().unwrap();
+    if IS_EXITING.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
         save_res_and_exit();
     }
 }
