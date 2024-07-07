@@ -7,19 +7,13 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="0ca26552-0624-4319-9af1-31909bf6c144" name="Changes" comment="Global storage implemented&#10;Renamed to sparkles">
+    <list default="true" id="0ca26552-0624-4319-9af1-31909bf6c144" name="Changes" comment="multiple threads working..... kinda.....&#10;begin auto-cleanup implementation&#10;expose finalize functions to ensure all data is flushed&#10;Add actual thread and event names to result file">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sparkles-receiver/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sparkles-receiver/examples/listen_and_print.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/examples/listen_and_print.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/sparkles-receiver/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/src/lib.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sparkles-receiver/src/perfetto_format.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/src/perfetto_format.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/sparkles/examples/tracing_dense.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/examples/tracing_dense.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/sparkles/src/global_storage.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/global_storage.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sparkles/src/id_mapping.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/id_mapping.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sparkles/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/lib.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/sparkles/src/thread_local_storage.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/thread_local_storage.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles/src/timestamp.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/timestamp.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -48,25 +42,30 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Cargo.Bench bench_hashtable_lookup.executor": "Debug",
-    "Cargo.Run listen_and_print.executor": "Run",
-    "Cargo.Run timestamp_tests.executor": "Run",
-    "Cargo.Run tracing_dense.executor": "Debug",
-    "Cargo.Test tracer.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.rust.reset.selective.auto.import": "true",
-    "git-widget-placeholder": "main",
-    "last_opened_file_path": "/home/skygrel19/projects/sparkles",
-    "node.js.detected.package.eslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
-    "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
-    "org.rust.first.attach.projects": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Cargo.Bench bench_hashtable_lookup.executor&quot;: &quot;Debug&quot;,
+    &quot;Cargo.Run listen_and_print.executor&quot;: &quot;Run&quot;,
+    &quot;Cargo.Run timestamp_tests.executor&quot;: &quot;Run&quot;,
+    &quot;Cargo.Run tracing_dense.executor&quot;: &quot;Debug&quot;,
+    &quot;Cargo.Test tracer.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/skygrel19/projects/sparkles&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;org.rust.cargo.project.model.PROJECT_DISCOVERY&quot;: &quot;true&quot;,
+    &quot;org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon&quot;: &quot;&quot;,
+    &quot;org.rust.first.attach.projects&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/issues" />
+    </key>
+  </component>
   <component name="RunManager" selected="Cargo.Run tracing_dense">
     <configuration name="Bench bench_hashtable_lookup" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
       <option name="command" value="bench --package sparkles --bench tracing_bench bench_hashtable_lookup -- --exact" />
@@ -216,7 +215,8 @@
       <workItem from="1720131355139" duration="95000" />
       <workItem from="1720131453314" duration="5825000" />
       <workItem from="1720203982479" duration="6719000" />
-      <workItem from="1720257442673" duration="6012000" />
+      <workItem from="1720257442673" duration="6840000" />
+      <workItem from="1720297250225" duration="8109000" />
     </task>
     <task id="LOCAL-00001" summary="Faster tracing, sending+parting buffer (mpsc)&#10;string -&gt; hash -&gt; u8 implemented">
       <option name="closed" value="true" />
@@ -250,7 +250,15 @@
       <option name="project" value="LOCAL" />
       <updated>1720138751404</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="multiple threads working..... kinda.....&#10;begin auto-cleanup implementation&#10;expose finalize functions to ensure all data is flushed&#10;Add actual thread and event names to result file">
+      <option name="closed" value="true" />
+      <created>1720264452629</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1720264452629</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -263,6 +271,7 @@
     <MESSAGE value="Implement IPC&#10;remove mpsc&#10;Trace parser: process parsing separately from receiving&#10;Add README.md" />
     <MESSAGE value="add new requirements" />
     <MESSAGE value="Global storage implemented&#10;Renamed to sparkles" />
-    <option name="LAST_COMMIT_MESSAGE" value="Global storage implemented&#10;Renamed to sparkles" />
+    <MESSAGE value="multiple threads working..... kinda.....&#10;begin auto-cleanup implementation&#10;expose finalize functions to ensure all data is flushed&#10;Add actual thread and event names to result file" />
+    <option name="LAST_COMMIT_MESSAGE" value="multiple threads working..... kinda.....&#10;begin auto-cleanup implementation&#10;expose finalize functions to ensure all data is flushed&#10;Add actual thread and event names to result file" />
   </component>
 </project>

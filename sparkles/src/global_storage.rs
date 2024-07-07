@@ -69,7 +69,6 @@ impl Default for GlobalStorage {
                 // handle failed pages
                 if failed_pages.len() > 0 {
                     info!("Took {} failed pages", failed_pages.len());
-                    let mut header_len = [0u8; 8];
                     for header in failed_pages {
                         let header = bincode::serialize(&header).unwrap();
                         let header_len = header.len().to_be_bytes();

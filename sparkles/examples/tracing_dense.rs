@@ -14,15 +14,15 @@ fn calc_sqrt(val: f64) -> f64 {
 }
 fn perform_tracing() {
     let mut v = 0.0f64;
-    tracing_event!("meow");
-    tracing_event!("meow1");
-    tracing_event!("meow2");
-    tracing_event!("meow3");
-    tracing_event!("meow4");
-    tracing_event!("meow5");
+    tracing_event!("k");
+    tracing_event!("i");
+    tracing_event!("t");
+    tracing_event!("y");
+    tracing_event!("d");
+    tracing_event!("o");
     for i in 0..1_000 {
         v += calc_sqrt(i as f64 + 234.532);
-        tracing_event!("haha");
+        tracing_event!("g");
     }
     black_box(v);
 }
@@ -31,18 +31,59 @@ fn main() {
     SimpleLogger::new().init().unwrap();
 
 
-    thread::Builder::new().name(String::from("another thread")).spawn(|| {
-        for _ in 0..10 {
+    let jh1 = thread::Builder::new().name(String::from("another thread")).spawn(|| {
+        for _ in 0..30 {
             perform_tracing();
         }
         sparkles::flush_thread_local();
     }).unwrap();
-    for _ in 0..10 {
+
+    let jh2 = thread::Builder::new().name(String::from("sewerslvt")).spawn(|| {
+        for _ in 0..30 {
+            perform_tracing();
+        }
+        sparkles::flush_thread_local();
+    }).unwrap();
+
+    let jh3 = thread::Builder::new().name(String::from("???")).spawn(|| {
+        for _ in 0..30 {
+            perform_tracing();
+        }
+        sparkles::flush_thread_local();
+    }).unwrap();
+
+    let jh4 = thread::Builder::new().name(String::from("i only got one")).spawn(|| {
+        for _ in 0..30 {
+            perform_tracing();
+        }
+        sparkles::flush_thread_local();
+    }).unwrap();
+
+    let jh5 = thread::Builder::new().name(String::from("cocktail")).spawn(|| {
+        for _ in 0..30 {
+            perform_tracing();
+        }
+        sparkles::flush_thread_local();
+    }).unwrap();
+
+    let jh6 = thread::Builder::new().name(String::from("tomorrow")).spawn(|| {
+        for _ in 0..30 {
+            perform_tracing();
+        }
+        sparkles::flush_thread_local();
+    }).unwrap();
+    for _ in 0..30 {
         perform_tracing();
     }
 
     println!("Finished! waiting for tracer send...");
 
     sparkles::flush_thread_local();
+    jh1.join().unwrap();
+    jh2.join().unwrap();
+    jh3.join().unwrap();
+    jh4.join().unwrap();
+    jh5.join().unwrap();
+    jh6.join().unwrap();
     sparkles::finalize();
 }

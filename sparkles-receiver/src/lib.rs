@@ -13,7 +13,15 @@ use sparkles::LocalPacketHeader;
 use crate::perfetto_format::PerfettoTraceFile;
 
 pub struct TraceAcceptor {
-    stream_parser: ParsingStateMachine,
+    event_parsers: BTreeMap<u64, ThreadParserState>,
+}
+
+#[derive(Default)]
+pub struct ThreadParserState {
+    event_buf: Vec<(LocalPacketHeader, Vec<TracingEvent>)>,
+
+    state_machine: ParsingStateMachine,
+    cur_pr: u64,
 }
 
 const MEASURE_DUR_NS: usize = 19;
@@ -25,31 +33,20 @@ lazy_static! {
 impl TraceAcceptor {
     pub fn new() -> Self {
         Self {
-            stream_parser: ParsingStateMachine::EventId
+            event_parsers: BTreeMap::new()
         }
     }
 
     pub fn listen(&mut self) -> Result<(), std::io::Error> {
         let listener = TcpListener::bind("0.0.0.0:4302").unwrap();
 
-        let mut total_pr = 0;
-        let mut first = true;
-
         info!("Server running at port 4302");
         info!("Waiting for connection...");
-        let mut buf = vec![0; 1_000_000];
-        // let mut reader = BufReader::with_capacity(5_000_000, con);
 
-        let mut bytes_cnt = 0;
-        let mut events_cnt = 0;
-
-        let mut threads_info = BTreeMap::new();
-
-        let mut events = BTreeMap::new();
         for con in listener.incoming().take(1) {
             if let Ok(mut con) = con {
                 info!("Client connected!");
-                if let Err(e) = self.handle_client(&mut con, &mut events, &mut threads_info) {
+                if let Err(e) = self.handle_client(&mut con) {
                     error!("Error handling client: {:?}", e);
                     break;
                 }
@@ -63,37 +60,44 @@ impl TraceAcceptor {
 
         let mut id_offset = 0;
         let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
-        for (thread_id, header) in threads_info {
-            for (id, tag) in header.id_store.id_map.iter().enumerate() {
-                trace_res_file.set_thread_name(id + id_offset, header.thread_name.clone() + "." + tag);
-            }
+        // iterate over all threads
+        for (_thread_id, mut parser_state) in &mut self.event_parsers {
+            // iterate over events
+            for (header, events) in &parser_state.event_buf {
+                for (id, tag) in header.id_store.id_map.iter().enumerate() {
+                    trace_res_file.set_thread_name(id + id_offset, header.thread_name.clone() + "." + tag);
+                }
 
-            for event in events.get(&thread_id).unwrap() {
-                if first {
-                    first = false;
+                parser_state.cur_pr = header.initial_timestamp >> 16;
+                let mut first = true;
+                for event in events {
+                    if first {
+                        first = false;
+                    }
+                    else {
+                        parser_state.cur_pr += event.2;
+                    }
+                    // add to trace file
+                    let timestamp = ((event.1 as u64 | (parser_state.cur_pr << 16)) as f64 / 2.495) as u64;
+                    trace_res_file.add_point_event(format!("{:?}", header.thread_name), event.0 as usize + id_offset, timestamp);
                 }
-                else {
-                    total_pr += event.2;
-                }
-                // add to trace file
-                trace_res_file.add_point_event(format!("{:?}", event.0), event.0 as usize + id_offset, ((event.1 as u64 | (total_pr << 16)) as f64 / 2.495) as u64);
+
             }
             id_offset += 256;
         }
-
-        info!("Total PR: {}", total_pr);
 
         info!("Finished!");
 
         Ok(())
     }
 
-    fn handle_client(&mut self, con: &mut TcpStream, events: &mut BTreeMap<u64, Vec<TracingEvent>>, threads_info: &mut BTreeMap<u64, LocalPacketHeader>) -> Result<(), std::io::Error> {
+    fn handle_client(&mut self, con: &mut TcpStream) -> Result<(), std::io::Error> {
         loop {
             let mut packet_type = [0u8; 1];
             con.read_exact(&mut packet_type)?;
             info!("Packet id: {}", packet_type[0]);
 
+            let mut packet_num = 0;
             match packet_type[0] {
                 0x01 => {
                     let mut total_bytes = [0u8; 8];
@@ -101,7 +105,6 @@ impl TraceAcceptor {
 
                     let mut total_bytes = usize::from_be_bytes(total_bytes);
                     while total_bytes > 0 {
-
                         let mut header_len = [0u8; 8];
                         con.read_exact(&mut header_len)?;
                         let header_len = usize::from_be_bytes(header_len);
@@ -109,10 +112,16 @@ impl TraceAcceptor {
                         con.read_exact(&mut header_bytes)?;
                         let header = bincode::deserialize::<LocalPacketHeader>(&header_bytes).unwrap();
 
+                        let mut event_buf = Vec::with_capacity(10_000);
                         info!("Got packet header: {:?}", header);
                         let thread_id = header.thread_id;
-                        threads_info.insert(thread_id, header.clone());
 
+                        let mut cur_parser_state = self.event_parsers.entry(thread_id).or_default();
+
+                        let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
+                        let timestamp = ((header.initial_timestamp as f64 / 2.495) as u64) as u64;
+                        let duration = ((header.end_timestamp - header.initial_timestamp) as f64 / 2.495) as u32;
+                        trace_res_file.add_range_event(format!("Local packet #{}", packet_num), 666 + header.thread_id as usize, timestamp, duration);
 
 
                         let mut remaining_size = header.buf_length;
@@ -121,19 +130,21 @@ impl TraceAcceptor {
                             let mut cur_buf = vec![0; cur_size];
                             con.read_exact(&mut cur_buf)?;
 
-                            let new_events = self.stream_parser.parse_many(&cur_buf, &header);
+                            let new_events = cur_parser_state.state_machine.parse_many(&cur_buf);
                             let new_events_len = new_events.len();
-                            events.entry(thread_id).or_insert_with(|| Vec::with_capacity(1_000_000)).extend(new_events);
+                            event_buf.extend(new_events);
                             debug!("Got {} bytes, Parsed {} events", cur_size, new_events_len);
 
                             remaining_size -= cur_size;
                         }
 
                         total_bytes -= 8 + header_len + header.buf_length;
+                        packet_num += 1;
+
+                        cur_parser_state.event_buf.push((header, event_buf));
                     }
                 },
                 0x02 => {
-
                     let mut header_len = [0u8; 8];
                     con.read_exact(&mut header_len)?;
                     let mut header_bytes = vec![0u8; usize::from_be_bytes(header_len)];
@@ -192,7 +203,7 @@ impl ParsingStateMachine {
         }
     }
 
-    pub fn parse_many(&mut self, bytes: &[u8], header: &LocalPacketHeader) -> Vec<TracingEvent> {
+    pub fn parse_many(&mut self, bytes: &[u8]) -> Vec<TracingEvent> {
         bytes.iter().flat_map(|b| self.next_byte(*b)).collect()
     }
 }

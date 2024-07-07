@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use log::info;
 use crate::global_storage::{GLOBAL_STORAGE, LocalPacketHeader};
 use crate::id_mapping::IdStore;
-use crate::timestamp::capture_timestamp;
 
 pub const FLUSH_THRESHOLD: usize = 10_000;
 
@@ -11,7 +10,9 @@ pub struct ThreadLocalStorage {
     accum_pr: u64,
     last_now: u16,
     buf: Vec<u8>,
-    id_store: IdStore
+    id_store: IdStore,
+
+    prev_pr: u64,
 }
 
 impl ThreadLocalStorage {
@@ -22,16 +23,26 @@ impl ThreadLocalStorage {
             start_timestamp: 0,
             accum_pr: 0,
             last_now: 0,
+            prev_pr: 0,
         }
     }
 
 
     pub fn event(&mut self, hash: u32, string: &str) {
-        let (mut dif_pr, now) = capture_timestamp();
+        let timestamp = crate::timestamp::now();
+        // let now = 8234721;
+        let now_pr = (timestamp >> 16) as u64;
+        let now = timestamp as u16;
+        let mut dif_pr = now_pr.wrapping_sub(self.prev_pr) & 0xFFFF_FFFF_FFFF;
+        self.prev_pr = now_pr;
         let mut buf = [0; 11];
         let v = self.id_store.insert_and_get_id(hash, string);
+
         if self.start_timestamp == 0 {
-            self.start_timestamp = crate::timestamp::now();
+            // if first event in local packet, init start_timestamp
+            self.start_timestamp = timestamp;
+            // ignore dif_pr as we have start_timestamp
+            dif_pr = 0;
         }
         else {
             self.accum_pr += dif_pr;
