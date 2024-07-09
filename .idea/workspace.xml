@@ -7,13 +7,15 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="0ca26552-0624-4319-9af1-31909bf6c144" name="Changes" comment="multiple threads working..... kinda.....&#10;begin auto-cleanup implementation&#10;expose finalize functions to ensure all data is flushed&#10;Add actual thread and event names to result file">
+    <list default="true" id="0ca26552-0624-4319-9af1-31909bf6c144" name="Changes" comment="thread issues fixed">
+      <change afterPath="$PROJECT_DIR$/BENCHES.MD" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/sparkles-receiver/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/src/lib.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/sparkles/examples/tracing_dense.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/examples/tracing_dense.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/sparkles/src/global_storage.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/global_storage.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/sparkles/src/thread_local_storage.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/thread_local_storage.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sparkles/src/timestamp.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/timestamp.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -66,7 +68,7 @@
       <recent name="$PROJECT_DIR$/issues" />
     </key>
   </component>
-  <component name="RunManager" selected="Cargo.Run tracing_dense">
+  <component name="RunManager" selected="Cargo.Run timestamp_tests">
     <configuration name="Bench bench_hashtable_lookup" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
       <option name="command" value="bench --package sparkles --bench tracing_bench bench_hashtable_lookup -- --exact" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
@@ -179,10 +181,10 @@
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Cargo.Run timestamp_tests" />
         <item itemvalue="Cargo.Run tracing_dense" />
         <item itemvalue="Cargo.Bench bench_hashtable_lookup" />
         <item itemvalue="Cargo.Run listen_and_print" />
-        <item itemvalue="Cargo.Run timestamp_tests" />
         <item itemvalue="Cargo.Run tracing_lib" />
       </list>
     </recent_temporary>
@@ -216,7 +218,8 @@
       <workItem from="1720131453314" duration="5825000" />
       <workItem from="1720203982479" duration="6719000" />
       <workItem from="1720257442673" duration="6840000" />
-      <workItem from="1720297250225" duration="8109000" />
+      <workItem from="1720297250225" duration="8488000" />
+      <workItem from="1720469623898" duration="5812000" />
     </task>
     <task id="LOCAL-00001" summary="Faster tracing, sending+parting buffer (mpsc)&#10;string -&gt; hash -&gt; u8 implemented">
       <option name="closed" value="true" />
@@ -258,7 +261,15 @@
       <option name="project" value="LOCAL" />
       <updated>1720264452629</updated>
     </task>
-    <option name="localTasksCounter" value="6" />
+    <task id="LOCAL-00006" summary="thread issues fixed">
+      <option name="closed" value="true" />
+      <created>1720310453098</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1720310453098</updated>
+    </task>
+    <option name="localTasksCounter" value="7" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -272,6 +283,7 @@
     <MESSAGE value="add new requirements" />
     <MESSAGE value="Global storage implemented&#10;Renamed to sparkles" />
     <MESSAGE value="multiple threads working..... kinda.....&#10;begin auto-cleanup implementation&#10;expose finalize functions to ensure all data is flushed&#10;Add actual thread and event names to result file" />
-    <option name="LAST_COMMIT_MESSAGE" value="multiple threads working..... kinda.....&#10;begin auto-cleanup implementation&#10;expose finalize functions to ensure all data is flushed&#10;Add actual thread and event names to result file" />
+    <MESSAGE value="thread issues fixed" />
+    <option name="LAST_COMMIT_MESSAGE" value="thread issues fixed" />
   </component>
 </project>

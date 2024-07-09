@@ -58,6 +58,12 @@ impl TraceAcceptor {
 
         info!("Disconnected... Start parsing");
 
+        //some stats
+        let mut total_events = 0;
+        let mut min_timestamp = u64::MAX;
+        let mut max_timestamp = 0;
+        let mut covered_dur = 0;
+
         let mut id_offset = 0;
         let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
         // iterate over all threads
@@ -81,10 +87,24 @@ impl TraceAcceptor {
                     let timestamp = ((event.1 as u64 | (parser_state.cur_pr << 16)) as f64 / 2.495) as u64;
                     trace_res_file.add_point_event(format!("{:?}", header.thread_name), event.0 as usize + id_offset, timestamp);
                 }
+                total_events += events.len();
+                if header.initial_timestamp < min_timestamp {
+                    min_timestamp = header.initial_timestamp;
+                }
+                if header.end_timestamp > max_timestamp {
+                    max_timestamp = header.end_timestamp;
+                }
+                covered_dur += header.end_timestamp - header.initial_timestamp;
 
             }
             id_offset += 256;
         }
+
+        let events_per_sec = total_events as f64 / ((max_timestamp - min_timestamp) as f64 / 2.495) * 1_000_000_000.0;
+        let events_per_sec_covered = total_events as f64 / (covered_dur as f64 / 2.495) * 1_000_000_000.0;
+        info!("Total events: {}", total_events);
+        info!("Events per second (global): {} eps", events_per_sec);
+        info!("Events per second (covered): {} eps", events_per_sec_covered);
 
         info!("Finished!");
 

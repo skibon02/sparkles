@@ -15,7 +15,7 @@ pub const GLOBAL_CAPACITY: usize = 500_000_000;
 
 pub const CLEANUP_THRESHOLD: usize = (GLOBAL_CAPACITY as f64 * 0.9) as usize;
 pub const CLEANUP_BOTTOM_THRESHOLD: usize = 350_000_000;
-pub const FLUSH_THRESHOLD: usize = 50_000;
+pub const FLUSH_THRESHOLD: usize = 5_000_000;
 
 pub static GLOBAL_STORAGE: Mutex<Option<GlobalStorage>> = Mutex::new(None);
 static FINALIZE_STARTED: AtomicBool = AtomicBool::new(false);

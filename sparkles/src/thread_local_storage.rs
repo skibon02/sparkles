@@ -3,7 +3,7 @@ use log::info;
 use crate::global_storage::{GLOBAL_STORAGE, LocalPacketHeader};
 use crate::id_mapping::IdStore;
 
-pub const FLUSH_THRESHOLD: usize = 10_000;
+pub const FLUSH_THRESHOLD_PER_THREAD: usize = 500_000;
 
 pub struct ThreadLocalStorage {
     start_timestamp: u64,
@@ -66,7 +66,7 @@ impl ThreadLocalStorage {
         self.buf.extend_from_slice(&buf[..ind]);
 
         // Automatic flush
-        if self.buf.len() > FLUSH_THRESHOLD {
+        if self.buf.len() > FLUSH_THRESHOLD_PER_THREAD {
             self.flush();
         }
     }

@@ -20,7 +20,7 @@ fn perform_tracing() {
     tracing_event!("y");
     tracing_event!("d");
     tracing_event!("o");
-    for i in 0..1_000 {
+    for i in 0..100_000 {
         v += calc_sqrt(i as f64 + 234.532);
         tracing_event!("g");
     }
@@ -31,48 +31,48 @@ fn main() {
     SimpleLogger::new().init().unwrap();
 
 
-    let jh1 = thread::Builder::new().name(String::from("another thread")).spawn(|| {
+    let jh1 = thread::Builder::new().name(String::from("sparkles 2")).spawn(|| {
         for _ in 0..30 {
             perform_tracing();
         }
         sparkles::flush_thread_local();
     }).unwrap();
 
-    let jh2 = thread::Builder::new().name(String::from("sewerslvt")).spawn(|| {
+    let jh2 = thread::Builder::new().name(String::from("sparkles 3")).spawn(|| {
         for _ in 0..30 {
             perform_tracing();
         }
         sparkles::flush_thread_local();
     }).unwrap();
 
-    let jh3 = thread::Builder::new().name(String::from("???")).spawn(|| {
+    let jh3 = thread::Builder::new().name(String::from("sparkles 4")).spawn(|| {
         for _ in 0..30 {
             perform_tracing();
         }
         sparkles::flush_thread_local();
     }).unwrap();
 
-    let jh4 = thread::Builder::new().name(String::from("i only got one")).spawn(|| {
+    let jh4 = thread::Builder::new().name(String::from("sparkles 5")).spawn(|| {
         for _ in 0..30 {
             perform_tracing();
         }
         sparkles::flush_thread_local();
     }).unwrap();
 
-    let jh5 = thread::Builder::new().name(String::from("cocktail")).spawn(|| {
+    let jh5 = thread::Builder::new().name(String::from("sparkles 6")).spawn(|| {
         for _ in 0..30 {
             perform_tracing();
         }
         sparkles::flush_thread_local();
     }).unwrap();
 
-    let jh6 = thread::Builder::new().name(String::from("tomorrow")).spawn(|| {
+    let jh6 = thread::Builder::new().name(String::from("sparkles 7")).spawn(|| {
         for _ in 0..30 {
             perform_tracing();
         }
         sparkles::flush_thread_local();
     }).unwrap();
-    for _ in 0..30 {
+    for _ in 0..100 {
         perform_tracing();
     }
 
