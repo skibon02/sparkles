@@ -22,7 +22,7 @@ static PACKET_NUM: AtomicUsize = AtomicUsize::new(0);
 
 pub fn flush_thread_local() {
     thread_local_storage::with_thread_local_tracer(|tracer| {
-        tracer.flush();
+        tracer.flush().unwrap();
         PACKET_NUM.fetch_add(1, Ordering::Relaxed);
     });
 }

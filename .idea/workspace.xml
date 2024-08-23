@@ -7,16 +7,7 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="0ca26552-0624-4319-9af1-31909bf6c144" name="Changes" comment="thread issues fixed">
-      <change afterPath="$PROJECT_DIR$/BENCHES.MD" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sparkles-receiver/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/src/lib.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sparkles/examples/tracing_dense.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/examples/tracing_dense.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sparkles/src/global_storage.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/global_storage.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sparkles/src/thread_local_storage.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/thread_local_storage.rs" afterDir="false" />
-    </list>
+    <list default="true" id="0ca26552-0624-4319-9af1-31909bf6c144" name="Changes" comment="thread issues fixed" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -44,33 +35,51 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Cargo.Bench bench_hashtable_lookup.executor&quot;: &quot;Debug&quot;,
-    &quot;Cargo.Run listen_and_print.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Run timestamp_tests.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Run tracing_dense.executor&quot;: &quot;Debug&quot;,
-    &quot;Cargo.Test tracer.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/skygrel19/projects/sparkles&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;org.rust.cargo.project.model.PROJECT_DISCOVERY&quot;: &quot;true&quot;,
-    &quot;org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon&quot;: &quot;&quot;,
-    &quot;org.rust.first.attach.projects&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Cargo.Bench bench_hashtable_lookup.executor": "Debug",
+    "Cargo.Run listen_and_print (1).executor": "Run",
+    "Cargo.Run listen_and_print.executor": "Run",
+    "Cargo.Run timestamp_tests.executor": "Run",
+    "Cargo.Run tracing_dense.executor": "Debug",
+    "Cargo.Test tracer.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.rust.reset.selective.auto.import": "true",
+    "git-widget-placeholder": "main",
+    "last_opened_file_path": "/home/skygrel19/projects/sparkles2",
+    "node.js.detected.package.eslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
+    "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
+    "org.rust.first.attach.projects": "true"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/issues" />
     </key>
   </component>
-  <component name="RunManager" selected="Cargo.Run timestamp_tests">
+  <component name="RunManager" selected="Cargo.Run listen_and_print (1)">
     <configuration name="Bench bench_hashtable_lookup" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
       <option name="command" value="bench --package sparkles --bench tracing_bench bench_hashtable_lookup -- --exact" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Run listen_and_print (1)" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="run --package sparkles-receiver --example listen_and_print" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <envs />
       <option name="emulateTerminal" value="true" />
@@ -137,23 +146,6 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
-    <configuration name="Run tracing_lib" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="command" value="run --package sparkles --example tracing_lib" />
-      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
-      <envs />
-      <option name="emulateTerminal" value="true" />
-      <option name="channel" value="DEFAULT" />
-      <option name="requiredFeatures" value="true" />
-      <option name="allFeatures" value="false" />
-      <option name="withSudo" value="false" />
-      <option name="buildTarget" value="REMOTE" />
-      <option name="backtrace" value="SHORT" />
-      <option name="isRedirectInput" value="false" />
-      <option name="redirectInputPath" value="" />
-      <method v="2">
-        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
-      </method>
-    </configuration>
     <configuration name="Test tracer" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
       <option name="command" value="test --workspace" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
@@ -173,19 +165,19 @@
     </configuration>
     <list>
       <item itemvalue="Cargo.Test tracer" />
+      <item itemvalue="Cargo.Run listen_and_print (1)" />
       <item itemvalue="Cargo.Bench bench_hashtable_lookup" />
       <item itemvalue="Cargo.Run listen_and_print" />
       <item itemvalue="Cargo.Run timestamp_tests" />
       <item itemvalue="Cargo.Run tracing_dense" />
-      <item itemvalue="Cargo.Run tracing_lib" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Cargo.Run listen_and_print (1)" />
         <item itemvalue="Cargo.Run timestamp_tests" />
         <item itemvalue="Cargo.Run tracing_dense" />
         <item itemvalue="Cargo.Bench bench_hashtable_lookup" />
         <item itemvalue="Cargo.Run listen_and_print" />
-        <item itemvalue="Cargo.Run tracing_lib" />
       </list>
     </recent_temporary>
   </component>
@@ -220,6 +212,7 @@
       <workItem from="1720257442673" duration="6840000" />
       <workItem from="1720297250225" duration="8488000" />
       <workItem from="1720469623898" duration="5812000" />
+      <workItem from="1724272993261" duration="383000" />
     </task>
     <task id="LOCAL-00001" summary="Faster tracing, sending+parting buffer (mpsc)&#10;string -&gt; hash -&gt; u8 implemented">
       <option name="closed" value="true" />
