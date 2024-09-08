@@ -1,4 +1,7 @@
 # .・゜゜・ 𝕊ℙ𝔸ℝ𝕂𝕃𝔼𝕊 ・゜゜・．
+<img src="https://img.shields.io/crates/v/sparkles"></img>
+<img src="https://img.shields.io/crates/size/sparkles"></img>
+
 Performance-focused library for capturing execution flow of application.
 
 ## Main parts
