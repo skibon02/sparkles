@@ -8,6 +8,7 @@
       <sourceFolder url="file://$MODULE_DIR$/sparkles/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/sparkles/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/sparkles/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/sparkles-core/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/sparkles/target" />
     </content>

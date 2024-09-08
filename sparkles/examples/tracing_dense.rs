@@ -1,6 +1,7 @@
-use std::hash::Hash;
-use std::thread;
 use std::hint::black_box;
+use std::thread;
+use std::time::Instant;
+use log::info;
 use simple_logger::SimpleLogger;
 use sparkles_macro::tracing_event;
 
@@ -15,9 +16,10 @@ fn perform_tracing() {
     tracing_event!("y");
     tracing_event!("d");
     tracing_event!("o");
-    for i in 0..100_000 {
+    tracing_event!("g");
+    for i in 0..1_000 {
         v += calc_sqrt(i as f64 + 234.532);
-        tracing_event!("g");
+        tracing_event!("✨");
     }
     black_box(v);
 }
@@ -26,59 +28,14 @@ fn main() {
     SimpleLogger::new().init().unwrap();
 
 
-    let jh1 = thread::Builder::new().name(String::from("sparkles 2")).spawn(|| {
-        for _ in 0..30 {
-            perform_tracing();
-        }
-        sparkles::flush_thread_local();
-    }).unwrap();
-
-    let jh2 = thread::Builder::new().name(String::from("sparkles 3")).spawn(|| {
-        for _ in 0..30 {
-            perform_tracing();
-        }
-        sparkles::flush_thread_local();
-    }).unwrap();
-
-    let jh3 = thread::Builder::new().name(String::from("sparkles 4")).spawn(|| {
-        for _ in 0..30 {
-            perform_tracing();
-        }
-        sparkles::flush_thread_local();
-    }).unwrap();
-
-    let jh4 = thread::Builder::new().name(String::from("sparkles 5")).spawn(|| {
-        for _ in 0..30 {
-            perform_tracing();
-        }
-        sparkles::flush_thread_local();
-    }).unwrap();
-
-    let jh5 = thread::Builder::new().name(String::from("sparkles 6")).spawn(|| {
-        for _ in 0..30 {
-            perform_tracing();
-        }
-        sparkles::flush_thread_local();
-    }).unwrap();
-
-    let jh6 = thread::Builder::new().name(String::from("sparkles 7")).spawn(|| {
-        for _ in 0..30 {
-            perform_tracing();
-        }
-        sparkles::flush_thread_local();
-    }).unwrap();
+    let start = Instant::now();
     for _ in 0..100 {
         perform_tracing();
     }
 
-    println!("Finished! waiting for tracer send...");
+    let dur = start.elapsed().as_nanos() as f64 / (100 * (1_000 + 6)) as f64;
+    info!("Finished! waiting for tracer send...");
+    info!("Each event took {:?} ns", dur);
 
-    sparkles::flush_thread_local();
-    jh1.join().unwrap();
-    jh2.join().unwrap();
-    jh3.join().unwrap();
-    jh4.join().unwrap();
-    jh5.join().unwrap();
-    jh6.join().unwrap();
     sparkles::finalize();
 }

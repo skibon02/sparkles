@@ -1,12 +1,10 @@
 mod perfetto_format;
 
-use std::{mem, thread};
 use std::cmp::min;
 use std::collections::BTreeMap;
 use std::io::Read;
-use std::net::{TcpListener, TcpStream, UdpSocket};
+use std::net::{TcpListener, TcpStream};
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
 use lazy_static::lazy_static;
 use log::{debug, error, info};
 use sparkles::LocalPacketHeader;
@@ -24,7 +22,6 @@ pub struct ThreadParserState {
     cur_pr: u64,
 }
 
-const MEASURE_DUR_NS: usize = 19;
 
 lazy_static! {
     pub static ref TRACE_RESULT_FILE: Mutex<PerfettoTraceFile> = Mutex::new(PerfettoTraceFile::new());
@@ -38,7 +35,7 @@ impl TraceAcceptor {
     }
 
     pub fn listen(&mut self) -> Result<(), std::io::Error> {
-        let listener = TcpListener::bind("0.0.0.0:4302").unwrap();
+        let listener = TcpListener::bind("0.0.0.0:4302")?;
 
         info!("Server running at port 4302");
         info!("Waiting for connection...");
@@ -66,10 +63,13 @@ impl TraceAcceptor {
 
         let mut id_offset = 0;
         let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
+
+        let mut counts_per_ns = 1.0;
         // iterate over all threads
-        for (_thread_id, mut parser_state) in &mut self.event_parsers {
+        for (_thread_id, parser_state) in &mut self.event_parsers {
             // iterate over events
             for (header, events) in &parser_state.event_buf {
+                counts_per_ns = header.counts_per_ns;
                 for (id, tag) in header.id_store.id_map.iter().enumerate() {
                     trace_res_file.set_thread_name(id + id_offset, header.thread_name.clone() + "." + tag);
                 }
@@ -84,7 +84,7 @@ impl TraceAcceptor {
                         parser_state.cur_pr += event.2;
                     }
                     // add to trace file
-                    let timestamp = ((event.1 as u64 | (parser_state.cur_pr << 16)) as f64 / 2.495) as u64;
+                    let timestamp = ((event.1 as u64 | (parser_state.cur_pr << 16)) as f64 / header.counts_per_ns) as u64;
                     trace_res_file.add_point_event(format!("{:?}", header.thread_name), event.0 as usize + id_offset, timestamp);
                 }
                 total_events += events.len();
@@ -100,8 +100,8 @@ impl TraceAcceptor {
             id_offset += 256;
         }
 
-        let events_per_sec = total_events as f64 / ((max_timestamp - min_timestamp) as f64 / 2.495) * 1_000_000_000.0;
-        let events_per_sec_covered = total_events as f64 / (covered_dur as f64 / 2.495) * 1_000_000_000.0;
+        let events_per_sec = total_events as f64 / ((max_timestamp - min_timestamp) as f64 / counts_per_ns) * 1_000_000_000.0;
+        let events_per_sec_covered = total_events as f64 / (covered_dur as f64 / counts_per_ns) * 1_000_000_000.0;
         info!("Total events: {}", total_events);
         info!("Events per second (global): {} eps", events_per_sec);
         info!("Events per second (covered): {} eps", events_per_sec_covered);
@@ -136,18 +136,18 @@ impl TraceAcceptor {
                         info!("Got packet header: {:?}", header);
                         let thread_id = header.thread_id;
 
-                        let mut cur_parser_state = self.event_parsers.entry(thread_id).or_default();
+                        let cur_parser_state = self.event_parsers.entry(thread_id).or_default();
 
                         let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
-                        let timestamp = ((header.initial_timestamp as f64 / 2.495) as u64) as u64;
-                        let duration = ((header.end_timestamp - header.initial_timestamp) as f64 / 2.495) as u32;
+                        let timestamp = (header.initial_timestamp as f64 / header.counts_per_ns) as u64;
+                        let duration = ((header.end_timestamp - header.initial_timestamp) as f64 / header.counts_per_ns) as u32;
                         trace_res_file.add_range_event(format!("Local packet #{}", packet_num), 666 + header.thread_id as usize, timestamp, duration);
 
 
                         let mut remaining_size = header.buf_length;
                         while remaining_size > 0 {
                             let cur_size = min(1_000_000, remaining_size);
-                            let mut cur_buf = vec![0; cur_size];
+                            let mut cur_buf = vec![0; cur_size as usize];
                             con.read_exact(&mut cur_buf)?;
 
                             let new_events = cur_parser_state.state_machine.parse_many(&cur_buf);
@@ -158,7 +158,7 @@ impl TraceAcceptor {
                             remaining_size -= cur_size;
                         }
 
-                        total_bytes -= 8 + header_len + header.buf_length;
+                        total_bytes -= 8 + header_len + header.buf_length as usize;
                         packet_num += 1;
 
                         cur_parser_state.event_buf.push((header, event_buf));
@@ -181,42 +181,60 @@ impl TraceAcceptor {
 
 pub type TracingEventId = u8;
 
-/// event, timestamp end (cpu cycles), dif_pr (24 bits)
+/// event, now (16 bits), dif_pr (48 bits)
 #[derive(Debug, Copy, Clone)]
 pub struct TracingEvent(TracingEventId, u16, u64);
 
 #[derive(Copy,Clone, Default)]
 pub enum ParsingStateMachine {
     #[default]
-    EventId,
-    TimestampHigh(TracingEventId),
-    TimestampLow(TracingEventId, u8),
-    TimestampPrOrEventId(TracingEventId, u16, u64, u8),
+    NewFrame,
+    DifPrLen(TracingEventId),
+    Now(TracingEventId, u8),
+    Now2(TracingEventId, u8, u16),
+
+    /// Id, now, dif_pr, left_dif_pr
+    DifPr(TracingEventId, u16, u64, u8)
 }
 
 impl ParsingStateMachine {
     pub fn next_byte(&mut self, b: u8) -> Option<TracingEvent> {
         match *self {
-            ParsingStateMachine::EventId => unsafe {
-                *self = ParsingStateMachine::TimestampHigh(TracingEventId::from(b & 0x7F));
+            ParsingStateMachine::NewFrame => {
+                *self = ParsingStateMachine::DifPrLen(b);
                 None
             }
-            ParsingStateMachine::TimestampHigh(event_id) => {
-                *self = ParsingStateMachine::TimestampLow(event_id, b);
+            ParsingStateMachine::DifPrLen(ev) => {
+                // let have_emb_data = b & 0b1000 != 0;
+                // if have_emb_data {
+                //     unimplemented!("Have embedded data!");
+                // }
+                *self = ParsingStateMachine::Now(ev, b);
                 None
             }
-            ParsingStateMachine::TimestampLow(event_id, now) => {
-                *self = ParsingStateMachine::TimestampPrOrEventId(event_id, ((now as u16) << 8) | b as u16, 0, 0);
+            ParsingStateMachine::Now(ev, dif_pr_len) => {
+                *self = ParsingStateMachine::Now2(ev, dif_pr_len, b as u16);
                 None
             }
-            ParsingStateMachine::TimestampPrOrEventId(event_id, now, pr, cur_shift) => unsafe {
-                if b & 0x80 != 0 {
-                    // new event start, finalize current event
-                    *self = ParsingStateMachine::TimestampHigh(TracingEventId::from(b & 0x7F));
-                    Some(TracingEvent(event_id, now, pr))
+            ParsingStateMachine::Now2(ev, dif_pr_len, cur_now) => {
+                let new_cur_now = cur_now | (b as u16) << 8;
+                if dif_pr_len == 0 {
+                    *self = ParsingStateMachine::NewFrame;
+                    Some(TracingEvent(ev, new_cur_now, 0))
                 }
                 else {
-                    *self = ParsingStateMachine::TimestampPrOrEventId(event_id, now, ((b as u64) << cur_shift as u64) | pr, cur_shift + 7);
+                    *self = ParsingStateMachine::DifPr(ev, new_cur_now, 0, dif_pr_len);
+                    None
+                }
+            }
+            ParsingStateMachine::DifPr(ev, now, cur_dif_pr, left_bytes) => {
+                let new_dif_pr = cur_dif_pr | ((b as u64) << ((left_bytes - 1) * 8));
+                if left_bytes == 1 {
+                    *self = ParsingStateMachine::NewFrame;
+                    Some(TracingEvent(ev, now, new_dif_pr))
+                }
+                else {
+                    *self= ParsingStateMachine::DifPr(ev, now, new_dif_pr, left_bytes - 1);
                     None
                 }
             }

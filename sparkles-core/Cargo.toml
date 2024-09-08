@@ -1,0 +1,14 @@
+[package]
+name = "sparkles-core"
+description = "Core crate for sparkles"
+version = "0.0.2"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/skibon02/sparkles"
+
+[dependencies]
+
+
+[features]
+default = []
+accurate-events-x86 = []

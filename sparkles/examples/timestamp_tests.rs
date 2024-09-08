@@ -1,7 +1,5 @@
 use std::arch::x86_64::_rdtsc;
-use std::net::UdpSocket;
-use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Instant};
 use log::info;
 use simple_logger::SimpleLogger;
 

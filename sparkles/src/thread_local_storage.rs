@@ -1,9 +1,11 @@
 use std::cell::RefCell;
-use log::info;
 use crate::global_storage::{GLOBAL_STORAGE, LocalPacketHeader};
 use crate::id_mapping::IdStore;
 
-pub const FLUSH_THRESHOLD_PER_THREAD: usize = 500_000;
+use sparkles_core::Timestamp;
+use sparkles_core::TimestampProvider;
+
+pub const FLUSH_THRESHOLD_PER_THREAD: usize = 10*1024;
 
 pub struct ThreadLocalStorage {
     start_timestamp: u64,
@@ -16,9 +18,9 @@ pub struct ThreadLocalStorage {
 }
 
 impl ThreadLocalStorage {
-    pub const fn new()-> Self {
+    pub fn new()-> Self {
         ThreadLocalStorage {
-            buf: Vec::new(),
+            buf: Vec::with_capacity(FLUSH_THRESHOLD_PER_THREAD + 10),
             id_store: IdStore::new(),
             start_timestamp: 0,
             accum_pr: 0,
@@ -28,20 +30,27 @@ impl ThreadLocalStorage {
     }
 
 
+    #[inline(always)]
     pub fn event(&mut self, hash: u32, string: &str) {
-        let timestamp = crate::timestamp::now();
-        // let now = 8234721;
-        let now_pr = (timestamp >> 16) as u64;
-        let now = timestamp as u16;
-        let mut dif_pr = now_pr.wrapping_sub(self.prev_pr) & 0xFFFF_FFFF_FFFF;
-        self.prev_pr = now_pr;
-        let mut buf = [0; 11];
+        //      TIMINGS PROVIDED FOR x86-64 PLATFORM ON INTEL i5 12400 CPU
+
+        //      STAGE 1: insert string and get ID. (1.3ns avg)
         let v = self.id_store.insert_and_get_id(hash, string);
 
+
+        //      STAGE 2: Acquire timestamp and calculate now, dif_pr
+        //    (3ns on non-serializing x86 timestamp, 11ns on serializing x86 timestamp)
+        let timestamp = Timestamp::now();
+        let now_pr = timestamp >> 16;
+        let now = timestamp as u16;
+        let mut dif_pr = now_pr.wrapping_sub(self.prev_pr);
+
+
+        //      STAGE 3: Update local info (1ns avg)
+        self.prev_pr = now_pr;
         if self.start_timestamp == 0 {
             // if first event in local packet, init start_timestamp
             self.start_timestamp = timestamp;
-            // ignore dif_pr as we have start_timestamp
             dif_pr = 0;
         }
         else {
@@ -49,23 +58,16 @@ impl ThreadLocalStorage {
         }
         self.last_now = now;
 
-        buf[0] = v | 0x80;
-        buf[1] = (now >> 8) as u8;
-        buf[2] = now as u8;
 
-        let mut ind = 3;
-        // While value is 64-16 = 48 bits, we send 7 bits at a time
-        while dif_pr > 0 {
-            buf[ind] = dif_pr as u8 & 0x7F;
+        //      STAGE 4: PUSH VALUES (2ns avg)
+        let dif_pr_bytes: [u8; 8] = dif_pr.to_le_bytes();
+        let dif_pr_bytes_len = ((Timestamp::TIMESTAMP_VALID_BITS as u32 + 7 - dif_pr.leading_zeros()) >> 3) as u8; // 0.6ns
+        let buf = [v, dif_pr_bytes_len, now as u8, (now >> 8) as u8];
+        self.buf.extend_from_slice(&buf);
+        self.buf.extend_from_slice(&dif_pr_bytes[..dif_pr_bytes_len as usize]);
 
-            dif_pr >>= 7;
-            ind += 1;
-        }
 
-        // Write event packet
-        self.buf.extend_from_slice(&buf[..ind]);
-
-        // Automatic flush
+        //      STAGE 5: flushing
         if self.buf.len() > FLUSH_THRESHOLD_PER_THREAD {
             self.flush();
         }
@@ -75,18 +77,20 @@ impl ThreadLocalStorage {
     pub fn flush(&mut self) {
         let data = self.buf.clone().into_boxed_slice();
         self.buf.clear();
-        let mut global_storage_ref = GLOBAL_STORAGE.lock().unwrap();
-        let mut global_storage_ref = global_storage_ref.get_or_insert_default();
 
         let thread_info = std::thread::current();
         let header = LocalPacketHeader {
             thread_name: thread_info.name().unwrap_or("unnamed").to_string(),
-            thread_id: thread_info.id().as_u64().get(),
+            thread_id: thread_id::get() as u64,
             initial_timestamp: self.start_timestamp,
             end_timestamp: ((self.start_timestamp & 0xFFFF_FFFF_FFFF_0000) + (self.accum_pr << 16)) | self.last_now as u64,
-            buf_length: data.len(),
-            id_store: self.id_store.clone().into()
+            buf_length: data.len() as u64,
+            id_store: self.id_store.clone().into(),
+            counts_per_ns: Timestamp::COUNTS_PER_NS
         };
+
+        let mut global_storage_ref = GLOBAL_STORAGE.lock().unwrap();
+        let global_storage_ref = global_storage_ref.get_or_insert_with(Default::default);
         global_storage_ref.push_buf(header, &*data);
 
         self.start_timestamp = 0;
@@ -95,6 +99,7 @@ impl ThreadLocalStorage {
 }
 
 
+#[inline(always)]
 pub fn with_thread_local_tracer<F>(f: F)
 where F: FnOnce(&mut ThreadLocalStorage) {
     thread_local! {

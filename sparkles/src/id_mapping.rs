@@ -1,8 +1,8 @@
-//! Overhead: 5*elements_cnt
+//! Memory overhead: 5*elements_cnt
 //!
 //! 256 id variants => 1280 bytes
 //!
-//! get overhead ~10ns
+//! get overhead ~1ns
 
 use serde::{Deserialize, Serialize};
 
@@ -83,6 +83,7 @@ impl IdStore {
     }
 
     /// Intended way to use: map.get_id_or_insert(id_map!("tag_name");
+    #[inline(always)]
     pub fn insert_and_get_id(&mut self, hash: u32, tag: &str) -> u8 {
         match self.id_map.get(hash) {
             Some(v) => {

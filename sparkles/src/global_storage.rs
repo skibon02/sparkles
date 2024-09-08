@@ -3,19 +3,19 @@ use std::net::TcpStream;
 use std::sync::Mutex;
 use std::{mem, thread};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread::{JoinHandle, ThreadId};
+use std::thread::{JoinHandle};
 use std::time::Duration;
 use log::{info, warn};
 use ringbuf::traits::{Consumer, Observer, Producer};
 use serde::{Deserialize, Serialize};
-use crate::id_mapping::{IdStore, IdStoreMap};
+use crate::id_mapping::IdStoreMap;
 
-/// Preallocate 50MB for trace buffer
-pub const GLOBAL_CAPACITY: usize = 500_000_000;
+/// Preallocate 500MB for trace buffer
+pub const GLOBAL_CAPACITY: usize = 500*1024*1024;
 
 pub const CLEANUP_THRESHOLD: usize = (GLOBAL_CAPACITY as f64 * 0.9) as usize;
-pub const CLEANUP_BOTTOM_THRESHOLD: usize = 350_000_000;
-pub const FLUSH_THRESHOLD: usize = 5_000_000;
+pub const CLEANUP_BOTTOM_THRESHOLD: usize = 350*1024*1024;
+pub const FLUSH_THRESHOLD: usize = 5*1024*1024;
 
 pub static GLOBAL_STORAGE: Mutex<Option<GlobalStorage>> = Mutex::new(None);
 static FINALIZE_STARTED: AtomicBool = AtomicBool::new(false);
@@ -34,7 +34,8 @@ impl Default for GlobalStorage {
             info!("Global_storage: Connected!");
 
             loop {
-                thread::sleep(Duration::from_millis(100));
+                // TODO: replace sleep with waiting for finalize
+                thread::sleep(Duration::from_millis(20));
 
                 let is_finalizing = FINALIZE_STARTED.load(Ordering::Relaxed);
                 if is_finalizing {
@@ -96,10 +97,6 @@ impl Default for GlobalStorage {
 }
 
 impl GlobalStorage {
-    pub fn new() -> Self {
-        Default::default()
-    }
-
     pub fn push_buf(&mut self, header: LocalPacketHeader, buf: &[u8]) {
         // info!("Got local packet: {:?}", header);
         let header = bincode::serialize(&header).unwrap();
@@ -120,7 +117,7 @@ impl GlobalStorage {
                 self.inner.read_exact(&mut header_bytes).unwrap();
                 let header = bincode::deserialize::<LocalPacketHeader>(&header_bytes).unwrap();
                 let buf_len = header.buf_length;
-                self.inner.skip(buf_len);
+                self.inner.skip(buf_len as usize);
                 self.skipped_msr_pages_headers.push(header);
             }
             self.dump_sizes();
@@ -170,10 +167,14 @@ pub struct LocalPacketHeader {
     pub end_timestamp: u64,
 
     pub id_store: IdStoreMap,
-    pub buf_length: usize,
+    pub buf_length: u64,
+    pub counts_per_ns: f64,
 }
 
+/// Wait for TCP sending thread to finish its job
 pub fn finalize() {
+    super::flush_thread_local();
+
     FINALIZE_STARTED.store(true, Ordering::Relaxed);
     let jh = if let Some(global_storage) = GLOBAL_STORAGE.lock().unwrap().as_mut() {
         global_storage.take_jh()
