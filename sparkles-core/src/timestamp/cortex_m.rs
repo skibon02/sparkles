@@ -14,10 +14,6 @@ pub fn init() {
 }
 
 pub struct CortexMTimestamp;
-pub fn get_cpu_cyc() -> u32 {
-    unsafe { (&*DWT::PTR).cyccnt.read() }
-}
-
 
 impl TimestampProvider for CortexMTimestamp {
     type TimestampType = u32;
@@ -28,7 +24,7 @@ impl TimestampProvider for CortexMTimestamp {
         if !IS_INIT.load(Ordering::Relaxed) {
             panic!("Attempt to get cyccnt without initialization! Must call init() first");
         }
-        get_cpu_cyc()
+        unsafe { (&*DWT::PTR).cyccnt.read() }
     }
 
     // TODO: Depends on core frequency, assume 200MHz for now
