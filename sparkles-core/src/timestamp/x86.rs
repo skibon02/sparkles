@@ -1,7 +1,7 @@
 #[cfg(target_arch="x86")]
-use std::arch::x86::{__rdtscp, _rdtsc};
+use core::arch::x86::{__rdtscp, _rdtsc};
 #[cfg(target_arch="x86_64")]
-use std::arch::x86_64::{__rdtscp, _rdtsc};
+use core::arch::x86_64::{__rdtscp, _rdtsc};
 use crate::timestamp::TimestampProvider;
 
 pub struct X86Timestamp;

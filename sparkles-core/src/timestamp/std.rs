@@ -1,10 +1,12 @@
+extern crate std;
+
 use std::time::UNIX_EPOCH;
 use crate::TimestampProvider;
 
-pub struct InstantTimestamp;
+pub struct StdTimestamp;
 
 // TODO: consider increasing TimestampType to avoid overflow
-impl TimestampProvider for InstantTimestamp {
+impl TimestampProvider for StdTimestamp {
     type TimestampType = u64;
 
     #[inline(always)]

@@ -1,12 +1,20 @@
 #[cfg(any(target_arch="x86", target_arch="x86_64"))]
 pub mod x86;
-
 #[cfg(any(target_arch="x86", target_arch="x86_64"))]
 pub use x86::X86Timestamp as Timestamp;
 
-pub mod instant;
-#[cfg(not(any(target_arch="x86", target_arch="x86_64")))]
-pub use instant::InstantTimestamp as Timestamp;
+#[cfg(all(not(target_os="none"), not(any(target_arch="x86", target_arch="x86_64"))))]
+pub mod std;
+#[cfg(all(not(target_os="none"), not(any(target_arch="x86", target_arch="x86_64"))))]
+pub use std::StdTimestamp as Timestamp;
+
+#[cfg(feature="cortex-m")]
+pub mod cortex_m;
+#[cfg(feature="cortex-m")]
+pub use cortex_m::CortexMTimestamp as Timestamp;
+
+#[cfg(not(any(target_arch="x86", target_arch="x86_64", feature="cortex-m", not(target_os="none"))))]
+compile_error!("Unsupported platform! Either std or cortex-m are currently supported");
 
 /// TimestampProvider is a source for relatively stable timestamp, which wraps around after reaching maximum value.
 ///
