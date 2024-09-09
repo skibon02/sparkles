@@ -4,7 +4,7 @@
 
 Performance-focused library for capturing execution flow of application.
 
-![img_1.png](https://github.com/skibon02/sparkles/blob/main/img_1.png)
+![img_1.png](https://github.com/skibon02/sparkles/blob/main/img_1.png?raw=true)
 ## Main parts
 - **sparkles**: Ready-to-use library for capturing events and streaming them to receiving app over TCP
 - **sparkles-core**: Common functionality for std and no_std version of sparkles.
@@ -54,7 +54,7 @@ fn main() {
 4. Run your code. As it finishes, trace.json is generated.
 5. Go to https://ui.perfetto.dev and drag'n'drop resulting json file.
 6. Observe the result:
-![img.png](https://github.com/skibon02/sparkles/blob/main/img.png)
+![img.png](https://github.com/skibon02/sparkles/blob/main/img.png?raw=true)
 
 
 ## ✧ Requirements
