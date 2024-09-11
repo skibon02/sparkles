@@ -7,7 +7,9 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="0ca26552-0624-4319-9af1-31909bf6c144" name="Changes" comment="update sparkles version with new readme" />
+    <list default="true" id="0ca26552-0624-4319-9af1-31909bf6c144" name="Changes" comment="update readme: fix img urls">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -201,6 +203,10 @@
       <workItem from="1725824084042" duration="1918000" />
       <workItem from="1725900203623" duration="118000" />
       <workItem from="1725900421236" duration="86000" />
+      <workItem from="1725900581820" duration="351000" />
+      <workItem from="1725965369896" duration="3000" />
+      <workItem from="1725992640985" duration="618000" />
+      <workItem from="1726049728257" duration="2000" />
     </task>
     <task id="LOCAL-00001" summary="Faster tracing, sending+parting buffer (mpsc)&#10;string -&gt; hash -&gt; u8 implemented">
       <option name="closed" value="true" />
@@ -282,7 +288,15 @@
       <option name="project" value="LOCAL" />
       <updated>1725900485879</updated>
     </task>
-    <option name="localTasksCounter" value="11" />
+    <task id="LOCAL-00011" summary="update readme: fix img urls">
+      <option name="closed" value="true" />
+      <created>1725900675375</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1725900675375</updated>
+    </task>
+    <option name="localTasksCounter" value="12" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -312,6 +326,7 @@
     <MESSAGE value="update version" />
     <MESSAGE value="add image" />
     <MESSAGE value="update sparkles version with new readme" />
-    <option name="LAST_COMMIT_MESSAGE" value="update sparkles version with new readme" />
+    <MESSAGE value="update readme: fix img urls" />
+    <option name="LAST_COMMIT_MESSAGE" value="update readme: fix img urls" />
   </component>
 </project>
