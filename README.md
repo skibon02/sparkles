@@ -31,24 +31,28 @@ use sparkles::SparklesConfigBuilder;
 
 // Refer to sparkles/examples/how_to_use.rs
 fn main() {
-    let g = SparklesConfigBuilder::default_init();
+    let finalize_guard = SparklesConfigBuilder::default_init();
+
+    let jh = std::thread::Builder::new().name(String::from("joined thread")).spawn(|| {
+        for _ in 0..100 {
+            tracing_event!("^-^");
+            std::thread::sleep(Duration::from_micros(1_000));
+        }
+    }).unwrap();
     
-    let jh = std::thread::Builder::new().name(String::from("thread 2")).spawn(|| {
+    let jh = std::thread::Builder::new().name(String::from("detached thread")).spawn(|| {
         for _ in 0..30 {
-            tracing_event!("✨✨✨");
+            tracing_event!("*_*");
             std::thread::sleep(Duration::from_micros(1_000));
         }
     }).unwrap();
 
     for i in 0..1_000 {
-        tracing_event!("^-^");
+        tracing_event!("✨✨✨");
         std::thread::sleep(Duration::from_micros(10));
     }
 
     jh.join().unwrap();
-
-    // It is required for now, will be replaced with drop guard in future
-    sparkles::finalize();
 }
 ```
 4. Run your code. As it finishes, trace.json is generated.
