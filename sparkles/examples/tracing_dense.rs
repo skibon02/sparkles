@@ -1,8 +1,8 @@
 use std::hint::black_box;
-use std::thread;
 use std::time::Instant;
 use log::info;
 use simple_logger::SimpleLogger;
+use sparkles::SparklesConfigBuilder;
 use sparkles_macro::tracing_event;
 
 fn calc_sqrt(val: f64) -> f64 {
@@ -26,7 +26,7 @@ fn perform_tracing() {
 
 fn main() {
     SimpleLogger::new().init().unwrap();
-
+    let finalize_guard = SparklesConfigBuilder::default_init();
 
     let start = Instant::now();
     for _ in 0..100 {
@@ -36,6 +36,4 @@ fn main() {
     let dur = start.elapsed().as_nanos() as f64 / (100 * (1_000 + 6)) as f64;
     info!("Finished! waiting for tracer send...");
     info!("Each event took {:?} ns", dur);
-
-    sparkles::finalize();
 }

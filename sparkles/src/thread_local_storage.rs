@@ -1,4 +1,6 @@
 use std::cell::RefCell;
+use std::thread;
+use log::debug;
 use crate::global_storage::{GLOBAL_STORAGE, LocalPacketHeader};
 use crate::id_mapping::IdStore;
 
@@ -15,10 +17,16 @@ pub struct ThreadLocalStorage {
     id_store: IdStore,
 
     prev_pr: u64,
+    thread_id: usize,
+    //todo: name can change
+    thread_name: String,
 }
 
 impl ThreadLocalStorage {
     pub fn new()-> Self {
+        let thread_info = thread::current();
+        let thread_name = thread_info.name().unwrap_or("Unnamed thread");
+
         ThreadLocalStorage {
             buf: Vec::with_capacity(FLUSH_THRESHOLD_PER_THREAD + 10),
             id_store: IdStore::new(),
@@ -26,6 +34,8 @@ impl ThreadLocalStorage {
             accum_pr: 0,
             last_now: 0,
             prev_pr: 0,
+            thread_id: thread_id::get(),
+            thread_name: thread_name.to_string()
         }
     }
 
@@ -75,13 +85,17 @@ impl ThreadLocalStorage {
 
     /// Flush whole event buffer data to the global storage
     pub fn flush(&mut self) {
-        let data = self.buf.clone().into_boxed_slice();
+        let data = self.buf.clone();
         self.buf.clear();
+        
+        if data.len() == 0 {
+            // Nothing to flush, ignore
+            return;
+        }
 
-        let thread_info = std::thread::current();
         let header = LocalPacketHeader {
-            thread_name: thread_info.name().unwrap_or("unnamed").to_string(),
-            thread_id: thread_id::get() as u64,
+            thread_name: self.thread_name.clone(),
+            thread_id: self.thread_id as u64,
             initial_timestamp: self.start_timestamp,
             end_timestamp: ((self.start_timestamp & 0xFFFF_FFFF_FFFF_0000) + (self.accum_pr << 16)) | self.last_now as u64,
             buf_length: data.len() as u64,
@@ -98,6 +112,18 @@ impl ThreadLocalStorage {
     }
 }
 
+impl Drop for ThreadLocalStorage {
+    fn drop(&mut self) {
+        self.flush();
+
+        let thread = thread::current();
+        let id = thread_id::get();
+        debug!("Dropping TLS from thread {:?}", thread.name());
+        // if id == MAIN_THREAD_ID.load(Ordering::Relaxed) {
+        //     debug!("Main drop detected!");
+        // }
+    }
+}
 
 #[inline(always)]
 pub fn with_thread_local_tracer<F>(f: F)

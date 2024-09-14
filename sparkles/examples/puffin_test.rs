@@ -3,7 +3,6 @@ use std::thread;
 use std::time::{Duration, Instant};
 use log::info;
 use simple_logger::SimpleLogger;
-use tracing::{Dispatch, dispatcher, instrument};
 
 const N: usize = 1_000;
 

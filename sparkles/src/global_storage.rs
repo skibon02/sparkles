@@ -5,7 +5,7 @@ use std::{mem, thread};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{JoinHandle};
 use std::time::Duration;
-use log::{info, warn};
+use log::{debug, error, trace, warn};
 use ringbuf::traits::{Consumer, Observer, Producer};
 use serde::{Deserialize, Serialize};
 use crate::id_mapping::IdStoreMap;
@@ -29,9 +29,9 @@ pub struct GlobalStorage {
 impl Default for GlobalStorage {
     fn default() -> Self {
         let jh = thread::spawn(|| {
-            info!("Global_storage: connecting to remote...");
+            debug!("[sparkles] Flush thread started! Connecting to remote...");
             let mut con = TcpStream::connect("127.0.0.1:4302").unwrap();
-            info!("Global_storage: Connected!");
+            debug!("[sparkles] Connected!");
 
             loop {
                 // TODO: replace sleep with waiting for finalize
@@ -39,7 +39,7 @@ impl Default for GlobalStorage {
 
                 let is_finalizing = FINALIZE_STARTED.load(Ordering::Relaxed);
                 if is_finalizing {
-                    info!("Finalizing detected!");
+                    debug!("[sparkles] Finalize detected!");
                 }
 
                 // this thing should be fast
@@ -58,7 +58,7 @@ impl Default for GlobalStorage {
 
                 // handle buffers
                 if let Some((slice1, slice2)) = slices {
-                    info!("took two fresh slices! sizes: {}, {}", slice1.len(), slice2.len());
+                    trace!("[sparkles] took two fresh slices! sizes: {}, {}", slice1.len(), slice2.len());
                     con.write_all(&[0x01]).unwrap();
                     let total_len = slice1.len() + slice2.len();
                     let total_len_bytes = total_len.to_be_bytes();
@@ -69,7 +69,7 @@ impl Default for GlobalStorage {
 
                 // handle failed pages
                 if failed_pages.len() > 0 {
-                    info!("Took {} failed pages", failed_pages.len());
+                    trace!("Took {} failed pages", failed_pages.len());
                     for header in failed_pages {
                         let header = bincode::serialize(&header).unwrap();
                         let header_len = header.len().to_be_bytes();
@@ -83,7 +83,7 @@ impl Default for GlobalStorage {
                     break;
                 }
             }
-            info!("Quit from global storage thread!");
+            debug!("[sparkles] Quit from flush thread!");
         });
 
 
@@ -107,8 +107,8 @@ impl GlobalStorage {
         self.inner.push_slice(&buf);
 
         if self.inner.occupied_len() > CLEANUP_THRESHOLD {
-            self.dump_sizes();
-            warn!("BUFFER FULL! clearing...");
+            // self.dump_sizes();
+            warn!("[sparkles] BUFFER FULL! clearing...");
             let mut header_len = [0u8; 8];
             while self.inner.occupied_len() > CLEANUP_BOTTOM_THRESHOLD {
                 self.inner.read_exact(&mut header_len).unwrap();
@@ -120,7 +120,7 @@ impl GlobalStorage {
                 self.inner.skip(buf_len as usize);
                 self.skipped_msr_pages_headers.push(header);
             }
-            self.dump_sizes();
+            // self.dump_sizes();
         }
     }
 
@@ -135,7 +135,7 @@ impl GlobalStorage {
             FLUSH_THRESHOLD
         };
         if self.inner.occupied_len() > threshold {
-            info!("Flushing..");
+            debug!("[sparkles] Flushing..");
             let slices = self.inner.as_slices();
             let slices = (slices.0.to_vec(), slices.1.to_vec());
             self.inner.clear();
@@ -146,12 +146,12 @@ impl GlobalStorage {
         }
     }
 
-    fn dump_sizes(&self)  {
-        info!("\n\n\t*** STORAGE METRICS DUMP***");
-        info!("Occupied len: {}", self.inner.occupied_len());
-        info!("Skipped pages count: {}", self.skipped_msr_pages_headers.len());
-        info!("");
-    }
+    // fn dump_sizes(&self)  {
+    //     debug!("\n\n\t*** STORAGE METRICS DUMP***");
+    //     info!("Occupied len: {}", self.inner.occupied_len());
+    //     info!("Skipped pages count: {}", self.skipped_msr_pages_headers.len());
+    //     info!("");
+    // }
 
     fn take_jh(&mut self) -> Option<JoinHandle<()>> {
         self.sending_thread.take()
@@ -183,8 +183,10 @@ pub fn finalize() {
     };
 
     if let Some(jh) = jh {
-        info!("JH JOIN! waiting for sender to finish");
-        jh.join().unwrap();
+        debug!("[sparkles] Joining sparkles flush thread...");
+        let _ = jh.join().inspect_err(|e| {
+            error!("Error while joining sparkles' flush thread! {:?}", e);
+        });
     }
 
 }

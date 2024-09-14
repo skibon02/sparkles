@@ -61,18 +61,18 @@ impl TraceAcceptor {
         let mut max_timestamp = 0;
         let mut covered_dur = 0;
 
-        let mut id_offset = 0;
         let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
 
         let mut counts_per_ns = 1.0;
         // iterate over all threads
-        for (_thread_id, parser_state) in &mut self.event_parsers {
+        for (&thread_id, parser_state) in &mut self.event_parsers {
             // iterate over events
             for (header, events) in &parser_state.event_buf {
                 counts_per_ns = header.counts_per_ns;
-                for (id, tag) in header.id_store.id_map.iter().enumerate() {
-                    trace_res_file.set_thread_name(id + id_offset, header.thread_name.clone() + "." + tag);
-                }
+
+                trace_res_file.set_thread_name(thread_id as usize % 65590, header.thread_name.clone());
+                // for (id, tag) in header.id_store.id_map.iter().enumerate() {
+                // }
 
                 parser_state.cur_pr = header.initial_timestamp >> 16;
                 let mut first = true;
@@ -85,7 +85,8 @@ impl TraceAcceptor {
                     }
                     // add to trace file
                     let timestamp = ((event.1 as u64 | (parser_state.cur_pr << 16)) as f64 / header.counts_per_ns) as u64;
-                    trace_res_file.add_point_event(format!("{:?}", header.thread_name), event.0 as usize + id_offset, timestamp);
+                    let ev_name = &header.id_store.id_map[event.0 as usize];
+                    trace_res_file.add_point_event(format!("{}.{}", &header.thread_name, ev_name), thread_id as usize % 65590, timestamp);
                 }
                 total_events += events.len();
                 if header.initial_timestamp < min_timestamp {
@@ -97,7 +98,6 @@ impl TraceAcceptor {
                 covered_dur += header.end_timestamp - header.initial_timestamp;
 
             }
-            id_offset += 256;
         }
 
         let events_per_sec = total_events as f64 / ((max_timestamp - min_timestamp) as f64 / counts_per_ns) * 1_000_000_000.0;
@@ -138,10 +138,10 @@ impl TraceAcceptor {
 
                         let cur_parser_state = self.event_parsers.entry(thread_id).or_default();
 
-                        let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
-                        let timestamp = (header.initial_timestamp as f64 / header.counts_per_ns) as u64;
-                        let duration = ((header.end_timestamp - header.initial_timestamp) as f64 / header.counts_per_ns) as u32;
-                        trace_res_file.add_range_event(format!("Local packet #{}", packet_num), 666 + header.thread_id as usize, timestamp, duration);
+                        // let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
+                        // let timestamp = (header.initial_timestamp as f64 / header.counts_per_ns) as u64;
+                        // let duration = ((header.end_timestamp - header.initial_timestamp) as f64 / header.counts_per_ns) as u32;
+                        // trace_res_file.add_range_event(format!("Local packet #{}", packet_num), header.thread_id as usize, 0, timestamp, duration);
 
 
                         let mut remaining_size = header.buf_length;

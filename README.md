@@ -1,17 +1,17 @@
-# .・゜゜・ 𝕊ℙ𝔸ℝ𝕂𝕃𝔼𝕊 ・゜゜・．
+# .・゜゜ 𝕊ℙ𝔸ℝ𝕂𝕃𝔼𝕊 ・゜゜・
 <img src="https://img.shields.io/crates/v/sparkles"></img>
 <img src="https://img.shields.io/crates/size/sparkles"></img>
 
 Performance-focused library for capturing execution flow of application.
 
 ![img_1.png](https://github.com/skibon02/sparkles/blob/main/img_1.png?raw=true)
-## Main parts
+## ✧ Main parts
 - **sparkles**: Ready-to-use library for capturing events and streaming them to receiving app over TCP
 - **sparkles-core**: Common functionality for std and no_std version of sparkles.
 - **sparkles-macro**: tracing_event! macro to encode event name into integer value.
 - **sparkles-receiver**: This binary will listen to TCP port, capture and decode incoming events and save them to JSON file (Perfetto format).
 
-## How to use
+## ✧ How to use
 1. Add sparkles as a dependency to your project
 ```bash
 cargo add sparkles 
@@ -27,21 +27,21 @@ cargo run --release --example listen_and_print
 ```rust
 use std::time::Duration;
 use sparkles_macro::tracing_event;
+use sparkles::SparklesConfigBuilder;
 
 // Refer to sparkles/examples/how_to_use.rs
 fn main() {
+    let g = SparklesConfigBuilder::default_init();
+    
     let jh = std::thread::Builder::new().name(String::from("thread 2")).spawn(|| {
         for _ in 0..30 {
             tracing_event!("✨✨✨");
             std::thread::sleep(Duration::from_micros(1_000));
         }
-
-        // It is required for now, will be replaced with drop guard in future
-        sparkles::flush_thread_local();
     }).unwrap();
 
     for i in 0..1_000 {
-        tracing_event!("✨");
+        tracing_event!("^-^");
         std::thread::sleep(Duration::from_micros(10));
     }
 

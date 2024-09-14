@@ -7,8 +7,20 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="0ca26552-0624-4319-9af1-31909bf6c144" name="Changes" comment="update readme: fix img urls">
+    <list default="true" id="0ca26552-0624-4319-9af1-31909bf6c144" name="Changes" comment="specify dep version">
+      <change afterPath="$PROJECT_DIR$/sparkles/src/config.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles-receiver/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles-receiver/src/perfetto_format.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/src/perfetto_format.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles/examples/how_to_use.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/examples/how_to_use.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles/examples/puffin_test.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/examples/puffin_test.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles/examples/tracing_dense.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/examples/tracing_dense.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles/src/global_storage.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/global_storage.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles/src/thread_local_storage.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/thread_local_storage.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -327,6 +339,7 @@
     <MESSAGE value="add image" />
     <MESSAGE value="update sparkles version with new readme" />
     <MESSAGE value="update readme: fix img urls" />
-    <option name="LAST_COMMIT_MESSAGE" value="update readme: fix img urls" />
+    <MESSAGE value="specify dep version" />
+    <option name="LAST_COMMIT_MESSAGE" value="specify dep version" />
   </component>
 </project>
