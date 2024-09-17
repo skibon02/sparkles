@@ -18,7 +18,10 @@ pub struct CortexMTimestamp;
 impl TimestampProvider for CortexMTimestamp {
     type TimestampType = u32;
 
-    /// Get current cortex-m cyccnt value. Panics if was not called init() first.
+    /// Get current cortex-m cyccnt value.
+    ///
+    /// # Panic
+    /// Panics if `init()` was not called first.
     #[inline(always)]
     fn now() -> Self::TimestampType {
         if !IS_INIT.load(Ordering::Relaxed) {
@@ -27,6 +30,6 @@ impl TimestampProvider for CortexMTimestamp {
         unsafe { (&*DWT::PTR).cyccnt.read() }
     }
 
-    // TODO: Depends on core frequency, assume 200MHz for now
+    // TODO: Depends on core frequency, fix at 200MHz for now
     const COUNTS_PER_NS: f64 = 0.2;
 }

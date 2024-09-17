@@ -1,15 +1,27 @@
+//! Simple hash map, aimed for better insertion performance.
 //! Memory overhead: 5*elements_cnt
 //!
 //! 256 id variants => 1280 bytes
 //!
 //! get overhead ~1ns
 
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone)]
 struct U32U8Map {
     keys: [Option<u32>; 256],
     values: [Option<u8>; 256],
+}
+
+impl Default for U32U8Map {
+    fn default() -> Self {
+        Self {
+            keys: [None; 256],
+            values: [None; 256],
+        }
+    }
 }
 
 impl U32U8Map {
@@ -21,7 +33,7 @@ impl U32U8Map {
     }
 
     fn hash(&self, key: u32) -> usize {
-        (std::num::Wrapping(key).0 as usize).wrapping_mul(2654435761) % 256
+        (core::num::Wrapping(key).0 as usize).wrapping_mul(2654435761) % 256
     }
 
     fn insert(&mut self, key: u32, value: u8) -> Result<(), &'static str> {
@@ -53,14 +65,14 @@ impl U32U8Map {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct IdStore {
     id_map: U32U8Map,
     last_id: u8,
     tags: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct IdStoreMap {
     pub id_map: Vec<String>,
 }
@@ -82,7 +94,6 @@ impl IdStore {
         }
     }
 
-    /// Intended way to use: map.get_id_or_insert(id_map!("tag_name");
     #[inline(always)]
     pub fn insert_and_get_id(&mut self, hash: u32, tag: &str) -> u8 {
         match self.id_map.get(hash) {

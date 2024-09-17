@@ -3,22 +3,36 @@
   <component name="AutoImportSettings">
     <option name="autoReloadType" value="ALL" />
   </component>
+  <component name="CargoProjectFeatures">
+    <cargoProject file="$PROJECT_DIR$/Cargo.toml">
+      <package file="$PROJECT_DIR$/sparkles-core">
+        <feature name="cortex-m" />
+        <feature name="accurate-timestamps-x86" />
+      </package>
+    </cargoProject>
+  </component>
   <component name="CargoProjects">
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="0ca26552-0624-4319-9af1-31909bf6c144" name="Changes" comment="specify dep version">
-      <change afterPath="$PROJECT_DIR$/sparkles/src/config.rs" afterDir="false" />
+    <list default="true" id="a718849c-2055-42e8-a3ce-24476f6e237e" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/sparkles-core/src/headers.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/sparkles-core/src/local_storage/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/tracer.iml" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles-core/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-core/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles-core/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-core/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles-core/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-core/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles-core/src/timestamp/cortex_m.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-core/src/timestamp/cortex_m.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles-core/src/timestamp/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-core/src/timestamp/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles-core/src/timestamp/x86.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-core/src/timestamp/x86.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles-receiver/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/Cargo.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/sparkles-receiver/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/src/lib.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sparkles-receiver/src/perfetto_format.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-receiver/src/perfetto_format.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/sparkles/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sparkles/examples/how_to_use.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/examples/how_to_use.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sparkles/examples/puffin_test.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/examples/puffin_test.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sparkles/examples/tracing_dense.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/examples/tracing_dense.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/sparkles/src/global_storage.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/global_storage.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sparkles/src/id_mapping.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles-core/src/local_storage/id_mapping.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/sparkles/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/lib.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/sparkles/src/thread_local_storage.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sparkles/src/thread_local_storage.rs" afterDir="false" />
     </list>
@@ -27,7 +41,7 @@
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
-  <component name="ExecutionTargetManager" SELECTED_TARGET="RsBuildProfile:dev" />
+  <component name="ExecutionTargetManager" SELECTED_TARGET="RsBuildProfile:test" />
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
       <list>
@@ -37,32 +51,24 @@
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
-    <option name="UPDATE_TYPE" value="REBASE" />
   </component>
   <component name="MacroExpansionManager">
-    <option name="directoryName" value="b44lo88v" />
+    <option name="directoryName" value="2450iihm" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;customColor&quot;: &quot;&quot;,
-  &quot;associatedIndex&quot;: 2
+  &quot;associatedIndex&quot;: 8
 }</component>
-  <component name="ProjectId" id="2ht7bsFBXkvGXeg4j8T6D6hl6oJ" />
+  <component name="ProjectId" id="2m7u1aHLbKzBpcfkZ64r0GC6Nic" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent">{
   &quot;keyToString&quot;: {
-    &quot;Cargo.Bench bench_hashtable_lookup.executor&quot;: &quot;Debug&quot;,
-    &quot;Cargo.Run listen_and_print (1).executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Run listen_and_print.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Run timestamp_tests.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Run tracing_dense.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Test tracer.executor&quot;: &quot;Run&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/skygrel19/projects/sparkles/sparkles-core/src/timestamp&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
@@ -71,26 +77,19 @@
     &quot;org.rust.cargo.project.model.PROJECT_DISCOVERY&quot;: &quot;true&quot;,
     &quot;org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon&quot;: &quot;&quot;,
     &quot;org.rust.first.attach.projects&quot;: &quot;true&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;language.rust.build.tool.cargo&quot;,
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
 }</component>
   <component name="RecentsManager">
-    <key name="CopyFile.RECENT_KEYS">
-      <recent name="$PROJECT_DIR$/sparkles-core/src/timestamp" />
-      <recent name="$PROJECT_DIR$/sparkles/src/timestamp" />
-    </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/sparkles-core/src/storage" />
       <recent name="$PROJECT_DIR$/sparkles-core/src" />
-      <recent name="$PROJECT_DIR$/issues" />
     </key>
   </component>
-  <component name="RsExternalLinterProjectSettings">
-    <option name="runOnTheFly" value="true" />
-  </component>
-  <component name="RunManager" selected="Cargo.Run listen_and_print">
-    <configuration name="Bench bench_hashtable_lookup" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="command" value="bench --package sparkles --bench tracing_bench bench_hashtable_lookup -- --exact" />
+  <component name="RunManager">
+    <configuration name="Test sparkles" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="buildProfileId" value="test" />
+      <option name="command" value="test --workspace" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <envs />
       <option name="emulateTerminal" value="true" />
@@ -106,73 +105,6 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
-    <configuration name="Run listen_and_print" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="command" value="run --package sparkles-receiver --example listen_and_print" />
-      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
-      <envs />
-      <option name="emulateTerminal" value="true" />
-      <option name="channel" value="DEFAULT" />
-      <option name="requiredFeatures" value="true" />
-      <option name="allFeatures" value="false" />
-      <option name="withSudo" value="false" />
-      <option name="buildTarget" value="REMOTE" />
-      <option name="backtrace" value="SHORT" />
-      <option name="isRedirectInput" value="false" />
-      <option name="redirectInputPath" value="" />
-      <method v="2">
-        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="Run timestamp_tests" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="command" value="run --package sparkles --example timestamp_tests" />
-      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
-      <envs />
-      <option name="emulateTerminal" value="true" />
-      <option name="channel" value="DEFAULT" />
-      <option name="requiredFeatures" value="true" />
-      <option name="allFeatures" value="false" />
-      <option name="withSudo" value="false" />
-      <option name="buildTarget" value="REMOTE" />
-      <option name="backtrace" value="SHORT" />
-      <option name="isRedirectInput" value="false" />
-      <option name="redirectInputPath" value="" />
-      <method v="2">
-        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="Run tracing_dense" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="buildProfileId" value="release" />
-      <option name="command" value="run --package sparkles --example tracing_dense" />
-      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
-      <envs />
-      <option name="emulateTerminal" value="true" />
-      <option name="channel" value="DEFAULT" />
-      <option name="requiredFeatures" value="true" />
-      <option name="allFeatures" value="false" />
-      <option name="withSudo" value="false" />
-      <option name="buildTarget" value="REMOTE" />
-      <option name="backtrace" value="SHORT" />
-      <option name="isRedirectInput" value="false" />
-      <option name="redirectInputPath" value="" />
-      <method v="2">
-        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
-      </method>
-    </configuration>
-    <list>
-      <item itemvalue="Cargo.Bench bench_hashtable_lookup" />
-      <item itemvalue="Cargo.Run listen_and_print" />
-      <item itemvalue="Cargo.Run timestamp_tests" />
-      <item itemvalue="Cargo.Run tracing_dense" />
-    </list>
-    <recent_temporary>
-      <list>
-        <item itemvalue="Cargo.Run listen_and_print" />
-        <item itemvalue="Cargo.Run listen_and_print" />
-        <item itemvalue="Cargo.Run tracing_dense" />
-        <item itemvalue="Cargo.Run listen_and_print" />
-        <item itemvalue="Cargo.Run listen_and_print" />
-      </list>
-    </recent_temporary>
   </component>
   <component name="RustProjectSettings">
     <option name="toolchainHomeDirectory" value="$USER_HOME$/.cargo/bin" />
@@ -180,166 +112,17 @@
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
-      <changelist id="0ca26552-0624-4319-9af1-31909bf6c144" name="Changes" comment="" />
-      <created>1718401594550</created>
+      <changelist id="a718849c-2055-42e8-a3ce-24476f6e237e" name="Changes" comment="" />
+      <created>1726439722247</created>
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
-      <updated>1718401594550</updated>
-      <workItem from="1718401595748" duration="3388000" />
-      <workItem from="1718456850483" duration="3915000" />
-      <workItem from="1718464657353" duration="414000" />
-      <workItem from="1718495551473" duration="1493000" />
-      <workItem from="1718535437957" duration="5765000" />
-      <workItem from="1718832575653" duration="2294000" />
-      <workItem from="1718836021603" duration="5000" />
-      <workItem from="1719007112640" duration="3404000" />
-      <workItem from="1719042834499" duration="9750000" />
-      <workItem from="1719089004447" duration="4886000" />
-      <workItem from="1719157647083" duration="11953000" />
-      <workItem from="1719254663155" duration="1393000" />
-      <workItem from="1719428791257" duration="907000" />
-      <workItem from="1720048600354" duration="1547000" />
-      <workItem from="1720131355139" duration="95000" />
-      <workItem from="1720131453314" duration="5825000" />
-      <workItem from="1720203982479" duration="6719000" />
-      <workItem from="1720257442673" duration="6840000" />
-      <workItem from="1720297250225" duration="8488000" />
-      <workItem from="1720469623898" duration="5812000" />
-      <workItem from="1724272993261" duration="383000" />
-      <workItem from="1724402002032" duration="1248000" />
-      <workItem from="1725656327667" duration="80000" />
-      <workItem from="1725656421570" duration="498000" />
-      <workItem from="1725656951576" duration="638000" />
-      <workItem from="1725701512222" duration="2672000" />
-      <workItem from="1725810882672" duration="8615000" />
-      <workItem from="1725824084042" duration="1918000" />
-      <workItem from="1725900203623" duration="118000" />
-      <workItem from="1725900421236" duration="86000" />
-      <workItem from="1725900581820" duration="351000" />
-      <workItem from="1725965369896" duration="3000" />
-      <workItem from="1725992640985" duration="618000" />
-      <workItem from="1726049728257" duration="2000" />
+      <updated>1726439722247</updated>
+      <workItem from="1726439723747" duration="1886000" />
+      <workItem from="1726506907263" duration="7465000" />
     </task>
-    <task id="LOCAL-00001" summary="Faster tracing, sending+parting buffer (mpsc)&#10;string -&gt; hash -&gt; u8 implemented">
-      <option name="closed" value="true" />
-      <created>1719093793779</created>
-      <option name="number" value="00001" />
-      <option name="presentableId" value="LOCAL-00001" />
-      <option name="project" value="LOCAL" />
-      <updated>1719093793779</updated>
-    </task>
-    <task id="LOCAL-00002" summary="Implement IPC&#10;remove mpsc&#10;Trace parser: process parsing separately from receiving&#10;Add README.md">
-      <option name="closed" value="true" />
-      <created>1719177989994</created>
-      <option name="number" value="00002" />
-      <option name="presentableId" value="LOCAL-00002" />
-      <option name="project" value="LOCAL" />
-      <updated>1719177989994</updated>
-    </task>
-    <task id="LOCAL-00003" summary="add new requirements">
-      <option name="closed" value="true" />
-      <created>1719255358430</created>
-      <option name="number" value="00003" />
-      <option name="presentableId" value="LOCAL-00003" />
-      <option name="project" value="LOCAL" />
-      <updated>1719255358430</updated>
-    </task>
-    <task id="LOCAL-00004" summary="Global storage implemented&#10;Renamed to sparkles">
-      <option name="closed" value="true" />
-      <created>1720138751404</created>
-      <option name="number" value="00004" />
-      <option name="presentableId" value="LOCAL-00004" />
-      <option name="project" value="LOCAL" />
-      <updated>1720138751404</updated>
-    </task>
-    <task id="LOCAL-00005" summary="multiple threads working..... kinda.....&#10;begin auto-cleanup implementation&#10;expose finalize functions to ensure all data is flushed&#10;Add actual thread and event names to result file">
-      <option name="closed" value="true" />
-      <created>1720264452629</created>
-      <option name="number" value="00005" />
-      <option name="presentableId" value="LOCAL-00005" />
-      <option name="project" value="LOCAL" />
-      <updated>1720264452629</updated>
-    </task>
-    <task id="LOCAL-00006" summary="thread issues fixed">
-      <option name="closed" value="true" />
-      <created>1720310453098</created>
-      <option name="number" value="00006" />
-      <option name="presentableId" value="LOCAL-00006" />
-      <option name="project" value="LOCAL" />
-      <updated>1720310453098</updated>
-    </task>
-    <task id="LOCAL-00007" summary="add readme&#10;update gitignore">
-      <option name="closed" value="true" />
-      <created>1724402319904</created>
-      <option name="number" value="00007" />
-      <option name="presentableId" value="LOCAL-00007" />
-      <option name="project" value="LOCAL" />
-      <updated>1724402319904</updated>
-    </task>
-    <task id="LOCAL-00008" summary="update version">
-      <option name="closed" value="true" />
-      <created>1724402386496</created>
-      <option name="number" value="00008" />
-      <option name="presentableId" value="LOCAL-00008" />
-      <option name="project" value="LOCAL" />
-      <updated>1724402386496</updated>
-    </task>
-    <task id="LOCAL-00009" summary="add image">
-      <option name="closed" value="true" />
-      <created>1725900311909</created>
-      <option name="number" value="00009" />
-      <option name="presentableId" value="LOCAL-00009" />
-      <option name="project" value="LOCAL" />
-      <updated>1725900311909</updated>
-    </task>
-    <task id="LOCAL-00010" summary="update sparkles version with new readme">
-      <option name="closed" value="true" />
-      <created>1725900485879</created>
-      <option name="number" value="00010" />
-      <option name="presentableId" value="LOCAL-00010" />
-      <option name="project" value="LOCAL" />
-      <updated>1725900485879</updated>
-    </task>
-    <task id="LOCAL-00011" summary="update readme: fix img urls">
-      <option name="closed" value="true" />
-      <created>1725900675375</created>
-      <option name="number" value="00011" />
-      <option name="presentableId" value="LOCAL-00011" />
-      <option name="project" value="LOCAL" />
-      <updated>1725900675375</updated>
-    </task>
-    <option name="localTasksCounter" value="12" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
-  </component>
-  <component name="Vcs.Log.Tabs.Properties">
-    <option name="TAB_STATES">
-      <map>
-        <entry key="MAIN">
-          <value>
-            <State />
-          </value>
-        </entry>
-      </map>
-    </option>
-  </component>
-  <component name="VcsManagerConfiguration">
-    <MESSAGE value="workspace.xml" />
-    <MESSAGE value="Faster tracing, sending+parting buffer (mpsc)&#10;string -&gt; hash -&gt; u8 implemented" />
-    <MESSAGE value="Implement IPC&#10;remove mpsc&#10;Trace parser: process parsing separately from receiving" />
-    <MESSAGE value="Implement IPC&#10;remove mpsc&#10;Trace parser: process parsing separately from receiving&#10;Add README.md" />
-    <MESSAGE value="add new requirements" />
-    <MESSAGE value="Global storage implemented&#10;Renamed to sparkles" />
-    <MESSAGE value="multiple threads working..... kinda.....&#10;begin auto-cleanup implementation&#10;expose finalize functions to ensure all data is flushed&#10;Add actual thread and event names to result file" />
-    <MESSAGE value="thread issues fixed" />
-    <MESSAGE value="add readme&#10;update gitignore" />
-    <MESSAGE value="update version" />
-    <MESSAGE value="add image" />
-    <MESSAGE value="update sparkles version with new readme" />
-    <MESSAGE value="update readme: fix img urls" />
-    <MESSAGE value="specify dep version" />
-    <option name="LAST_COMMIT_MESSAGE" value="specify dep version" />
   </component>
 </project>

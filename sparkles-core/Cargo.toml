@@ -1,16 +1,18 @@
 [package]
 name = "sparkles-core"
 description = "Core crate for sparkles"
-version = "0.0.3"
+version = "0.1.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/skibon02/sparkles"
 
 [dependencies]
+serde = { version = "1.0.210", features = ["derive"] }
 cortex-m = {version = "0.7.7", optional = true}
 
 
 [features]
 default = []
-accurate-events-x86 = []
+accurate-timestamps-x86 = []
 cortex-m = ["dep:cortex-m"]
+std = []

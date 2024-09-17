@@ -1,3 +1,11 @@
+//! Timestamps adaptively choose implementation depending on architecture, std support and `cortex-m` feature
+//!
+//! Priority order:
+//! 1. If your CPU architecture is x86, `X86Timestamp` is used
+//! 2. Otherwise, if you're in std environment, `std::time::Instant` is selected as timestamp provider.
+//! 3. If feature `cortex-m` is active, `CortexMTimestamp` is used.
+//! 4. If none of above is true, compile error is emitted.
+
 #[cfg(any(target_arch="x86", target_arch="x86_64"))]
 pub mod x86;
 #[cfg(any(target_arch="x86", target_arch="x86_64"))]
@@ -18,8 +26,9 @@ compile_error!("Unsupported platform! Either std or cortex-m are currently suppo
 
 /// TimestampProvider is a source for relatively stable timestamp, which wraps around after reaching maximum value.
 ///
-/// Maximum value is defined as unsigned integer composed of TIMESTAMP_VALID_BYTES binary ones.
+/// Maximum value is defined as unsigned integer composed of TIMESTAMP_VALID_BITS binary ones.
 pub trait TimestampProvider {
+    /// Numeric timestamp type, can be either u32 or u64.
     type TimestampType: Copy + Sized;
 
     /// Returns current timestamp from provider.

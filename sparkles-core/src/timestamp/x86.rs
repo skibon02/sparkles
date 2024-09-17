@@ -12,9 +12,9 @@ impl TimestampProvider for X86Timestamp {
     #[inline(always)]
     fn now() -> Self::TimestampType {
         unsafe {
-            #[cfg(feature = "accurate-events-x86")]
+            #[cfg(feature = "accurate-timestamps-x86")]
             let v = __rdtscp(&mut 0);
-            #[cfg(not(feature = "accurate-events-x86"))]
+            #[cfg(not(feature = "accurate-timestamps-x86"))]
             let v = _rdtsc();
 
             v

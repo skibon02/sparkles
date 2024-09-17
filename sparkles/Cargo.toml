@@ -1,20 +1,20 @@
 [package]
 name = "sparkles"
 description = "Capture execution flow of your Rust application with CPU cycle precision!"
-version = "0.0.4"
+version = "0.1.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/skibon02/sparkles"
 readme = "../README.md"
 
 [dependencies]
-sparkles-core = {version = "0.0.3", path = "../sparkles-core"}
+sparkles-core = {version = "0.1.0", path = "../sparkles-core", features = ["std"]}
 bincode = "1.3.3"
+serde = { version = "1.0.210", features = ["derive"] }
 log = { version = "0.4.22", default-features = false }
 ringbuf = "0.4.4"
-serde = { version = "1.0.210", features = ["derive"] }
-thread-id = "4.2.2"
 drop_guard = "0.3.0"
+thread-id = { version = "4.2.2" }
 
 [dev-dependencies]
 # for examples
@@ -27,4 +27,4 @@ sparkles-macro = {path = "../sparkles-macro"}
 
 [features]
 default = []
-accurate-events-x86 = ["sparkles-core/accurate-events-x86"]
+accurate-timestamps-x86 = ["sparkles-core/accurate-timestamps-x86"]
