@@ -9,6 +9,13 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum EventType {
+    Instant,
+    RangeStart,
+    RangeEnd(u8),
+}
+
 #[derive(Clone)]
 struct U32U8Map {
     keys: [Option<u32>; 256],
@@ -66,36 +73,42 @@ impl U32U8Map {
 }
 
 #[derive(Clone, Default)]
-pub struct IdStore {
+pub struct IdStoreRepr {
+    /// Used internally for faster lookup
     id_map: U32U8Map,
     last_id: u8,
-    tags: Vec<String>,
+
+    tags_store: IdStoreMap,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct IdStoreMap {
-    pub id_map: Vec<String>,
+    pub tags: Vec<(String, EventType)>,
 }
-
-impl From<IdStore> for IdStoreMap {
-    fn from(id_store: IdStore) -> Self {
+impl IdStoreMap {
+    pub const fn new() -> Self {
         Self {
-            id_map: id_store.tags
+            tags: Vec::new()
         }
     }
 }
+impl From<IdStoreRepr> for IdStoreMap {
+    fn from(id_store: IdStoreRepr) -> Self {
+        id_store.tags_store
+    }
+}
 
-impl IdStore {
+impl IdStoreRepr {
     pub const fn new() -> Self {
         Self {
             id_map: U32U8Map::new(),
             last_id: 0,
-            tags: Vec::new()
+            tags_store: IdStoreMap::new(),
         }
     }
 
     #[inline(always)]
-    pub fn insert_and_get_id(&mut self, hash: u32, tag: &str) -> u8 {
+    pub fn insert_and_get_id(&mut self, hash: u32, tag: &'static str, event_type: EventType) -> u8 {
         match self.id_map.get(hash) {
             Some(v) => {
                 v
@@ -104,7 +117,7 @@ impl IdStore {
                 let last_id = self.last_id;
                 self.last_id += 1;
                 self.id_map.insert(hash, last_id).unwrap();
-                self.tags.push(tag.to_string());
+                self.tags_store.tags.push((tag.to_string(), event_type));
                 last_id
             }
         }

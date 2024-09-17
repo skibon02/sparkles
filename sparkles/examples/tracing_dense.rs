@@ -3,23 +3,25 @@ use std::time::Instant;
 use log::info;
 use simple_logger::SimpleLogger;
 use sparkles::SparklesConfigBuilder;
-use sparkles_macro::tracing_event;
+use sparkles_macro::{instant_event, range_event_start};
 
 fn calc_sqrt(val: f64) -> f64 {
     val.sqrt()
 }
 fn perform_tracing() {
     let mut v = 0.0f64;
-    tracing_event!("k");
-    tracing_event!("i");
-    tracing_event!("t");
-    tracing_event!("y");
-    tracing_event!("d");
-    tracing_event!("o");
-    tracing_event!("g");
+    
+    let start = range_event_start!("perform_tracing()");
+    instant_event!("k");
+    instant_event!("i");
+    instant_event!("t");
+    instant_event!("y");
+    instant_event!("d");
+    instant_event!("o");
+    instant_event!("g");
     for i in 0..1_000 {
         v += calc_sqrt(i as f64 + 234.532);
-        tracing_event!("✨");
+        instant_event!("✨");
     }
     black_box(v);
 }

@@ -28,13 +28,13 @@ fn new_local_storage() -> LocalStorage<GlobalStorageRef> {
 }
 
 #[inline(always)]
-pub fn with_thread_local_tracer<F>(f: F)
-where F: FnOnce(&mut ThreadLocalStorage) {
+pub fn with_thread_local_tracer<F, R>(f: F) -> R
+where F: FnOnce(&mut ThreadLocalStorage) -> R {
     thread_local! {
         static TRACER: RefCell<ThreadLocalStorage> = RefCell::new(new_local_storage());
     }
 
     TRACER.with_borrow_mut(|tracer| {
         f(tracer)
-    });
+    })
 }

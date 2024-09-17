@@ -4,10 +4,38 @@ mod config;
 
 pub use global_storage::finalize;
 
-pub fn event(hash: u32, string: &str) {
+pub fn instant_event(hash: u32, string: &'static str) {
     thread_local_storage::with_thread_local_tracer(|tracer| {
-        tracer.event(hash, string);
+        tracer.event_instant(hash, string);
     });
+}
+
+pub struct RangeStartGuard {
+    repr: RangeStartRepr
+}
+
+impl RangeStartGuard {
+    pub fn end(self, hash: u32, string: &'static str) {
+        thread_local_storage::with_thread_local_tracer(|tracer| {
+            tracer.event_range_end(self.repr, hash, string);
+        });
+    }
+}
+
+impl Drop for RangeStartGuard {
+    fn drop(&mut self) {
+        thread_local_storage::with_thread_local_tracer(|tracer| {
+            tracer.event_range_end(self.repr, 0, "");
+        });
+    }
+}
+
+pub fn range_event_start(hash: u32, string: &'static str) -> RangeStartGuard {
+    thread_local_storage::with_thread_local_tracer(|tracer| {
+        RangeStartGuard {
+            repr: tracer.event_range_start(hash, string)
+        }
+    })
 }
 
 pub fn set_cur_thread_name(name: String) {
@@ -19,7 +47,7 @@ pub fn set_cur_thread_name(name: String) {
 
 pub fn flush_thread_local() {
     thread_local_storage::with_thread_local_tracer(|tracer| {
-        tracer.flush();
+        tracer.flush(false);
     });
 }
 
@@ -42,3 +70,4 @@ fn init(_config: SparklesConfigBuilder) {
 }
 
 pub use config::SparklesConfigBuilder;
+use sparkles_core::local_storage::RangeStartRepr;

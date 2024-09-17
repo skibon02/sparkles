@@ -8,7 +8,7 @@ use std::time::Duration;
 use log::LevelFilter;
 use simple_logger::SimpleLogger;
 use sparkles::SparklesConfigBuilder;
-use sparkles_macro::tracing_event;
+use sparkles_macro::instant_event;
 
 fn main() {
     SimpleLogger::default().with_level(LevelFilter::Debug).init().unwrap();
@@ -19,7 +19,7 @@ fn main() {
     // Flushing: Events are preserved because this thread is joined later in code
     let jh = thread::Builder::new().name(String::from("joined thread")).spawn(|| {
         for _ in 0..100 {
-            tracing_event!("^-^");
+            instant_event!("^-^");
             thread::sleep(Duration::from_micros(1_000));
         }
     }).unwrap();
@@ -27,14 +27,14 @@ fn main() {
     // Flushing: Flushing for threads that are not joined is not guaranteed, please use `sparkles::flush_thread_local()`;
     thread::Builder::new().name(String::from("detached thread")).spawn(|| {
         for _ in 0..30 {
-            tracing_event!("*_*");
+            instant_event!("*_*");
             thread::sleep(Duration::from_micros(1_000));
         }
         // sparkles::flush_thread_local();
     }).unwrap();
 
     for _ in 0..1_000 {
-        tracing_event!("✨✨✨");
+        instant_event!("✨✨✨");
         thread::sleep(Duration::from_micros(10));
     }
 

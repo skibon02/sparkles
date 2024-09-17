@@ -15,4 +15,3 @@ cortex-m = {version = "0.7.7", optional = true}
 default = []
 accurate-timestamps-x86 = []
 cortex-m = ["dep:cortex-m"]
-std = []
