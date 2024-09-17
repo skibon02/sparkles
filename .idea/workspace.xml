@@ -15,7 +15,7 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a718849c-2055-42e8-a3ce-24476f6e237e" name="Changes" comment="">
+    <list default="true" id="a718849c-2055-42e8-a3ce-24476f6e237e" name="Changes" comment="Move local storage to sparkles-core&#10;Add global storage ref abstraction&#10;add ThreadNameHeader to protocol&#10;move buf_len out of LocalPacketHeader&#10;use Little endian in protocol&#10;replace usize with u64 in protocol&#10;Use thread_ord_id as unique thread id, starting from 0 and inc by 1&#10;Update Perfetto conversion: group by thread_ord_id&#10;Show failed local_headers' ranges&#10;Add graceful disconnect in protocol">
       <change afterPath="$PROJECT_DIR$/sparkles-core/src/headers.rs" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/sparkles-core/src/local_storage/mod.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
@@ -119,10 +119,24 @@
       <updated>1726439722247</updated>
       <workItem from="1726439723747" duration="1886000" />
       <workItem from="1726506907263" duration="7465000" />
+      <workItem from="1726561813042" duration="543000" />
     </task>
+    <task id="LOCAL-00001" summary="Move local storage to sparkles-core&#10;Add global storage ref abstraction&#10;add ThreadNameHeader to protocol&#10;move buf_len out of LocalPacketHeader&#10;use Little endian in protocol&#10;replace usize with u64 in protocol&#10;Use thread_ord_id as unique thread id, starting from 0 and inc by 1&#10;Update Perfetto conversion: group by thread_ord_id&#10;Show failed local_headers' ranges&#10;Add graceful disconnect in protocol">
+      <option name="closed" value="true" />
+      <created>1726562355062</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1726562355062</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Move local storage to sparkles-core&#10;Add global storage ref abstraction&#10;add ThreadNameHeader to protocol&#10;move buf_len out of LocalPacketHeader&#10;use Little endian in protocol&#10;replace usize with u64 in protocol&#10;Use thread_ord_id as unique thread id, starting from 0 and inc by 1&#10;Update Perfetto conversion: group by thread_ord_id&#10;Show failed local_headers' ranges&#10;Add graceful disconnect in protocol" />
+    <option name="LAST_COMMIT_MESSAGE" value="Move local storage to sparkles-core&#10;Add global storage ref abstraction&#10;add ThreadNameHeader to protocol&#10;move buf_len out of LocalPacketHeader&#10;use Little endian in protocol&#10;replace usize with u64 in protocol&#10;Use thread_ord_id as unique thread id, starting from 0 and inc by 1&#10;Update Perfetto conversion: group by thread_ord_id&#10;Show failed local_headers' ranges&#10;Add graceful disconnect in protocol" />
   </component>
 </project>

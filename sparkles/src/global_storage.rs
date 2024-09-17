@@ -1,3 +1,6 @@
+//! Single global storage for sparkles events
+//! All evens are being flushed into GLOBAL_STORAGE, and then head towards transport abstraction (UDP/TCP/file).
+
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
 use std::sync::Mutex;
@@ -9,8 +12,6 @@ use log::{debug, error, trace, warn};
 use ringbuf::traits::{Consumer, Observer, Producer};
 use sparkles_core::headers::{LocalPacketHeader, ThreadNameHeader};
 
-//! Single global storage for sparkles events
-//! All evens are being flushed into GLOBAL_STORAGE, and then head towards transport abstraction (UDP/TCP/file).
 
 /// Preallocate 500MB for trace buffer
 pub const GLOBAL_CAPACITY: usize = 500*1024*1024;
