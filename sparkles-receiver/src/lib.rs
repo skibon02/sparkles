@@ -12,6 +12,8 @@ use crate::perfetto_format::PerfettoTraceFile;
 
 pub struct TraceAcceptor {
     event_parsers: BTreeMap<u64, ThreadParserState>,
+    total_event_bytes: u64,
+    total_transport_bytes: u64,
 }
 
 #[derive(Default)]
@@ -20,7 +22,7 @@ pub struct ThreadParserState {
     event_buf: Vec<(LocalPacketHeader, Vec<TracingEvent>)>,
 
     state_machine: ParsingStateMachine,
-    cur_pr: u64,
+    cur_tm: u64,
 }
 
 
@@ -31,7 +33,9 @@ lazy_static! {
 impl TraceAcceptor {
     pub fn new() -> Self {
         Self {
-            event_parsers: BTreeMap::new()
+            event_parsers: BTreeMap::new(),
+            total_event_bytes: 0,
+            total_transport_bytes: 0,
         }
     }
 
@@ -77,17 +81,17 @@ impl TraceAcceptor {
                 // for (id, tag) in header.id_store.id_map.iter().enumerate() {
                 // }
 
-                parser_state.cur_pr = header.start_timestamp >> 16;
+                parser_state.cur_tm = header.start_timestamp;
                 let mut first = true;
                 for event in events {
                     if first {
                         first = false;
                     }
                     else {
-                        parser_state.cur_pr += event.2;
+                        parser_state.cur_tm += event.1;
                     }
                     // add to trace file
-                    let timestamp = ((event.1 as u64 | (parser_state.cur_pr << 16)) as f64 / header.counts_per_ns) as u64;
+                    let timestamp = (parser_state.cur_tm as f64 / header.counts_per_ns) as u64;
                     let ev_name = &header.id_store.id_map[event.0 as usize];
                     trace_res_file.add_point_event(format!("{}.{}", thread_name, ev_name), thread_id, timestamp);
                 }
@@ -108,6 +112,9 @@ impl TraceAcceptor {
         info!("Total events: {}", total_events);
         info!("Events per second (global): {} eps", events_per_sec);
         info!("Events per second (covered): {} eps", events_per_sec_covered);
+        info!("Average event duration: {} ns", covered_dur as f64 / counts_per_ns / total_events as f64);
+        info!("Average bytes per event: {} bytes", self.total_event_bytes as f64 / total_events as f64);
+        info!("Average transport bytes per event: {} bytes", self.total_transport_bytes as f64 / total_events as f64);
 
         info!("Finished!");
 
@@ -131,14 +138,17 @@ impl TraceAcceptor {
                     while total_bytes > 0 {
                         let mut header_len = [0u8; 8];
                         con.read_exact(&mut header_len)?;
+                        self.total_transport_bytes += 8;
                         let header_len = u64::from_le_bytes(header_len) as usize;
 
                         let mut header_bytes = vec![0u8; header_len];
                         con.read_exact(&mut header_bytes)?;
+                        self.total_transport_bytes += header_len as u64;
                         let header = bincode::deserialize::<LocalPacketHeader>(&header_bytes).unwrap();
 
                         let mut buf_len = [0u8; 8];
                         con.read_exact(&mut buf_len)?;
+                        self.total_transport_bytes += 8;
                         let buf_len = u64::from_le_bytes(buf_len) as usize;
 
                         let mut event_buf = Vec::with_capacity(10_000);
@@ -157,11 +167,13 @@ impl TraceAcceptor {
                             let cur_size = min(1_000_000, remaining_size);
                             events_bytes.resize(cur_size, 0);
                             con.read_exact(&mut events_bytes)?;
+                            self.total_transport_bytes += cur_size as u64;
 
                             let new_events = cur_parser_state.state_machine.parse_many(&events_bytes);
                             let new_events_len = new_events.len();
                             event_buf.extend_from_slice(&new_events);
                             debug!("Got {} bytes, Parsed {} events", cur_size, new_events_len);
+                            self.total_event_bytes += cur_size as u64;
 
                             remaining_size -= cur_size;
                         }
@@ -174,10 +186,12 @@ impl TraceAcceptor {
                 0x02 => {
                     let mut header_len = [0u8; 8];
                     con.read_exact(&mut header_len)?;
+                    self.total_transport_bytes += 8;
                     let header_len = u64::from_le_bytes(header_len) as usize;
 
                     let mut header_bytes = vec![0u8; header_len];
                     con.read_exact(&mut header_bytes)?;
+                    self.total_transport_bytes += header_len as u64;
                     let header = bincode::deserialize::<LocalPacketHeader>(&header_bytes).unwrap();
 
                     info!("Got failed packet header: {:?}", header);
@@ -191,10 +205,12 @@ impl TraceAcceptor {
                 0x03 => {
                     let mut header_len = [0u8; 8];
                     con.read_exact(&mut header_len)?;
+                    self.total_transport_bytes += 8;
                     let header_len = u64::from_le_bytes(header_len) as usize;
 
                     let mut header_bytes = vec![0u8; header_len];
                     con.read_exact(&mut header_bytes)?;
+                    self.total_transport_bytes += header_len as u64;
                     let header = bincode::deserialize::<ThreadNameHeader>(&header_bytes).unwrap();
 
                     info!("Got thread name: {:?}", header);
@@ -217,20 +233,18 @@ impl TraceAcceptor {
 
 pub type TracingEventId = u8;
 
-/// event, now (16 bits), dif_pr (48 bits)
+/// event, dif_tm
 #[derive(Debug, Copy, Clone)]
-pub struct TracingEvent(TracingEventId, u16, u64);
+pub struct TracingEvent(TracingEventId, u64);
 
 #[derive(Copy,Clone, Default)]
 pub enum ParsingStateMachine {
     #[default]
     NewFrame,
     DifPrLen(TracingEventId),
-    Now(TracingEventId, u8),
-    Now2(TracingEventId, u8, u16),
 
-    /// Id, now, dif_pr, left_dif_pr
-    DifPr(TracingEventId, u16, u64, u8)
+    /// id, dif_tm, left_dif_tm_bytes
+    DifTm(TracingEventId, u64, u8)
 }
 
 impl ParsingStateMachine {
@@ -241,36 +255,22 @@ impl ParsingStateMachine {
                 None
             }
             ParsingStateMachine::DifPrLen(ev) => {
-                // let have_emb_data = b & 0b1000 != 0;
-                // if have_emb_data {
-                //     unimplemented!("Have embedded data!");
-                // }
-                *self = ParsingStateMachine::Now(ev, b);
-                None
-            }
-            ParsingStateMachine::Now(ev, dif_pr_len) => {
-                *self = ParsingStateMachine::Now2(ev, dif_pr_len, b as u16);
-                None
-            }
-            ParsingStateMachine::Now2(ev, dif_pr_len, cur_now) => {
-                let new_cur_now = cur_now | (b as u16) << 8;
-                if dif_pr_len == 0 {
+                let dif_tm_len = b & 0b0000_1111;
+                if dif_tm_len == 0 {
                     *self = ParsingStateMachine::NewFrame;
-                    Some(TracingEvent(ev, new_cur_now, 0))
+                    return Some(TracingEvent(ev, 0));
                 }
-                else {
-                    *self = ParsingStateMachine::DifPr(ev, new_cur_now, 0, dif_pr_len);
-                    None
-                }
+                *self = ParsingStateMachine::DifTm(ev, 0, dif_tm_len);
+                None
             }
-            ParsingStateMachine::DifPr(ev, now, cur_dif_pr, left_bytes) => {
-                let new_dif_pr = cur_dif_pr | ((b as u64) << ((left_bytes - 1) * 8));
+            ParsingStateMachine::DifTm(ev, cur_dif_tm, left_bytes) => {
+                let new_dif_tm = cur_dif_tm | ((b as u64) << ((left_bytes - 1) * 8));
                 if left_bytes == 1 {
                     *self = ParsingStateMachine::NewFrame;
-                    Some(TracingEvent(ev, now, new_dif_pr))
+                    Some(TracingEvent(ev, new_dif_tm))
                 }
                 else {
-                    *self= ParsingStateMachine::DifPr(ev, now, new_dif_pr, left_bytes - 1);
+                    *self= ParsingStateMachine::DifTm(ev, new_dif_tm, left_bytes - 1);
                     None
                 }
             }

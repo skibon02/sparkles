@@ -17,10 +17,8 @@ pub trait GlobalStorageImpl {
 }
 
 pub struct LocalStorage<G: GlobalStorageImpl> {
-    prev_pr: u64,
-
-    accum_pr: u64,
-    last_now: u16,
+    prev_tm: u64,
+    accum_tm: u64,
 
     buf: Vec<u8>,
     id_store: IdStore,
@@ -41,9 +39,8 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
 
         LocalStorage {
             buf: Vec::new(),
-            accum_pr: 0,
-            last_now: 0,
-            prev_pr: 0,
+            prev_tm: 0,
+            accum_tm: 0,
 
             id_store: Default::default(),
             local_packet_header: LocalPacketHeader {
@@ -72,33 +69,27 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
         let v = self.id_store.insert_and_get_id(hash, string);
 
 
-        //      STAGE 2: Acquire timestamp and calculate now, dif_pr
+        //      STAGE 2: Acquire timestamp and calculate now, dif_tm
         //    (3ns on non-serializing x86 timestamp, 11ns on serializing x86 timestamp)
         let timestamp = Timestamp::now();
-        let now_pr = timestamp >> 16;
-        let now = timestamp as u16;
-        let mut dif_pr = now_pr.wrapping_sub(self.prev_pr);
+        let mut dif_tm = timestamp.wrapping_sub(self.prev_tm);
+        self.prev_tm = timestamp;
 
 
         //      STAGE 3: Update local info (1ns avg)
-        self.prev_pr = now_pr;
         if self.local_packet_header.start_timestamp == 0 {
             // if first event in local packet, init start_timestamp
             self.local_packet_header.start_timestamp = timestamp;
-            dif_pr = 0;
+            dif_tm = 0;
         }
-        else {
-            self.accum_pr += dif_pr;
-        }
-        self.last_now = now;
 
 
         //      STAGE 4: PUSH VALUES (2ns avg)
-        let dif_pr_bytes: [u8; 8] = dif_pr.to_le_bytes();
-        let dif_pr_bytes_len = ((Timestamp::TIMESTAMP_VALID_BITS as u32 + 7 - dif_pr.leading_zeros()) >> 3) as u8; // 0.6ns
-        let buf = [v, dif_pr_bytes_len, now as u8, (now >> 8) as u8];
+        let dif_tm_bytes: [u8; 8] = dif_tm.to_le_bytes();
+        let dif_tm_bytes_len = ((Timestamp::TIMESTAMP_VALID_BITS as u32 + 7 - dif_tm.leading_zeros()) >> 3) as u8; // 0.6ns
+        let buf = [v, dif_tm_bytes_len];
         self.buf.extend_from_slice(&buf);
-        self.buf.extend_from_slice(&dif_pr_bytes[..dif_pr_bytes_len as usize]);
+        self.buf.extend_from_slice(&dif_tm_bytes[..dif_tm_bytes_len as usize]);
 
 
         //      STAGE 5: flushing
@@ -122,7 +113,7 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
             return;
         }
 
-        self.local_packet_header.end_timestamp = ((self.local_packet_header.start_timestamp & 0xFFFF_FFFF_FFFF_0000) + (self.accum_pr << 16)) | self.last_now as u64;
+        self.local_packet_header.end_timestamp = self.prev_tm;
         self.local_packet_header.id_store = self.id_store.clone().into();
 
         if self.thread_name_changed {
@@ -132,7 +123,6 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
         self.global_storage_ref.flush(self.local_packet_header.clone(), data);
 
         self.local_packet_header.start_timestamp = 0;
-        self.accum_pr = 0;
     }
 
     pub fn finalize(&mut self) {
