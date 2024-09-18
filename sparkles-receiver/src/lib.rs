@@ -6,7 +6,7 @@ use std::io::Read;
 use std::net::{TcpListener, TcpStream};
 use std::sync::Mutex;
 use lazy_static::lazy_static;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use sparkles_core::headers::{LocalPacketHeader, ThreadNameHeader};
 use sparkles_core::local_storage::id_mapping::EventType;
 use crate::perfetto_format::PerfettoTraceFile;
@@ -187,10 +187,11 @@ impl TraceAcceptor {
                         let thread_id = header.thread_ord_id;
                         let cur_parser_state = self.event_parsers.entry(thread_id).or_default();
 
-                        // let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
-                        // let timestamp = (header.initial_timestamp as f64 / header.counts_per_ns) as u64;
-                        // let duration = ((header.end_timestamp - header.initial_timestamp) as f64 / header.counts_per_ns) as u32;
-                        // trace_res_file.add_range_event(format!("Local packet #{}", packet_num), header.thread_id as usize, 0, timestamp, duration);
+                        // TODO: if comment out something unexplainable happens...
+                        let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
+                        let timestamp = (header.start_timestamp as f64 / header.counts_per_ns) as u64;
+                        let duration = ((header.end_timestamp - header.start_timestamp) as f64 / header.counts_per_ns) as u64;
+                        trace_res_file.add_range_event("Local packet".to_string(), header.thread_id as usize, timestamp, duration);
 
                         let mut remaining_size = buf_len;
                         while remaining_size > 0 {

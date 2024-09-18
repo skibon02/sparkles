@@ -37,7 +37,7 @@ fn main() {
         perform_tracing();
     }
 
-    let dur = start.elapsed().as_nanos() as f64 / (100 * (1_000 + 6)) as f64;
+    let dur = start.elapsed().as_nanos() as f64 / (100 * (3_000 + 9)) as f64;
     info!("Finished! waiting for tracer send...");
     info!("Each event took {:?} ns", dur);
 }
