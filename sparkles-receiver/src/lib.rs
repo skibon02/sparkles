@@ -30,7 +30,7 @@ pub struct ThreadParserState {
 
 
 lazy_static! {
-    pub static ref TRACE_RESULT_FILE: Mutex<PerfettoTraceFile> = Mutex::new(PerfettoTraceFile::new());
+    pub static ref TRACE_RESULT_FILE: Mutex<PerfettoTraceFile> = Mutex::new(PerfettoTraceFile::default());
 }
 
 impl TraceAcceptor {
