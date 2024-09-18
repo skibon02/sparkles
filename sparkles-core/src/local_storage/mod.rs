@@ -1,5 +1,6 @@
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::marker::PhantomData;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use crate::headers::{LocalPacketHeader, ThreadNameHeader};
 use crate::local_storage::id_mapping::{EventType, IdStoreRepr};
@@ -29,7 +30,8 @@ pub struct LocalStorage<G: GlobalStorageImpl> {
     thread_name_header: ThreadNameHeader,
     thread_name_changed: bool,
 
-    global_storage_ref: G
+    global_storage_ref: G,
+    last_range_ord_id: u8
 }
 
 static CUR_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
@@ -57,53 +59,64 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
                 thread_name,
             },
 
-            global_storage_ref
+            global_storage_ref,
+            last_range_ord_id: 0
         }
     }
 
+    fn new_range_ord_id(&mut self) -> u8 {
+        let range_ord_id = self.last_range_ord_id.wrapping_add(1);
+        self.last_range_ord_id = range_ord_id;
+        range_ord_id
+    }
+
     #[inline(always)]
-    pub fn event_range_start(&self, hash: u32, name: &'static str) -> RangeStartRepr {
+    pub fn event_range_start(&mut self, hash: u32, name: &'static str) -> RangeStartRepr {
+        // On a new range event we acquire new range_ord_id to match start and end events
+        let range_ord_id = self.new_range_ord_id();
+        let start_id = self.id_store.insert_and_get_id(hash, name, EventType::RangeStart);
+        self.range_event(Some(start_id), range_ord_id);
+
         RangeStartRepr {
-            hash,
-            name,
-            thread_ord_id: self.local_packet_header.thread_ord_id,
-            tm: Timestamp::now(),
+            range_ord_id,
+            range_start_id: start_id,
+
+            _not_send: PhantomData
         }
     }
 
     #[inline(always)]
     pub fn event_range_end(&mut self, range_start: RangeStartRepr, hash: u32, name: &'static str) {
-        // 1) Insert event start string
-        let start_id = self.id_store.insert_and_get_id(range_start.hash, range_start.name, EventType::RangeStart);
+        let range_ord_id = range_start.range_ord_id;
+        let start_id = range_start.range_start_id;
         if hash != 0 {
             let end_id = self.id_store.insert_and_get_id(hash, name, EventType::RangeEnd(start_id));
-            self.range_event(start_id, end_id, range_start.tm);
+            self.range_event(Some(end_id), range_ord_id);
         }
         else {
-            // 0 == no end event name
-            self.range_event(start_id, 0, range_start.tm);
+            self.range_event(None, range_ord_id);
         }
     }
 
     #[inline(always)]
-    fn range_event(&mut self, start_id: u8, end_id: u8, start_tm: u64) {
+    fn range_event(&mut self, id: Option<u8>, range_ord_id: u8) {
         //      STAGE 2: Acquire timestamp and calculate now, dif_tm
         //    (3ns on non-serializing x86 timestamp, 11ns on serializing x86 timestamp)
         let timestamp = Timestamp::now();
 
         //      STAGE 3: Update local info
         let dif_tm = self.update_local_info(timestamp);
-        let dur = timestamp.wrapping_sub(start_tm);
-        let dur_bytes: [u8; 8] = dur.to_le_bytes();
-        let dur_len = ((Timestamp::TIMESTAMP_VALID_BITS as u32 + 7 - dur.leading_zeros()) >> 3) as u8;
 
         //      STAGE 4: PUSH VALUES
         let dif_tm_bytes: [u8; 8] = dif_tm.to_le_bytes();
         let dif_tm_bytes_len = ((Timestamp::TIMESTAMP_VALID_BITS as u32 + 7 - dif_tm.leading_zeros()) >> 3) as u8;
-        let buf = [start_id, dif_tm_bytes_len | 0x80, end_id, dur_len]; // add flag to indicate range event
+        let buf = match id {
+            Some(id) => [id, dif_tm_bytes_len | 0x80, range_ord_id],
+            None => [0, dif_tm_bytes_len | 0xC0, range_ord_id]
+        };
         self.buf.extend_from_slice(&buf);
         self.buf.extend_from_slice(&dif_tm_bytes[..dif_tm_bytes_len as usize]);
-        self.buf.extend_from_slice(&dur_bytes[..dur_len as usize]);
+
 
         //      STAGE 5: flushing
         self.auto_flush();
@@ -193,8 +206,8 @@ impl<G: GlobalStorageImpl> Drop for LocalStorage<G> {
 
 #[derive(Copy, Clone)]
 pub struct RangeStartRepr {
-    hash: u32,
-    name: &'static str,
-    thread_ord_id: u64,
-    tm: u64,
+    range_start_id: u8, // required to create potentially new end event
+    range_ord_id: u8, // required to match with start event during parsing
+
+    _not_send: PhantomData<*const ()>
 }

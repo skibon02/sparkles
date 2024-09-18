@@ -22,6 +22,8 @@ fn perform_tracing() {
     for i in 0..1_000 {
         v += calc_sqrt(i as f64 + 234.532);
         instant_event!("✨");
+        instant_event!("✨✨");
+        instant_event!("✨✨✨");
     }
     black_box(v);
 }

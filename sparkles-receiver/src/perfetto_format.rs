@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Default,Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PerfettoTraceFile {
     pub trace_events: Vec<PerfettoTraceEvent>,
@@ -9,14 +9,7 @@ pub struct PerfettoTraceFile {
 }
 
 impl PerfettoTraceFile {
-    pub fn new() -> Self {
-        Self {
-            trace_events: vec![],
-            thread_names: HashMap::new(),
-        }
-    }
-
-    pub fn add_range_event(&mut self, name: String, thread_id: usize, timestamp: u64, duration: u32) {
+    pub fn add_range_event(&mut self, name: String, thread_id: usize, timestamp: u64, duration: u64) {
         self.trace_events.push(PerfettoTraceEvent::Range(RangeEvent::new(name, thread_id, timestamp, duration)));
     }
 
@@ -48,7 +41,7 @@ pub struct RangeEvent {
 }
 
 impl RangeEvent {
-    pub fn new(name: String, thread_id: usize, timestamp: u64, duration: u32) -> Self {
+    pub fn new(name: String, thread_id: usize, timestamp: u64, duration: u64) -> Self {
         Self {
             name,
             cat: "Range".to_string(),

@@ -8,8 +8,10 @@ use std::sync::Mutex;
 use lazy_static::lazy_static;
 use log::{debug, error, info};
 use sparkles_core::headers::{LocalPacketHeader, ThreadNameHeader};
+use sparkles_core::local_storage::id_mapping::EventType;
 use crate::perfetto_format::PerfettoTraceFile;
 
+#[derive(Default)]
 pub struct TraceAcceptor {
     event_parsers: BTreeMap<u64, ThreadParserState>,
     total_event_bytes: u64,
@@ -21,6 +23,7 @@ pub struct ThreadParserState {
     thread_name: String,
     event_buf: Vec<(LocalPacketHeader, Vec<TracingEvent>)>,
 
+    cur_started_ranges: BTreeMap<u8, (TracingEventId, u64)>,
     state_machine: ParsingStateMachine,
     cur_tm: u64,
 }
@@ -31,14 +34,6 @@ lazy_static! {
 }
 
 impl TraceAcceptor {
-    pub fn new() -> Self {
-        Self {
-            event_parsers: BTreeMap::new(),
-            total_event_bytes: 0,
-            total_transport_bytes: 0,
-        }
-    }
-
     pub fn listen(&mut self) -> Result<(), std::io::Error> {
         let listener = TcpListener::bind("0.0.0.0:4302")?;
 
@@ -88,12 +83,47 @@ impl TraceAcceptor {
                         first = false;
                     }
                     else {
-                        parser_state.cur_tm += event.1;
+                        match event {
+                            TracingEvent::Instant(_, dif_tm) => {
+                                parser_state.cur_tm += dif_tm;
+                            }
+                            TracingEvent::RangePart(_, dif_tm, _) => {
+                                  parser_state.cur_tm += dif_tm;
+                            }
+                            TracingEvent::UnnamedRangeEnd(dif_tm, _) => {
+                                parser_state.cur_tm += dif_tm;
+                            }
+                        }
                     }
                     // add to trace file
                     let timestamp = (parser_state.cur_tm as f64 / header.counts_per_ns) as u64;
-                    let ev_name = &header.id_store.id_map[event.0 as usize];
-                    trace_res_file.add_point_event(format!("{}.{}", thread_name, ev_name), thread_id, timestamp);
+                    match event {
+                        TracingEvent::Instant(id, _) => {
+                            let (ev_name, _) = &header.id_store.tags[*id as usize];
+                            trace_res_file.add_point_event(format!("{}.{}", thread_name, ev_name), thread_id, timestamp);
+                        }
+                        TracingEvent::RangePart(id, _, ord_id) => {
+                            let (ev_name, ev_type) = &header.id_store.tags[*id as usize];
+                            if let EventType::RangeEnd(start_id) = ev_type {
+                                let (start_name, _) = &header.id_store.tags[*start_id as usize];
+                                let start_info = parser_state.cur_started_ranges.remove(ord_id).unwrap();
+                                let start_tm = start_info.1;
+                                let duration = timestamp - start_tm;
+                                trace_res_file.add_range_event(format!("{}.(Range){} -> {}", thread_name, start_name, ev_name), thread_id, start_tm, duration);
+                            }
+                            else {
+                                // Range start
+                                parser_state.cur_started_ranges.insert(*ord_id, (*id, timestamp));
+                            }
+                        }
+                        TracingEvent::UnnamedRangeEnd(_, ord_id ) => {
+                            let start_info = parser_state.cur_started_ranges.remove(ord_id).unwrap();
+                            let range_name = start_info.0;
+                            let start_tm = start_info.1;
+                            let duration = timestamp - start_tm;
+                            trace_res_file.add_range_event(format!("{}.(Range){}", thread_name, range_name), thread_id, start_tm, duration);
+                        }
+                    }
                 }
                 total_events += events.len();
                 if header.start_timestamp < min_timestamp {
@@ -198,7 +228,7 @@ impl TraceAcceptor {
 
                     let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
                     let timestamp = (header.start_timestamp as f64 / header.counts_per_ns) as u64;
-                    let duration = ((header.end_timestamp - header.start_timestamp) as f64 / header.counts_per_ns) as u32;
+                    let duration = ((header.end_timestamp - header.start_timestamp) as f64 / header.counts_per_ns) as u64;
                     trace_res_file.add_range_event("Missed events page".to_string(), header.thread_ord_id as usize, timestamp, duration);
 
                 },
@@ -235,7 +265,11 @@ pub type TracingEventId = u8;
 
 /// event, dif_tm
 #[derive(Debug, Copy, Clone)]
-pub struct TracingEvent(TracingEventId, u64);
+pub enum TracingEvent {
+    Instant(TracingEventId, u64),
+    RangePart(TracingEventId, u64, u8),
+    UnnamedRangeEnd(u64, u8)
+}
 
 #[derive(Copy,Clone, Default)]
 pub enum ParsingStateMachine {
@@ -244,7 +278,10 @@ pub enum ParsingStateMachine {
     DifPrLen(TracingEventId),
 
     /// id, dif_tm, left_dif_tm_bytes
-    DifTm(TracingEventId, u64, u8)
+    DifTm(TracingEventId, u64, u8),
+
+    RangeOrdId(Option<TracingEventId>, u8),
+    RangeTm(Option<TracingEventId>, u8, u64, u8)
 }
 
 impl ParsingStateMachine {
@@ -255,10 +292,21 @@ impl ParsingStateMachine {
                 None
             }
             ParsingStateMachine::DifPrLen(ev) => {
+                let is_range_event = b & 0b1000_0000 != 0;
+                let is_unnamed_range_end = b & 0b0100_0000 != 0;
                 let dif_tm_len = b & 0b0000_1111;
+                if is_range_event {
+                    if is_unnamed_range_end {
+                        *self = ParsingStateMachine::RangeOrdId(None, dif_tm_len);
+                    }
+                    else {
+                        *self = ParsingStateMachine::RangeOrdId(Some(ev), dif_tm_len);
+                    }
+                    return None;
+                }
                 if dif_tm_len == 0 {
                     *self = ParsingStateMachine::NewFrame;
-                    return Some(TracingEvent(ev, 0));
+                    return Some(TracingEvent::Instant(ev, 0));
                 }
                 *self = ParsingStateMachine::DifTm(ev, 0, dif_tm_len);
                 None
@@ -267,10 +315,42 @@ impl ParsingStateMachine {
                 let new_dif_tm = cur_dif_tm | ((b as u64) << ((left_bytes - 1) * 8));
                 if left_bytes == 1 {
                     *self = ParsingStateMachine::NewFrame;
-                    Some(TracingEvent(ev, new_dif_tm))
+                    Some(TracingEvent::Instant(ev, new_dif_tm))
                 }
                 else {
                     *self= ParsingStateMachine::DifTm(ev, new_dif_tm, left_bytes - 1);
+                    None
+                }
+            }
+            ParsingStateMachine::RangeOrdId(ev, dif_tm_len) => {
+                let ord_id = b;
+                if dif_tm_len == 0 {
+                    *self = ParsingStateMachine::NewFrame;
+                    if let Some(id) = ev {
+                        Some(TracingEvent::RangePart(id, 0, ord_id))
+                    }
+                    else {
+                        Some(TracingEvent::UnnamedRangeEnd(0, ord_id))
+                    }
+                }
+                else {
+                    *self = ParsingStateMachine::RangeTm(ev, ord_id, 0, dif_tm_len);
+                    None
+                }
+            }
+            ParsingStateMachine::RangeTm(ev_id, ord_id, cur_dif_tm, left_bytes) => {
+                let new_dif_tm = cur_dif_tm | ((b as u64) << ((left_bytes - 1) * 8));
+                if left_bytes == 1 {
+                    *self = ParsingStateMachine::NewFrame;
+                    if let Some(id) = ev_id {
+                        Some(TracingEvent::RangePart(id, new_dif_tm, ord_id))
+                    }
+                    else {
+                        Some(TracingEvent::UnnamedRangeEnd(new_dif_tm, ord_id))
+                    }
+                }
+                else {
+                    *self = ParsingStateMachine::RangeTm(ev_id, ord_id, new_dif_tm, left_bytes - 1);
                     None
                 }
             }

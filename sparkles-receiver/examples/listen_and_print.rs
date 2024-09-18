@@ -34,7 +34,7 @@ fn main() {
     }).unwrap();
 
     SimpleLogger::new().with_level(LevelFilter::Info).init().unwrap();
-    TraceAcceptor::new().listen().unwrap();
+    TraceAcceptor::default().listen().unwrap();
     if IS_EXITING.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
         save_res_and_exit();
     }
