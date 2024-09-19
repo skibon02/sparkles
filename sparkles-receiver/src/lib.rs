@@ -2,14 +2,19 @@ mod perfetto_format;
 
 use std::cmp::min;
 use std::collections::BTreeMap;
-use std::io::Read;
+use std::io::{Read, Write};
+use std::mem;
 use std::net::{TcpListener, TcpStream};
 use std::sync::Mutex;
 use lazy_static::lazy_static;
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
+use ringbuf::storage::Heap;
+use ringbuf::traits::{Consumer, Observer, Producer};
 use sparkles_core::headers::{LocalPacketHeader, ThreadNameHeader};
 use sparkles_core::local_storage::id_mapping::EventType;
 use crate::perfetto_format::PerfettoTraceFile;
+
+pub static PARSER_BUF_SIZE: usize = 1_000_000;
 
 #[derive(Default)]
 pub struct TraceAcceptor {
@@ -24,7 +29,7 @@ pub struct ThreadParserState {
     event_buf: Vec<(LocalPacketHeader, Vec<TracingEvent>)>,
 
     cur_started_ranges: BTreeMap<u8, (TracingEventId, u64)>,
-    state_machine: ParsingStateMachine,
+    state_machine: StreamParser,
     cur_tm: u64,
 }
 
@@ -83,24 +88,19 @@ impl TraceAcceptor {
                         first = false;
                     }
                     else {
-                        match event {
-                            TracingEvent::Instant(_, dif_tm) => {
-                                parser_state.cur_tm += dif_tm;
-                            }
-                            TracingEvent::RangePart(_, dif_tm, _) => {
-                                  parser_state.cur_tm += dif_tm;
-                            }
-                            TracingEvent::UnnamedRangeEnd(dif_tm, _) => {
-                                parser_state.cur_tm += dif_tm;
-                            }
-                        }
+                        let dif_tm = match event {
+                            TracingEvent::Instant(_, dif_tm) => dif_tm,
+                            TracingEvent::RangePart(_, dif_tm, _) => dif_tm,
+                            TracingEvent::UnnamedRangeEnd(dif_tm, _) => dif_tm
+                        };
+                        parser_state.cur_tm += dif_tm;
                     }
                     // add to trace file
                     let timestamp = (parser_state.cur_tm as f64 / header.counts_per_ns) as u64;
                     match event {
                         TracingEvent::Instant(id, _) => {
                             let (ev_name, _) = &header.id_store.tags[*id as usize];
-                            trace_res_file.add_point_event(format!("{}.{}", thread_name, ev_name), thread_id, timestamp);
+                            trace_res_file.add_point_event(ev_name.clone(), thread_id, timestamp);
                         }
                         TracingEvent::RangePart(id, _, ord_id) => {
                             let (ev_name, ev_type) = &header.id_store.tags[*id as usize];
@@ -109,7 +109,7 @@ impl TraceAcceptor {
                                 let start_info = parser_state.cur_started_ranges.remove(ord_id).unwrap();
                                 let start_tm = start_info.1;
                                 let duration = timestamp - start_tm;
-                                trace_res_file.add_range_event(format!("{}.(Range){} -> {}", thread_name, start_name, ev_name), thread_id, start_tm, duration);
+                                trace_res_file.add_range_event(format!("{} -> {}", start_name, ev_name), thread_id, start_tm, duration);
                             }
                             else {
                                 // Range start
@@ -118,10 +118,11 @@ impl TraceAcceptor {
                         }
                         TracingEvent::UnnamedRangeEnd(_, ord_id ) => {
                             let start_info = parser_state.cur_started_ranges.remove(ord_id).unwrap();
-                            let range_name = start_info.0;
+                            let range_id = start_info.0;
+                            let range_name = &header.id_store.tags[range_id as usize].0;
                             let start_tm = start_info.1;
                             let duration = timestamp - start_tm;
-                            trace_res_file.add_range_event(format!("{}.(Range){}", thread_name, range_name), thread_id, start_tm, duration);
+                            trace_res_file.add_range_event(range_name.clone(), thread_id, start_tm, duration);
                         }
                     }
                 }
@@ -181,21 +182,20 @@ impl TraceAcceptor {
                         self.total_transport_bytes += 8;
                         let buf_len = u64::from_le_bytes(buf_len) as usize;
 
-                        let mut event_buf = Vec::with_capacity(10_000);
+                        let mut event_buf = Vec::with_capacity(PARSER_BUF_SIZE);
                         info!("Got packet header: {:?}", header);
 
                         let thread_id = header.thread_ord_id;
                         let cur_parser_state = self.event_parsers.entry(thread_id).or_default();
 
-                        // TODO: if comment out something unexplainable happens...
-                        let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
-                        let timestamp = (header.start_timestamp as f64 / header.counts_per_ns) as u64;
-                        let duration = ((header.end_timestamp - header.start_timestamp) as f64 / header.counts_per_ns) as u64;
-                        trace_res_file.add_range_event("Local packet".to_string(), header.thread_id as usize, timestamp, duration);
+                        // let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
+                        // let timestamp = (header.start_timestamp as f64 / header.counts_per_ns) as u64;
+                        // let duration = ((header.end_timestamp - header.start_timestamp) as f64 / header.counts_per_ns) as u64;
+                        // trace_res_file.add_range_event("Local packet".to_string(), header.thread_id as usize, timestamp, duration);
 
                         let mut remaining_size = buf_len;
                         while remaining_size > 0 {
-                            let cur_size = min(1_000_000, remaining_size);
+                            let cur_size = min(PARSER_BUF_SIZE, remaining_size);
                             events_bytes.resize(cur_size, 0);
                             con.read_exact(&mut events_bytes)?;
                             self.total_transport_bytes += cur_size as u64;
@@ -208,6 +208,7 @@ impl TraceAcceptor {
 
                             remaining_size -= cur_size;
                         }
+                        cur_parser_state.state_machine.ensure_buf_end();
 
                         total_bytes -= 8 + 8 + header_len + buf_len;
 
@@ -272,93 +273,122 @@ pub enum TracingEvent {
     UnnamedRangeEnd(u64, u8)
 }
 
-#[derive(Copy,Clone, Default)]
-pub enum ParsingStateMachine {
-    #[default]
-    NewFrame,
-    DifPrLen(TracingEventId),
-
-    /// id, dif_tm, left_dif_tm_bytes
-    DifTm(TracingEventId, u64, u8),
-
-    RangeOrdId(Option<TracingEventId>, u8),
-    RangeTm(Option<TracingEventId>, u8, u64, u8)
+pub struct StreamParser {
+    state: ParsingState,
+    buf: ringbuf::LocalRb<Heap<u8>>
 }
 
-impl ParsingStateMachine {
-    pub fn next_byte(&mut self, b: u8) -> Option<TracingEvent> {
-        match *self {
-            ParsingStateMachine::NewFrame => {
-                *self = ParsingStateMachine::DifPrLen(b);
-                None
+impl Default for StreamParser {
+    fn default() -> Self {
+        Self {
+            state: ParsingState::NewFrame,
+            buf: ringbuf::LocalRb::new(PARSER_BUF_SIZE)
+        }
+    }
+}
+
+#[derive(Copy,Clone, Default, Debug)]
+#[derive(PartialEq)]
+pub enum ParsingState {
+    #[default]
+    NewFrame,
+    DifTmLen(TracingEventId),
+
+    /// id, dif_tm_len
+    DifTm(TracingEventId, usize),
+
+    RangeOrdId(Option<TracingEventId>, usize),
+    RangeTm(Option<TracingEventId>, usize, u8)
+}
+
+impl StreamParser {
+    pub fn try_parse_event(&mut self) -> Result<TracingEvent, bool> {
+        let available_bytes_len = self.buf.occupied_len();
+
+        let (ev, new_state) = match mem::take(&mut self.state) {
+            ParsingState::NewFrame if available_bytes_len >= 1 => {
+                let ev_id = self.buf.try_pop().unwrap();
+                (None, ParsingState::DifTmLen(ev_id))
             }
-            ParsingStateMachine::DifPrLen(ev) => {
-                let is_range_event = b & 0b1000_0000 != 0;
-                let is_unnamed_range_end = b & 0b0100_0000 != 0;
-                let dif_tm_len = b & 0b0000_1111;
+            ParsingState::DifTmLen(ev) if available_bytes_len >= 1 => {
+                let dif_tm_len = self.buf.try_pop().unwrap();
+
+                let is_range_event = dif_tm_len & 0b1000_0000 != 0;
+                let is_unnamed_range_end = dif_tm_len & 0b0100_0000 != 0;
+                let dif_tm_len = (dif_tm_len & 0b0000_1111) as usize;
+
                 if is_range_event {
                     if is_unnamed_range_end {
-                        *self = ParsingStateMachine::RangeOrdId(None, dif_tm_len);
+                        (None, ParsingState::RangeOrdId(None, dif_tm_len))
                     }
                     else {
-                        *self = ParsingStateMachine::RangeOrdId(Some(ev), dif_tm_len);
-                    }
-                    return None;
-                }
-                if dif_tm_len == 0 {
-                    *self = ParsingStateMachine::NewFrame;
-                    return Some(TracingEvent::Instant(ev, 0));
-                }
-                *self = ParsingStateMachine::DifTm(ev, 0, dif_tm_len);
-                None
-            }
-            ParsingStateMachine::DifTm(ev, cur_dif_tm, left_bytes) => {
-                let new_dif_tm = cur_dif_tm | ((b as u64) << ((left_bytes - 1) * 8));
-                if left_bytes == 1 {
-                    *self = ParsingStateMachine::NewFrame;
-                    Some(TracingEvent::Instant(ev, new_dif_tm))
-                }
-                else {
-                    *self= ParsingStateMachine::DifTm(ev, new_dif_tm, left_bytes - 1);
-                    None
-                }
-            }
-            ParsingStateMachine::RangeOrdId(ev, dif_tm_len) => {
-                let ord_id = b;
-                if dif_tm_len == 0 {
-                    *self = ParsingStateMachine::NewFrame;
-                    if let Some(id) = ev {
-                        Some(TracingEvent::RangePart(id, 0, ord_id))
-                    }
-                    else {
-                        Some(TracingEvent::UnnamedRangeEnd(0, ord_id))
+                        (None, ParsingState::RangeOrdId(Some(ev), dif_tm_len))
                     }
                 }
                 else {
-                    *self = ParsingStateMachine::RangeTm(ev, ord_id, 0, dif_tm_len);
-                    None
+                    (None, ParsingState::DifTm(ev, dif_tm_len))
                 }
             }
-            ParsingStateMachine::RangeTm(ev_id, ord_id, cur_dif_tm, left_bytes) => {
-                let new_dif_tm = cur_dif_tm | ((b as u64) << ((left_bytes - 1) * 8));
-                if left_bytes == 1 {
-                    *self = ParsingStateMachine::NewFrame;
-                    if let Some(id) = ev_id {
-                        Some(TracingEvent::RangePart(id, new_dif_tm, ord_id))
-                    }
-                    else {
-                        Some(TracingEvent::UnnamedRangeEnd(new_dif_tm, ord_id))
-                    }
+            ParsingState::DifTm(ev, dif_tm_len) if available_bytes_len >= dif_tm_len => {
+                let mut buf = [0u8; 8];
+                self.buf.pop_slice(&mut buf[..dif_tm_len]);
+                let dif_tm = u64::from_le_bytes(buf);
+                (Some(TracingEvent::Instant(ev, dif_tm)), ParsingState::NewFrame)
+            }
+            ParsingState::RangeOrdId(ev, dif_tm_len) if available_bytes_len >= 1 => {
+                let ord_id = self.buf.try_pop().unwrap();
+
+                (None, ParsingState::RangeTm(ev, dif_tm_len, ord_id))
+            }
+            ParsingState::RangeTm(ev_id, dif_tm_len, ord_id) if available_bytes_len >= dif_tm_len => {
+                let mut buf = [0u8; 8];
+                self.buf.pop_slice(&mut buf[..dif_tm_len]);
+                let dif_tm = u64::from_le_bytes(buf);
+
+                let ev = if let Some(id) = ev_id {
+                    Some(TracingEvent::RangePart(id, dif_tm, ord_id))
                 }
                 else {
-                    *self = ParsingStateMachine::RangeTm(ev_id, ord_id, new_dif_tm, left_bytes - 1);
-                    None
+                    Some(TracingEvent::UnnamedRangeEnd(dif_tm, ord_id))
+                };
+                (ev, ParsingState::NewFrame)
+            }
+            state => {
+                // Not enough bytes
+                self.state = state;
+                return Err(true)
+            }
+        };
+
+        self.state = new_state;
+        if let Some(ev) = ev {
+            Ok(ev)
+        }
+        else {
+            Err(false)
+        }
+    }
+
+    pub fn parse_many(&mut self, bytes: &[u8]) -> Vec<TracingEvent> {
+        self.buf.push_slice(bytes);
+        let mut events = Vec::new();
+        // Try parse as many events as possible
+        loop {
+            match self.try_parse_event() {
+                Ok(ev) => {
+                    events.push(ev);
+                }
+                Err(finish) => {
+                    if finish {
+                        return events;
+                    }
                 }
             }
         }
     }
 
-    pub fn parse_many(&mut self, bytes: &[u8]) -> Vec<TracingEvent> {
-        bytes.iter().flat_map(|b| self.next_byte(*b)).collect()
+    pub fn ensure_buf_end(&mut self) {
+        assert!(self.buf.is_empty());
+        assert_eq!(self.state, ParsingState::NewFrame);
     }
 }

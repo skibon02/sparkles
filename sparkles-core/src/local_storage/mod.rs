@@ -20,7 +20,6 @@ pub trait GlobalStorageImpl {
 
 pub struct LocalStorage<G: GlobalStorageImpl> {
     prev_tm: u64,
-    accum_tm: u64,
 
     buf: Vec<u8>,
     id_store: IdStoreRepr,
@@ -43,7 +42,6 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
         LocalStorage {
             buf: Vec::new(),
             prev_tm: 0,
-            accum_tm: 0,
 
             id_store: Default::default(),
             local_packet_header: LocalPacketHeader {
@@ -180,7 +178,7 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
         let data = self.buf.clone();
         self.buf.clear();
 
-        if data.len() == 0 {
+        if data.is_empty() {
             // Nothing to flush, ignore
             return;
         }

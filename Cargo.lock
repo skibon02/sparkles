@@ -466,6 +466,7 @@ dependencies = [
  "ctrlc",
  "lazy_static",
  "log",
+ "ringbuf",
  "serde",
  "serde_json",
  "simple_logger",
