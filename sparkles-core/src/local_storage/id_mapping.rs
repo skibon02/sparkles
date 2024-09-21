@@ -108,7 +108,7 @@ impl IdStoreRepr {
     }
 
     #[inline(always)]
-    pub fn insert_and_get_id(&mut self, hash: u32, tag: &'static str, event_type: EventType) -> u8 {
+    pub fn insert_and_get_id(&mut self, hash: u32, tag: &str, event_type: EventType) -> u8 {
         match self.id_map.get(hash) {
             Some(v) => {
                 v

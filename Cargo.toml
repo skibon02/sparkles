@@ -1,7 +1,7 @@
 [workspace]
 resolver="2"
 members = [
-    "sparkles-receiver",
+    "sparkles-parser",
     "sparkles-macro",
     "sparkles",
     "sparkles-core"

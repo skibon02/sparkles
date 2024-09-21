@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use log::{error, info, LevelFilter};
 use simple_logger::SimpleLogger;
-use sparkles_receiver::{TRACE_RESULT_FILE, TraceAcceptor};
+use sparkles_parser::{TRACE_RESULT_FILE, TraceAcceptor};
 
 fn save_res_and_exit() {
     //save as trace.json

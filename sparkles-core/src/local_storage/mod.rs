@@ -69,7 +69,7 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
     }
 
     #[inline(always)]
-    pub fn event_range_start(&mut self, hash: u32, name: &'static str) -> RangeStartRepr {
+    pub fn event_range_start(&mut self, hash: u32, name: &str) -> RangeStartRepr {
         // On a new range event we acquire new range_ord_id to match start and end events
         let range_ord_id = self.new_range_ord_id();
         let start_id = self.id_store.insert_and_get_id(hash, name, EventType::RangeStart);
@@ -84,7 +84,7 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
     }
 
     #[inline(always)]
-    pub fn event_range_end(&mut self, range_start: RangeStartRepr, hash: u32, name: &'static str) {
+    pub fn event_range_end(&mut self, range_start: RangeStartRepr, hash: u32, name: &str) {
         let range_ord_id = range_start.range_ord_id;
         let start_id = range_start.range_start_id;
         if hash != 0 {
@@ -122,7 +122,7 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
 
 
     #[inline(always)]
-    pub fn event_instant(&mut self, hash: u32, string: &'static str) {
+    pub fn event_instant(&mut self, hash: u32, string: &str) {
         //      STAGE 1: insert string and get ID.
         let id = self.id_store.insert_and_get_id(hash, string, EventType::Instant);
         self.event(id);
