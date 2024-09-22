@@ -16,6 +16,16 @@ pub enum EventType {
     RangeEnd(u8),
 }
 
+impl EventType {
+    fn get_offs(&self) -> u32 {
+        match self {
+            Self::Instant => 0,
+            Self::RangeStart => 1,
+            Self::RangeEnd(_) => 2,
+        }
+    }
+}
+
 #[derive(Clone)]
 struct U32U8Map {
     keys: [Option<u32>; 256],
@@ -109,6 +119,8 @@ impl IdStoreRepr {
 
     #[inline(always)]
     pub fn insert_and_get_id(&mut self, hash: u32, tag: &str, event_type: EventType) -> u8 {
+        let offs = event_type.get_offs();
+        let hash = hash + offs;
         match self.id_map.get(hash) {
             Some(v) => {
                 v

@@ -10,7 +10,6 @@ fn main() {
     let start = Instant::now();
 
     while start.elapsed().as_secs() < 1 {}
-    // thread::sleep(Duration::from_millis(1000));
     let end = unsafe { _rdtsc() };
-    info!("Your CPU speed is: {:.3}GHz", end.wrapping_sub(now) as f64 / 1_000_000_000.0);
+    info!("Your CPU timestamps frequency: {:.3}GHz", end.wrapping_sub(now) as f64 / 1_000_000_000.0);
 }

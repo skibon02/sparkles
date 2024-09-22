@@ -1,8 +1,8 @@
 use std::hint::black_box;
+use std::thread;
 use std::time::Instant;
 use log::info;
 use simple_logger::SimpleLogger;
-use sparkles::SparklesConfigBuilder;
 use sparkles_macro::{instant_event, range_event_start};
 
 fn calc_sqrt(val: f64) -> f64 {
@@ -30,9 +30,30 @@ fn perform_tracing() {
 
 fn main() {
     SimpleLogger::new().init().unwrap();
-    let finalize_guard = SparklesConfigBuilder::default_init();
+    let finalize_guard = sparkles::init_default();
 
     let start = Instant::now();
+    thread::spawn(|| {
+        sparkles::set_cur_thread_name("thread#2".to_string());
+        let g = range_event_start!("thread#2");
+        for _ in 0..100 {
+            perform_tracing();
+        }
+    });
+    thread::spawn(|| {
+        sparkles::set_cur_thread_name("thread#3".to_string());
+        let g = range_event_start!("thread#3");
+        for _ in 0..100 {
+            perform_tracing();
+        }
+    });
+    thread::spawn(|| {
+        sparkles::set_cur_thread_name("thread#4".to_string());
+        let g = range_event_start!("thread#4");
+        for _ in 0..100 {
+            perform_tracing();
+        }
+    });
     for _ in 0..100 {
         perform_tracing();
     }

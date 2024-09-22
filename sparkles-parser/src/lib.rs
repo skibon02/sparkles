@@ -10,7 +10,7 @@ use lazy_static::lazy_static;
 use log::{debug, error, info};
 use ringbuf::storage::Heap;
 use ringbuf::traits::{Consumer, Observer, Producer};
-use sparkles_core::headers::{LocalPacketHeader, ThreadNameHeader};
+use sparkles_core::headers::{LocalPacketHeader, SparklesEncoderInfo};
 use sparkles_core::local_storage::id_mapping::EventType;
 use crate::perfetto_format::PerfettoTraceFile;
 
@@ -21,6 +21,7 @@ pub struct TraceAcceptor {
     event_parsers: BTreeMap<u64, ThreadParserState>,
     total_event_bytes: u64,
     total_transport_bytes: u64,
+    encoder_info: Option<SparklesEncoderInfo>
 }
 
 #[derive(Default)]
@@ -68,6 +69,11 @@ impl TraceAcceptor {
 
         let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
 
+        let Some(encoder_info) = self.encoder_info.as_ref() else {
+            panic!("No encoder info received! Cannot continue parsing!");
+        };
+        info!("Begin parsing... Encoder info: {:?}", encoder_info);
+
         let mut counts_per_ns = 1.0;
         // iterate over all threads
         for (&thread_id, parser_state) in &mut self.event_parsers {
@@ -75,7 +81,7 @@ impl TraceAcceptor {
             let thread_name = &parser_state.thread_name;
             // iterate over events
             for (header, events) in &parser_state.event_buf {
-                counts_per_ns = header.counts_per_ns;
+                counts_per_ns = encoder_info.counts_per_ns;
 
                 trace_res_file.set_thread_name(thread_id, thread_name.clone());
                 // for (id, tag) in header.id_store.id_map.iter().enumerate() {
@@ -96,7 +102,7 @@ impl TraceAcceptor {
                         parser_state.cur_tm += dif_tm;
                     }
                     // add to trace file
-                    let timestamp = (parser_state.cur_tm as f64 / header.counts_per_ns) as u64;
+                    let timestamp = (parser_state.cur_tm as f64 / encoder_info.counts_per_ns) as u64;
                     match event {
                         TracingEvent::Instant(id, _) => {
                             let (ev_name, _) = &header.id_store.tags[*id as usize];
@@ -161,6 +167,17 @@ impl TraceAcceptor {
             let mut events_bytes = vec![0; 10_000];
 
             match packet_type[0] {
+                0x00 => {
+                    let mut info_bytes_len = [0u8; 8];
+                    con.read_exact(&mut info_bytes_len)?;
+                    let info_bytes_len = u64::from_le_bytes(info_bytes_len) as usize;
+
+                    let mut info_bytes = vec![0u8; info_bytes_len];
+                    con.read_exact(&mut info_bytes)?;
+                    let info = bincode::deserialize::<SparklesEncoderInfo>(&info_bytes).unwrap();
+
+                    self.encoder_info = Some(info);
+                }
                 0x01 => {
                     let mut total_bytes = [0u8; 8];
                     con.read_exact(&mut total_bytes)?;
@@ -188,6 +205,14 @@ impl TraceAcceptor {
                         let thread_id = header.thread_ord_id;
                         let cur_parser_state = self.event_parsers.entry(thread_id).or_default();
 
+                        //update thread name
+                        if let Some(thread_info) = &header.thread_info {
+                            if let Some(thread_name) = thread_info.new_thread_name.clone() {
+                                cur_parser_state.thread_name = thread_name;
+                            }
+                        }
+
+                        // // Local packet can be shown in trace as range event
                         // let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
                         // let timestamp = (header.start_timestamp as f64 / header.counts_per_ns) as u64;
                         // let duration = ((header.end_timestamp - header.start_timestamp) as f64 / header.counts_per_ns) as u64;
@@ -228,29 +253,13 @@ impl TraceAcceptor {
 
                     info!("Got failed packet header: {:?}", header);
 
-                    let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
-                    let timestamp = (header.start_timestamp as f64 / header.counts_per_ns) as u64;
-                    let duration = ((header.end_timestamp - header.start_timestamp) as f64 / header.counts_per_ns) as u64;
-                    trace_res_file.add_range_event("Missed events page".to_string(), header.thread_ord_id as usize, timestamp, duration);
+                    if let Some(encoder_info) = &self.encoder_info {
+                        let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
+                        let timestamp = (header.start_timestamp as f64 / encoder_info.counts_per_ns) as u64;
+                        let duration = ((header.end_timestamp - header.start_timestamp) as f64 / encoder_info.counts_per_ns) as u64;
+                        trace_res_file.add_range_event("Missed events page".to_string(), header.thread_ord_id as usize, timestamp, duration);
+                    }
 
-                },
-                0x03 => {
-                    let mut header_len = [0u8; 8];
-                    con.read_exact(&mut header_len)?;
-                    self.total_transport_bytes += 8;
-                    let header_len = u64::from_le_bytes(header_len) as usize;
-
-                    let mut header_bytes = vec![0u8; header_len];
-                    con.read_exact(&mut header_bytes)?;
-                    self.total_transport_bytes += header_len as u64;
-                    let header = bincode::deserialize::<ThreadNameHeader>(&header_bytes).unwrap();
-
-                    info!("Got thread name: {:?}", header);
-
-                    let thread_id = header.thread_ord_id;
-                    let cur_parser_state = self.event_parsers.entry(thread_id).or_default();
-
-                    cur_parser_state.thread_name = header.thread_name;
                 },
                 0xff => {
                     info!("Client was gracefully disconnected!");

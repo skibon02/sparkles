@@ -2,7 +2,8 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 use core::sync::atomic::{AtomicUsize, Ordering};
-use crate::headers::{LocalPacketHeader, ThreadNameHeader};
+use crate::config::LocalStorageConfig;
+use crate::headers::{LocalPacketHeader, ThreadInfo};
 use crate::local_storage::id_mapping::{EventType, IdStoreRepr};
 use crate::Timestamp;
 
@@ -10,24 +11,19 @@ use crate::timestamp::TimestampProvider;
 
 pub mod id_mapping;
 
-/// Todo: Make this configurable
-pub const FLUSH_THRESHOLD_PER_THREAD: usize = 10*1024;
-
 pub trait GlobalStorageImpl {
-    fn flush(&self, header: LocalPacketHeader, data: Vec<u8>);
-    fn put_thread_name(&self, header: ThreadNameHeader);
+    fn flush(&self, header: &LocalPacketHeader, data: Vec<u8>);
 }
 
 pub struct LocalStorage<G: GlobalStorageImpl> {
+    config: LocalStorageConfig,
+    
     prev_tm: u64,
 
     buf: Vec<u8>,
     id_store: IdStoreRepr,
 
     local_packet_header: LocalPacketHeader,
-
-    thread_name_header: ThreadNameHeader,
-    thread_name_changed: bool,
 
     global_storage_ref: G,
     last_range_ord_id: u8
@@ -36,25 +32,20 @@ pub struct LocalStorage<G: GlobalStorageImpl> {
 static CUR_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
 
 impl<G: GlobalStorageImpl> LocalStorage<G> {
-    pub fn new(global_storage_ref: G, thread_name: String, thread_id: u64)-> Self {
+    pub fn new(global_storage_ref: G, thread_info: Option<ThreadInfo>, config: LocalStorageConfig)-> Self {
         let thread_ord_id = CUR_THREAD_ID.fetch_add(1, Ordering::Relaxed) as u64;
 
         LocalStorage {
+            config,
             buf: Vec::new(),
             prev_tm: 0,
 
             id_store: Default::default(),
             local_packet_header: LocalPacketHeader {
                 thread_ord_id,
-                thread_id,
-                counts_per_ns: Timestamp::COUNTS_PER_NS,
+                thread_info,
 
                 ..Default::default()
-            },
-            thread_name_changed: true,
-            thread_name_header: ThreadNameHeader {
-                thread_ord_id,
-                thread_name,
             },
 
             global_storage_ref,
@@ -63,8 +54,8 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
     }
 
     fn new_range_ord_id(&mut self) -> u8 {
-        let range_ord_id = self.last_range_ord_id.wrapping_add(1);
-        self.last_range_ord_id = range_ord_id;
+        let range_ord_id = self.last_range_ord_id;
+        self.last_range_ord_id = self.last_range_ord_id.wrapping_add(1);
         range_ord_id
     }
 
@@ -161,14 +152,15 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
     }
 
     pub fn set_cur_thread_name(&mut self, name: String) {
-        self.thread_name_changed = true;
-        self.thread_name_header.thread_name = name;
+        if let Some(thread_info) = &mut self.local_packet_header.thread_info {
+            thread_info.new_thread_name = Some(name);
+        }
     }
 
     /// Check buffer length, and flush if the buffer is full
     #[inline(always)]
     pub fn auto_flush(&mut self) {
-        if self.buf.len() >= FLUSH_THRESHOLD_PER_THREAD {
+        if self.buf.len() >= self.config.flush_threshold {
             self.flush(false);
         }
     }
@@ -183,15 +175,18 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
             return;
         }
 
+        // Fill header
         self.local_packet_header.end_timestamp = self.prev_tm;
         self.local_packet_header.id_store = self.id_store.clone().into();
 
-        if self.thread_name_changed {
-            self.thread_name_changed = false;
-            self.global_storage_ref.put_thread_name(self.thread_name_header.clone())
-        }
-        self.global_storage_ref.flush(self.local_packet_header.clone(), data);
+        self.global_storage_ref.flush(&self.local_packet_header, data);
 
+        //cleanup
+        if let Some(thread_info) = &mut self.local_packet_header.thread_info {
+            if thread_info.new_thread_name.is_some() {
+                thread_info.new_thread_name = None;
+            }
+        }
         self.local_packet_header.start_timestamp = 0;
     }
 }

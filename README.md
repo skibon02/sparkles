@@ -14,7 +14,7 @@ Fast. Blazingly fast. 🚀 Single event overhead is 9ns.
 - **sparkles**: Ready-to-use library for capturing events and streaming them to receiving app over TCP
 - **sparkles-core**: Common functionality for std and no_std (todo) version of sparkles.
 - **sparkles-macro**: instant_event! and range_event_start! macro to encode event name into integer value.
-- **sparkles-receiver**: This binary will listen to TCP port, capture and decode incoming events and save them to JSON file (Perfetto format).
+- **sparkles-parser**: This binary will listen to TCP port, capture and decode incoming events and save them to JSON file (Perfetto format).
 
 ## ✧ How to use
 1. Add sparkles as a dependency to your project
@@ -32,11 +32,10 @@ cargo run --release --example listen_and_print
 ```rust
 use std::time::Duration;
 use sparkles_macro::{instant_event, range_event_start};
-use sparkles::SparklesConfigBuilder;
 
 // Refer to sparkles/examples/how_to_use.rs
 fn main() {
-    let finalize_guard = SparklesConfigBuilder::default_init();
+    let finalize_guard = sparkles::init_default();
     let g = range_event_start!("main()");
 
     let jh = std::thread::Builder::new().name(String::from("joined thread")).spawn(|| {
@@ -84,22 +83,21 @@ Ready: \
 🌟 Event name hashing \
 🌟 Perfetto json format compatibility
 🌟 Ranges (scopes) support
+🌟 Configuration support \
 
 TODO: \
 ⚙️ Abstraction over events transfer type (TCP/UDP/IPC/File) \
+⚙️ Perfetto binary format support \
 ⚙️ Additional attached binary data \
 ⚙️ Module info support: full module path, line of code \
-⚙️ Perfetto binary format support \
 ⚙️ Capture and transfer loss detection with no corruption to other captured and transmitted data \
 ⚙️ Async support \
-⚙️ Configuration support \
 ⚙️ NO_STD implementation \
 ⚙️ tags / hierarchy of events \
 ⚙️ Viewer app \
 ⚙️ Multi-app sync \
 ⚙️ Global ranges \
 ⚙️ Measurement overhead self-test
-
 
 ｡ﾟﾟ･｡･ﾟﾟ｡\
 ﾟ。SkyGrel19 ✨\
