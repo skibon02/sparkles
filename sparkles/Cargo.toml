@@ -15,6 +15,7 @@ log = { version = "0.4.22", default-features = false }
 ringbuf = "0.4.4"
 drop_guard = "0.3.0"
 thread-id = { version = "4.2.2" }
+chrono = "0.4.38"
 
 [dev-dependencies]
 # for examples
@@ -22,6 +23,11 @@ simple_logger = "5.0.0"
 # for puffin tests
 puffin_http = "0.16.0"
 puffin = { version = "0.19.0" }
+tracing = "0.1.40"
+tracing-perfetto = "0.1.1"
+tracing-subscriber = "0.3.18"
+anyhow = "1.0.88"
+
 
 sparkles-macro = {path = "../sparkles-macro"}
 

@@ -1,65 +1,72 @@
 mod perfetto_format;
+mod consts;
 
 use std::cmp::min;
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::mem;
-use std::net::{TcpListener, TcpStream};
-use std::sync::Mutex;
-use lazy_static::lazy_static;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use ringbuf::storage::Heap;
 use ringbuf::traits::{Consumer, Observer, Producer};
+use thiserror::Error;
 use sparkles_core::headers::{LocalPacketHeader, SparklesEncoderInfo};
 use sparkles_core::local_storage::id_mapping::EventType;
+use crate::ParseError::Decode;
 use crate::perfetto_format::PerfettoTraceFile;
 
 pub static PARSER_BUF_SIZE: usize = 1_000_000;
 
 #[derive(Default)]
-pub struct TraceAcceptor {
-    event_parsers: BTreeMap<u64, ThreadParserState>,
+pub struct SparklesParser {
     total_event_bytes: u64,
     total_transport_bytes: u64,
-    encoder_info: Option<SparklesEncoderInfo>
+
+    encoder_info: Option<SparklesEncoderInfo>,
+
+    event_parsers: BTreeMap<u64, ThreadParserState>,
 }
 
 #[derive(Default)]
 pub struct ThreadParserState {
-    thread_name: String,
+    thread_name: Option<String>,
+    thread_id: Option<u64>,
     event_buf: Vec<(LocalPacketHeader, Vec<TracingEvent>)>,
 
+    // start timestamp and duration for missed events packet
+    missed_events: Vec<(u64, u64)>,
+
+    // ---- TMP DATA ----
+    state_machine: StreamFrameDecoder,
+    // Helper for ranges handling
     cur_started_ranges: BTreeMap<u8, (TracingEventId, u64)>,
-    state_machine: StreamParser,
+    // Current timestamp, accumulated from events
     cur_tm: u64,
 }
 
-
-lazy_static! {
-    pub static ref TRACE_RESULT_FILE: Mutex<PerfettoTraceFile> = Mutex::new(PerfettoTraceFile::default());
+#[derive(Debug, Error)]
+pub enum ParseError {
+    #[error("Error while decoding frame")]
+    Decode(DecodeError),
 }
 
-impl TraceAcceptor {
-    pub fn listen(&mut self) -> Result<(), std::io::Error> {
-        let listener = TcpListener::bind("0.0.0.0:4302")?;
+#[derive(Debug, Error)]
+pub enum DecodeError {
+    #[error("Error while reading from stream")]
+    Io(#[from] std::io::Error),
+    #[error("Error while deserializing data")]
+    Bincode(#[from] bincode::Error),
+}
 
-        info!("Server running at port 4302");
-        info!("Waiting for connection...");
+type ParseResult<T> = Result<T, ParseError>;
+type DecodeResult<T> = Result<T, DecodeError>;
 
-        for con in listener.incoming().take(1) {
-            if let Ok(mut con) = con {
-                info!("Client connected!");
-                if let Err(e) = self.handle_client(&mut con) {
-                    error!("Error handling client: {:?}", e);
-                    break;
-                }
-            }
-            else {
-                error!("Error accepting connection: {:?}", con);
-            }
+impl SparklesParser {
+    /// Decode incoming events and save them to `trace.json` in Perfetto format
+    pub fn parse_and_save(&mut self, mut reader: impl Read) -> ParseResult<()> {
+        if let Err(e) = self.decode_packets(&mut reader) {
+            error!("Error handling client: {:?}", e);
+            return Err(Decode(e));
         }
-
-        info!("Disconnected... Start parsing");
 
         //some stats
         let mut total_events = 0;
@@ -67,25 +74,23 @@ impl TraceAcceptor {
         let mut max_timestamp = 0;
         let mut covered_dur = 0;
 
-        let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
 
-        let Some(encoder_info) = self.encoder_info.as_ref() else {
-            panic!("No encoder info received! Cannot continue parsing!");
-        };
+        let encoder_info = self.encoder_info.take().unwrap_or_else(|| {
+            warn!("Encoder info is not present in decoded data! Using default values");
+            SparklesEncoderInfo::default()
+        });
+
         info!("Begin parsing... Encoder info: {:?}", encoder_info);
 
-        let mut counts_per_ns = 1.0;
+        let mut trace_res_file = PerfettoTraceFile::new(encoder_info.process_name, encoder_info.pid);
+        let counts_per_ns = encoder_info.counts_per_ns;
         // iterate over all threads
-        for (&thread_id, parser_state) in &mut self.event_parsers {
-            let thread_id = thread_id as usize;
-            let thread_name = &parser_state.thread_name;
+        for (&thread_ord_id, parser_state) in &mut self.event_parsers {
+            let thread_name = parser_state.thread_name.clone().unwrap_or("".to_string());
+            let thread_id = parser_state.thread_id.unwrap_or(thread_ord_id);
             // iterate over events
             for (header, events) in &parser_state.event_buf {
-                counts_per_ns = encoder_info.counts_per_ns;
-
                 trace_res_file.set_thread_name(thread_id, thread_name.clone());
-                // for (id, tag) in header.id_store.id_map.iter().enumerate() {
-                // }
 
                 parser_state.cur_tm = header.start_timestamp;
                 let mut first = true;
@@ -114,8 +119,8 @@ impl TraceAcceptor {
                                 let (start_name, _) = &header.id_store.tags[*start_id as usize];
                                 let start_info = parser_state.cur_started_ranges.remove(ord_id).unwrap();
                                 let start_tm = start_info.1;
-                                let duration = timestamp - start_tm;
-                                trace_res_file.add_range_event(format!("{} -> {}", start_name, ev_name), thread_id, start_tm, duration);
+                                let end_tm = timestamp;
+                                trace_res_file.add_range_event(format!("{} -> {}", start_name, ev_name), thread_id, start_tm, end_tm);
                             }
                             else {
                                 // Range start
@@ -127,8 +132,8 @@ impl TraceAcceptor {
                             let range_id = start_info.0;
                             let range_name = &header.id_store.tags[range_id as usize].0;
                             let start_tm = start_info.1;
-                            let duration = timestamp - start_tm;
-                            trace_res_file.add_range_event(range_name.clone(), thread_id, start_tm, duration);
+                            let end_tm = timestamp;
+                            trace_res_file.add_range_event(range_name.clone(), thread_id, start_tm, end_tm);
                         }
                     }
                 }
@@ -153,12 +158,16 @@ impl TraceAcceptor {
         info!("Average bytes per event: {} bytes", self.total_event_bytes as f64 / total_events as f64);
         info!("Average transport bytes per event: {} bytes", self.total_transport_bytes as f64 / total_events as f64);
 
-        info!("Finished!");
+        info!("Finished! Saving to trace.perf...");
+
+        let mut file = std::fs::File::create("trace.perf").unwrap();
+        let bytes = trace_res_file.get_bytes();
+        file.write_all(&bytes).unwrap();
 
         Ok(())
     }
 
-    fn handle_client(&mut self, con: &mut TcpStream) -> Result<(), std::io::Error> {
+    fn decode_packets(&mut self, con: &mut impl Read) -> DecodeResult<()> {
         loop {
             let mut packet_type = [0u8; 1];
             con.read_exact(&mut packet_type)?;
@@ -174,7 +183,11 @@ impl TraceAcceptor {
 
                     let mut info_bytes = vec![0u8; info_bytes_len];
                     con.read_exact(&mut info_bytes)?;
-                    let info = bincode::deserialize::<SparklesEncoderInfo>(&info_bytes).unwrap();
+                    let info = bincode::deserialize::<SparklesEncoderInfo>(&info_bytes)?;
+
+                    if info.ver != consts::ENCODER_VERSION {
+                        warn!("Encoder version mismatch! Parser: {}, Encoder: {}", consts::ENCODER_VERSION, info.ver);
+                    }
 
                     self.encoder_info = Some(info);
                 }
@@ -192,7 +205,7 @@ impl TraceAcceptor {
                         let mut header_bytes = vec![0u8; header_len];
                         con.read_exact(&mut header_bytes)?;
                         self.total_transport_bytes += header_len as u64;
-                        let header = bincode::deserialize::<LocalPacketHeader>(&header_bytes).unwrap();
+                        let header = bincode::deserialize::<LocalPacketHeader>(&header_bytes)?;
 
                         let mut buf_len = [0u8; 8];
                         con.read_exact(&mut buf_len)?;
@@ -208,15 +221,10 @@ impl TraceAcceptor {
                         //update thread name
                         if let Some(thread_info) = &header.thread_info {
                             if let Some(thread_name) = thread_info.new_thread_name.clone() {
-                                cur_parser_state.thread_name = thread_name;
+                                cur_parser_state.thread_name = Some(thread_name);
+                                cur_parser_state.thread_id = Some(thread_info.thread_id);
                             }
                         }
-
-                        // // Local packet can be shown in trace as range event
-                        // let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
-                        // let timestamp = (header.start_timestamp as f64 / header.counts_per_ns) as u64;
-                        // let duration = ((header.end_timestamp - header.start_timestamp) as f64 / header.counts_per_ns) as u64;
-                        // trace_res_file.add_range_event("Local packet".to_string(), header.thread_id as usize, timestamp, duration);
 
                         let mut remaining_size = buf_len;
                         while remaining_size > 0 {
@@ -225,7 +233,7 @@ impl TraceAcceptor {
                             con.read_exact(&mut events_bytes)?;
                             self.total_transport_bytes += cur_size as u64;
 
-                            let new_events = cur_parser_state.state_machine.parse_many(&events_bytes);
+                            let new_events = cur_parser_state.state_machine.decode_many(&events_bytes);
                             let new_events_len = new_events.len();
                             event_buf.extend_from_slice(&new_events);
                             debug!("Got {} bytes, Parsed {} events", cur_size, new_events_len);
@@ -249,16 +257,14 @@ impl TraceAcceptor {
                     let mut header_bytes = vec![0u8; header_len];
                     con.read_exact(&mut header_bytes)?;
                     self.total_transport_bytes += header_len as u64;
-                    let header = bincode::deserialize::<LocalPacketHeader>(&header_bytes).unwrap();
+                    let header = bincode::deserialize::<LocalPacketHeader>(&header_bytes)?;
 
                     info!("Got failed packet header: {:?}", header);
 
-                    if let Some(encoder_info) = &self.encoder_info {
-                        let mut trace_res_file = TRACE_RESULT_FILE.lock().unwrap();
-                        let timestamp = (header.start_timestamp as f64 / encoder_info.counts_per_ns) as u64;
-                        let duration = ((header.end_timestamp - header.start_timestamp) as f64 / encoder_info.counts_per_ns) as u64;
-                        trace_res_file.add_range_event("Missed events page".to_string(), header.thread_ord_id as usize, timestamp, duration);
-                    }
+                    let start = header.start_timestamp;
+                    let dur = header.end_timestamp - header.start_timestamp;
+                    let thread_ord_id = header.thread_ord_id;
+                    self.thread_parser_state(thread_ord_id).missed_events.push((start, dur));
 
                 },
                 0xff => {
@@ -269,6 +275,10 @@ impl TraceAcceptor {
                 _ => panic!("Unknown packet type!")
             }
         }
+    }
+
+    fn thread_parser_state(&mut self, thread_id: u64) -> &mut ThreadParserState {
+        self.event_parsers.entry(thread_id).or_default()
     }
 }
 
@@ -282,12 +292,12 @@ pub enum TracingEvent {
     UnnamedRangeEnd(u64, u8)
 }
 
-pub struct StreamParser {
+pub struct StreamFrameDecoder {
     state: ParsingState,
     buf: ringbuf::LocalRb<Heap<u8>>
 }
 
-impl Default for StreamParser {
+impl Default for StreamFrameDecoder {
     fn default() -> Self {
         Self {
             state: ParsingState::NewFrame,
@@ -310,8 +320,8 @@ pub enum ParsingState {
     RangeTm(Option<TracingEventId>, usize, u8)
 }
 
-impl StreamParser {
-    pub fn try_parse_event(&mut self) -> Result<TracingEvent, bool> {
+impl StreamFrameDecoder {
+    pub fn try_decode_event(&mut self) -> Result<TracingEvent, bool> {
         let available_bytes_len = self.buf.occupied_len();
 
         let (ev, new_state) = match mem::take(&mut self.state) {
@@ -378,12 +388,12 @@ impl StreamParser {
         }
     }
 
-    pub fn parse_many(&mut self, bytes: &[u8]) -> Vec<TracingEvent> {
+    pub fn decode_many(&mut self, bytes: &[u8]) -> Vec<TracingEvent> {
         self.buf.push_slice(bytes);
         let mut events = Vec::new();
         // Try parse as many events as possible
         loop {
-            match self.try_parse_event() {
+            match self.try_decode_event() {
                 Ok(ev) => {
                     events.push(ev);
                 }

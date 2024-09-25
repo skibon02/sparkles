@@ -7,14 +7,14 @@ Performance-focused library for capturing execution flow of application.
 **What?**
 Just add instant_event! macro to your code and see all events in a timeline with CPU cycle precision. \
 **How?**
-Fast. Blazingly fast. 🚀 Single event overhead is 9ns.
+Fast. Blazingly fast. 🚀 Recording single event to trace buffer takes 9ns.
 
 ![img_1.png](https://github.com/skibon02/sparkles/blob/main/img_1.png?raw=true)
 ## ✧ Main parts
-- **sparkles**: Ready-to-use library for capturing events and streaming them to receiving app over TCP
+- **sparkles**: Ready-to-use library for capturing events and saving them to file in lightweight encoded format.
 - **sparkles-core**: Common functionality for std and no_std (todo) version of sparkles.
 - **sparkles-macro**: instant_event! and range_event_start! macro to encode event name into integer value.
-- **sparkles-parser**: This binary will listen to TCP port, capture and decode incoming events and save them to JSON file (Perfetto format).
+- **sparkles-parser**: This binary will parse tracing data, decode events and save them to file in Perfetto protobuf format.
 
 ## ✧ How to use
 1. Add sparkles as a dependency to your project
@@ -22,12 +22,7 @@ Fast. Blazingly fast. 🚀 Single event overhead is 9ns.
 cargo add sparkles 
 cargo add sparkles-macro
 ```
-2. Run receiving app in background
-```bash
-cd sparkles-receiver
-cargo run --release --example listen_and_print
-```
-3. Add some events to your code
+2. Add some events to your code
 
 ```rust
 use std::time::Duration;
@@ -60,8 +55,12 @@ fn main() {
     jh.join().unwrap();
 }
 ```
-4. Run your code. As it finishes, trace.json is generated.
-5. Go to https://ui.perfetto.dev and drag'n'drop resulting json file.
+3. Run your code. As it finishes, `trace/*.sprk` is generated.
+4. Run sparkles-parser in directory with `trace` folder.
+```bash
+cargo run --example file-parser
+```
+5. Go to https://ui.perfetto.dev and drag'n'drop resulting `.perf` file.
 6. Observe the result:
 ![img.png](https://github.com/skibon02/sparkles/blob/main/img.png?raw=true)
 
@@ -81,13 +80,13 @@ Up to 🫸100kk🫷 events can be captured in a local environment with no data l
 Ready: \
 🌟 Timestamp provider \
 🌟 Event name hashing \
-🌟 Perfetto json format compatibility
-🌟 Ranges (scopes) support
+🌟 ~~Perfetto json format compatibility~~ (replaced with protobuf) \
+🌟 Ranges (scopes) support \
 🌟 Configuration support \
+🌟 Perfetto protobuf format support \
 
 TODO: \
-⚙️ Abstraction over events transfer type (TCP/UDP/IPC/File) \
-⚙️ Perfetto binary format support \
+⚙️ Abstraction over events sending type (TCP/UDP/IPC/File) \
 ⚙️ Additional attached binary data \
 ⚙️ Module info support: full module path, line of code \
 ⚙️ Capture and transfer loss detection with no corruption to other captured and transmitted data \

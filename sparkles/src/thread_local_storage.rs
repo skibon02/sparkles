@@ -12,10 +12,10 @@ pub type ThreadLocalStorage = LocalStorage<GlobalStorageRef>;
 static LOCAL_CONFIG: OnceLock<LocalStorageConfig> = OnceLock::new();
 
 impl GlobalStorageImpl for GlobalStorageRef {
-    fn flush(&self, header: &LocalPacketHeader, data: Vec<u8>) {
+    fn flush(&self, header: &LocalPacketHeader, data: &[u8]) {
         let mut global_storage_ref = GLOBAL_STORAGE.lock().unwrap();
         let global_storage_ref = global_storage_ref.get_or_insert_with(|| GlobalStorage::new(Default::default()));
-        global_storage_ref.push_buf(header, &data);
+        global_storage_ref.push_buf(header, data);
     }
 }
 

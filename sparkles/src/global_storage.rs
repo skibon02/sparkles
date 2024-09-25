@@ -2,9 +2,8 @@
 //! All evens are being flushed into GLOBAL_STORAGE, and then head towards transport abstraction (UDP/TCP/file).
 
 use std::io::{Read, Write};
-use std::net::{Shutdown, TcpStream};
 use std::sync::Mutex;
-use std::{mem, thread};
+use std::{fs, mem, thread};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{JoinHandle};
 use std::time::Duration;
@@ -29,7 +28,6 @@ impl GlobalStorage {
     /// Create new global storage with given config and spawn sending thread
     pub fn new(config: SparklesConfig) -> Self {
         let jh = spawn_sending_task();
-
 
         let global_capacity = config.global_capacity;
         Self {
@@ -103,19 +101,34 @@ impl GlobalStorage {
 
 fn spawn_sending_task() -> JoinHandle<()> {
     thread::spawn(|| {
-        debug!("[sparkles] Flush thread started! Connecting to remote...");
-        let mut con = TcpStream::connect("127.0.0.1:4302").unwrap();
-        debug!("[sparkles] Connected!");
+        debug!("[sparkles] Flush thread started!");
+
+        // 1. Create log file
+        let dir = "trace";
+        if !fs::metadata(dir).is_ok() {
+            debug!("[sparkles] Creating output directory...");
+            fs::create_dir(dir).unwrap();
+        }
+
+        let now = chrono::Local::now();
+        let filename = format!("{}/{}.sprk", dir, now.format("%Y-%m-%d_%H-%M-%S"));
+        debug!("[sparkles] Creating output file: {}", filename);
+        let mut file = fs::File::create(filename).unwrap();
+
+        let process_name = std::env::current_exe().unwrap().file_name().unwrap().to_str().unwrap().to_string();
+        let pid = std::process::id();
 
         let info_header = SparklesEncoderInfo {
-            ver: sparkles_core::ENCODER_VER,
-            counts_per_ns: Timestamp::COUNTS_PER_NS
+            ver: sparkles_core::consts::ENCODER_VERSION,
+            counts_per_ns: Timestamp::COUNTS_PER_NS,
+            process_name,
+            pid
         };
         let encoded_info = bincode::serialize(&info_header).unwrap();
 
-        con.write_all(&[0x00]).unwrap();
-        con.write_all(&(encoded_info.len() as u64).to_le_bytes()).unwrap();
-        con.write_all(&encoded_info).unwrap();
+        file.write_all(&[0x00]).unwrap();
+        file.write_all(&(encoded_info.len() as u64).to_le_bytes()).unwrap();
+        file.write_all(&encoded_info).unwrap();
 
         loop {
             thread::sleep(Duration::from_millis(1));
@@ -141,12 +154,12 @@ fn spawn_sending_task() -> JoinHandle<()> {
             // handle buffers
             if let Some((slice1, slice2)) = slices {
                 trace!("[sparkles] took two fresh slices! sizes: {}, {}", slice1.len(), slice2.len());
-                con.write_all(&[0x01]).unwrap();
+                file.write_all(&[0x01]).unwrap();
                 let total_len = (slice1.len() + slice2.len()) as u64;
                 let total_len_bytes = total_len.to_le_bytes();
-                con.write_all(&total_len_bytes).unwrap();
-                con.write_all(&slice1).unwrap();
-                con.write_all(&slice2).unwrap();
+                file.write_all(&total_len_bytes).unwrap();
+                file.write_all(&slice1).unwrap();
+                file.write_all(&slice2).unwrap();
             }
 
             // handle failed pages
@@ -155,16 +168,15 @@ fn spawn_sending_task() -> JoinHandle<()> {
                 for failed_msr_page in failed_pages {
                     let header = bincode::serialize(&failed_msr_page).unwrap();
                     let header_len = (header.len() as u64).to_le_bytes();
-                    con.write_all(&[0x02]).unwrap();
-                    con.write_all(&header_len).unwrap();
-                    con.write_all(&header).unwrap();
+                    file.write_all(&[0x02]).unwrap();
+                    file.write_all(&header_len).unwrap();
+                    file.write_all(&header).unwrap();
                 }
             }
 
             if is_finalizing {
                 debug!("[sparkles] Finalize in process...");
-                con.write_all(&[0xff]).unwrap();
-                con.shutdown(Shutdown::Both).unwrap();
+                file.write_all(&[0xff]).unwrap();
                 break;
             }
         }

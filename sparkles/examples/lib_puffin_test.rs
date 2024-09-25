@@ -32,7 +32,7 @@ fn main() {
         puffin::GlobalProfiler::lock().new_frame();
         black_box(v);
     }
-    let dur = start.elapsed().as_nanos() as f64 / 2.0 / (100 * (N + 6)) as f64;
+    let dur = start.elapsed().as_nanos() as f64 / 2.0 / (100 * N) as f64;
     info!("Finished! waiting for tracer send...");
     info!("Each event took {:?} ns", dur);
 

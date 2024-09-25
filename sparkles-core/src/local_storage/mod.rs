@@ -12,7 +12,7 @@ use crate::timestamp::TimestampProvider;
 pub mod id_mapping;
 
 pub trait GlobalStorageImpl {
-    fn flush(&self, header: &LocalPacketHeader, data: Vec<u8>);
+    fn flush(&self, header: &LocalPacketHeader, data: &[u8]);
 }
 
 pub struct LocalStorage<G: GlobalStorageImpl> {
@@ -29,7 +29,7 @@ pub struct LocalStorage<G: GlobalStorageImpl> {
     last_range_ord_id: u8
 }
 
-static CUR_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
+static CUR_THREAD_ID: AtomicUsize = AtomicUsize::new(1);
 
 impl<G: GlobalStorageImpl> LocalStorage<G> {
     pub fn new(global_storage_ref: G, thread_info: Option<ThreadInfo>, config: LocalStorageConfig)-> Self {
@@ -167,10 +167,7 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
 
     /// Flush whole event buffer data to the global storage
     pub fn flush(&mut self, _finalize: bool) {
-        let data = self.buf.clone();
-        self.buf.clear();
-
-        if data.is_empty() {
+        if self.buf.is_empty() {
             // Nothing to flush, ignore
             return;
         }
@@ -179,8 +176,9 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
         self.local_packet_header.end_timestamp = self.prev_tm;
         self.local_packet_header.id_store = self.id_store.clone().into();
 
-        self.global_storage_ref.flush(&self.local_packet_header, data);
-
+        self.global_storage_ref.flush(&self.local_packet_header, &self.buf);
+        self.buf.clear();
+        
         //cleanup
         if let Some(thread_info) = &mut self.local_packet_header.thread_info {
             if thread_info.new_thread_name.is_some() {

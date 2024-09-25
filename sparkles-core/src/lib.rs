@@ -7,5 +7,5 @@ pub use timestamp::{Timestamp, TimestampProvider};
 pub mod local_storage;
 pub mod headers;
 pub mod config;
-
-pub const ENCODER_VER: u32 = 0;
+pub mod sender;
+pub mod consts;

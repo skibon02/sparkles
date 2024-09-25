@@ -1,5 +1,6 @@
 mod thread_local_storage;
 mod global_storage;
+mod sender;
 
 pub use global_storage::finalize;
 pub use sparkles_core::config::SparklesConfig;
