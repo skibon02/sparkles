@@ -1,13 +1,13 @@
 //! Single global storage for sparkles events
 //! All evens are being flushed into GLOBAL_STORAGE, and then head towards transport abstraction (UDP/TCP/file).
 
-use std::io::{Read, Write};
+use std::io::Read;
 use std::sync::Mutex;
 use std::{mem, thread};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{JoinHandle};
 use std::time::{Duration, Instant};
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, trace, warn};
 use ringbuf::traits::{Consumer, Observer, Producer};
 use sparkles_core::headers::{LocalPacketHeader, SparklesEncoderInfo};
 use sparkles_core::{Timestamp, TimestampProvider};
