@@ -10,7 +10,7 @@ repository = "https://github.com/skibon02/sparkles"
 log = "0.4.22"
 lazy_static = "1.5.0"
 bincode = "1.3.3"
-sparkles-core = { path = "../sparkles-core" }
+sparkles-core = { version = "0.1.4", path = "../sparkles-core" }
 ringbuf = "0.4.4"
 thiserror = "1.0.64"
 chrono = "0.4.38"
