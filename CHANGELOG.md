@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+- [sparkles] Removed TCP support
+- [sparkles] Added file saving support
+- [sparkles] **[WIP]** Added UDP sender support with configuration 
+- [sparkles] Add sender config to SparklesConfig
+- [sparkles-core] **[WIP]** aarch64 timestamps support
+- [encoder format] Add ticks_per_sec packet type
 
 ## [0.1.3] - 2024-09-23
 - [sparkles-core] New: Add configuration structures: `SparklesConfig` and `LocalStorageConfig`

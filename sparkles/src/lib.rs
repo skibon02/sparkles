@@ -1,11 +1,13 @@
 mod thread_local_storage;
 mod global_storage;
-mod sender;
+pub mod sender;
+pub mod config;
+mod encoder;
 
 pub use global_storage::finalize;
-pub use sparkles_core::config::SparklesConfig;
 
 use sparkles_core::local_storage::RangeStartRepr;
+use crate::config::SparklesConfig;
 use crate::global_storage::GlobalStorage;
 
 

@@ -1,20 +1,23 @@
+//! Interactive file parser
+//! 1. Run your application with sparkles with default file sender configuration. `trace` folder will be generated.
+//! 2. Use this example to parse latest trace file in this folder: `cargo run --release --example interactive`
+//! 3. Go to https://ui.perfetto.dev/ and drag'n'drop generated `trace.perf` file
+
 use log::{error, info, LevelFilter};
 use simple_logger::SimpleLogger;
 use sparkles_parser::SparklesParser;
 
-
 fn main() {
-
     SimpleLogger::new().with_level(LevelFilter::Info).init().unwrap();
 
     // 1. check directory trace
     if let Ok(meta) = std::fs::metadata("trace") {
         if !meta.is_dir() {
-            log::error!("trace is not a directory");
+            error!("trace is not a directory");
             return;
         }
     } else {
-        error!("trace directory does not exist");
+        error!("trace directory was not found!");
         return;
     }
 

@@ -13,6 +13,4 @@ impl TimestampProvider for StdTimestamp {
     fn now() -> Self::TimestampType {
         UNIX_EPOCH.elapsed().unwrap().as_nanos() as u64
     }
-
-    const COUNTS_PER_NS: f64 = 1.0;
 }

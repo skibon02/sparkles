@@ -84,9 +84,12 @@ Ready: \
 🌟 Ranges (scopes) support \
 🌟 Configuration support \
 🌟 Perfetto protobuf format support \
+🌟 Abstraction over events sending type (TCP/UDP/IPC/File) \
+🌟 Automatic timestamp frequency detection \
+🌟 aarch64 support
 
 TODO: \
-⚙️ Abstraction over events sending type (TCP/UDP/IPC/File) \
+⚙️ Option to run without additional bg thread \
 ⚙️ Additional attached binary data \
 ⚙️ Module info support: full module path, line of code \
 ⚙️ Capture and transfer loss detection with no corruption to other captured and transmitted data \

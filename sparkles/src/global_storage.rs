@@ -3,15 +3,19 @@
 
 use std::io::{Read, Write};
 use std::sync::Mutex;
-use std::{fs, mem, thread};
+use std::{mem, thread};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{JoinHandle};
-use std::time::Duration;
-use log::{debug, error, trace, warn};
+use std::time::{Duration, Instant};
+use log::{debug, error, info, trace, warn};
 use ringbuf::traits::{Consumer, Observer, Producer};
-use sparkles_core::config::SparklesConfig;
 use sparkles_core::headers::{LocalPacketHeader, SparklesEncoderInfo};
 use sparkles_core::{Timestamp, TimestampProvider};
+use sparkles_core::sender::{ConfiguredSender, Sender, SenderChain};
+use crate::config::SparklesConfig;
+use crate::encoder::{send_data_bytes, send_encoder_info_packet, send_failed_page_headers, send_timestamp_freq};
+use crate::sender::file_sender::FileSender;
+use crate::thread_local_storage::set_local_storage_config;
 
 pub static GLOBAL_STORAGE: Mutex<Option<GlobalStorage>> = Mutex::new(None);
 static FINALIZE_STARTED: AtomicBool = AtomicBool::new(false);
@@ -27,7 +31,10 @@ pub struct GlobalStorage {
 impl GlobalStorage {
     /// Create new global storage with given config and spawn sending thread
     pub fn new(config: SparklesConfig) -> Self {
-        let jh = spawn_sending_task();
+        // Set local storage config
+        set_local_storage_config(config.local_storage_config);
+
+        let jh = spawn_sending_task(config.clone());
 
         let global_capacity = config.global_capacity;
         Self {
@@ -99,39 +106,42 @@ impl GlobalStorage {
     }
 }
 
-fn spawn_sending_task() -> JoinHandle<()> {
-    thread::spawn(|| {
+fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
+    thread::spawn(move || {
         debug!("[sparkles] Flush thread started!");
 
-        // 1. Create log file
-        let dir = "trace";
-        if !fs::metadata(dir).is_ok() {
-            debug!("[sparkles] Creating output directory...");
-            fs::create_dir(dir).unwrap();
+        let mut sender_chain = SenderChain::default();
+        if let Some(file_sender_config) = config.file_sender_config.as_ref() {
+            if let Some(sender) = FileSender::new(file_sender_config) {
+                sender_chain.with_sender(sender);
+            }
+            else {
+                warn!("[sparkles] Failed to create file sender!");
+            }
         }
-
-        let now = chrono::Local::now();
-        let filename = format!("{}/{}.sprk", dir, now.format("%Y-%m-%d_%H-%M-%S"));
-        debug!("[sparkles] Creating output file: {}", filename);
-        let mut file = fs::File::create(filename).unwrap();
+        if let Some(udp_sender_config) = config.udp_sender_config.as_ref() {
+            if let Some(sender) = crate::sender::udp_sender::UdpSender::new(udp_sender_config) {
+                sender_chain.with_sender(sender);
+            }
+            else {
+                warn!("[sparkles] Failed to create UDP sender!");
+            }
+        }
 
         let process_name = std::env::current_exe().unwrap().file_name().unwrap().to_str().unwrap().to_string();
         let pid = std::process::id();
 
-        let info_header = SparklesEncoderInfo {
-            ver: sparkles_core::consts::ENCODER_VERSION,
-            counts_per_ns: Timestamp::COUNTS_PER_NS,
-            process_name,
-            pid
-        };
-        let encoded_info = bincode::serialize(&info_header).unwrap();
+        let mut freq_detector = TimestampFreqDetector::start(Duration::from_millis(100));
 
-        file.write_all(&[0x00]).unwrap();
-        file.write_all(&(encoded_info.len() as u64).to_le_bytes()).unwrap();
-        file.write_all(&encoded_info).unwrap();
+        let info_header = SparklesEncoderInfo::new(process_name, pid);
+        send_encoder_info_packet(&mut sender_chain, info_header);
 
         loop {
             thread::sleep(Duration::from_millis(1));
+
+            if let Some(ticks_per_sec) = freq_detector.next() {
+                send_timestamp_freq(&mut sender_chain, ticks_per_sec);
+            }
 
             // Read value before flushing
             let is_finalizing = FINALIZE_STARTED.load(Ordering::Relaxed);
@@ -153,30 +163,21 @@ fn spawn_sending_task() -> JoinHandle<()> {
 
             // handle buffers
             if let Some((slice1, slice2)) = slices {
-                trace!("[sparkles] took two fresh slices! sizes: {}, {}", slice1.len(), slice2.len());
-                file.write_all(&[0x01]).unwrap();
-                let total_len = (slice1.len() + slice2.len()) as u64;
-                let total_len_bytes = total_len.to_le_bytes();
-                file.write_all(&total_len_bytes).unwrap();
-                file.write_all(&slice1).unwrap();
-                file.write_all(&slice2).unwrap();
+                send_data_bytes(&mut sender_chain, &slice1, &slice2);
             }
 
             // handle failed pages
             if !failed_pages.is_empty() {
                 trace!("Sending {} failed pages", failed_pages.len());
-                for failed_msr_page in failed_pages {
-                    let header = bincode::serialize(&failed_msr_page).unwrap();
-                    let header_len = (header.len() as u64).to_le_bytes();
-                    file.write_all(&[0x02]).unwrap();
-                    file.write_all(&header_len).unwrap();
-                    file.write_all(&header).unwrap();
-                }
+                send_failed_page_headers(&mut sender_chain, &failed_pages)
             }
 
             if is_finalizing {
+                let ticks_per_sec = freq_detector.next_forced();
+                send_timestamp_freq(&mut sender_chain, ticks_per_sec);
+                
                 debug!("[sparkles] Finalize in process...");
-                file.write_all(&[0xff]).unwrap();
+                sender_chain.send(&[0xff]);
                 break;
             }
         }
@@ -203,4 +204,47 @@ pub fn finalize() {
         });
     }
 
+}
+
+struct TimestampFreqDetector {
+    prev_tm: u64,
+    prev_instant: Instant,
+
+    capture_interval: Duration,
+}
+
+impl TimestampFreqDetector {
+    pub fn start(interval: Duration) -> Self {
+        let now = Instant::now();
+        let now_tm = Timestamp::now();
+        Self {
+            prev_instant: now,
+            prev_tm: now_tm,
+
+            capture_interval: interval,
+        }
+    }
+    pub fn next(&mut self) -> Option<u64> {
+        if self.prev_instant.elapsed() > self.capture_interval {
+            Some(self.next_forced())
+        }
+        else {
+            None
+        }
+    }
+
+    pub fn next_forced(&mut self) -> u64 {
+
+        let now = Instant::now();
+        let now_tm = Timestamp::now();
+
+        let elapsed_tm = now_tm.wrapping_sub(self.prev_tm);
+        let elapsed_ns = (now - self.prev_instant).as_nanos() as u64;
+        let ticks_per_ns = elapsed_tm * 1_000_000_000 / elapsed_ns;
+
+        self.prev_tm = now_tm;
+        self.prev_instant = now;
+
+        ticks_per_ns
+    }
 }

@@ -1,3 +1,8 @@
+//! Tracing dense example
+//! 1. Run `cargo run --example tracing_dense --release`
+//! 2. Parse result file: `cargo run --release --example interactive`
+//! 3. Go to https://ui.perfetto.dev/ and drag'n'drop generated `trace.perf` file
+
 use std::hint::black_box;
 use std::thread;
 use std::time::Instant;

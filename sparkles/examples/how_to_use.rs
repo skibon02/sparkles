@@ -1,7 +1,7 @@
-
-//! 1. Run `cargo run --example listen_and_print --release` in bg
-//! 2. Run this example: `cargo run --example how_to_use --release`
-//! 3. Go to https://ui.perfetto.dev/ and drag'n'drop generated json file
+//! How to use example
+//! 1. Run `cargo run --example how_to_use --release`
+//! 2. Parse result file: `cargo run --release --example interactive`
+//! 3. Go to https://ui.perfetto.dev/ and drag'n'drop generated `trace.perf` file
 
 use std::thread;
 use std::time::Duration;

@@ -10,6 +10,9 @@ pub struct GlobalStorageRef;
 pub type ThreadLocalStorage = LocalStorage<GlobalStorageRef>;
 
 static LOCAL_CONFIG: OnceLock<LocalStorageConfig> = OnceLock::new();
+pub(crate) fn set_local_storage_config(config: LocalStorageConfig) {
+    let _ = LOCAL_CONFIG.set(config);
+}
 
 impl GlobalStorageImpl for GlobalStorageRef {
     fn flush(&self, header: &LocalPacketHeader, data: &[u8]) {

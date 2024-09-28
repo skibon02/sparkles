@@ -20,7 +20,4 @@ impl TimestampProvider for X86Timestamp {
             v
         }
     }
-
-    // TODO: May vary between CPUs
-    const COUNTS_PER_NS: f64 = 2.495;
 }

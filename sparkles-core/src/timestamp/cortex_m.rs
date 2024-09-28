@@ -29,7 +29,4 @@ impl TimestampProvider for CortexMTimestamp {
         }
         unsafe { (&*DWT::PTR).cyccnt.read() }
     }
-
-    // TODO: Depends on core frequency, fix at 200MHz for now
-    const COUNTS_PER_NS: f64 = 0.2;
 }
