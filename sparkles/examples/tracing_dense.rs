@@ -38,21 +38,21 @@ fn main() {
     let finalize_guard = sparkles::init_default();
 
     let start = Instant::now();
-    thread::spawn(|| {
+    let t1 = thread::spawn(|| {
         sparkles::set_cur_thread_name("thread#2".to_string());
         let g = range_event_start!("thread#2");
         for _ in 0..100 {
             perform_tracing();
         }
     });
-    thread::spawn(|| {
+    let t2 = thread::spawn(|| {
         sparkles::set_cur_thread_name("thread#3".to_string());
         let g = range_event_start!("thread#3");
         for _ in 0..100 {
             perform_tracing();
         }
     });
-    thread::spawn(|| {
+    let t3 = thread::spawn(|| {
         sparkles::set_cur_thread_name("thread#4".to_string());
         let g = range_event_start!("thread#4");
         for _ in 0..100 {
@@ -66,4 +66,8 @@ fn main() {
     let dur = start.elapsed().as_nanos() as f64 / (100 * (3_000 + 9)) as f64;
     info!("Finished! waiting for tracer send...");
     info!("Each event took {:?} ns", dur);
+
+    t1.join().unwrap();
+    t2.join().unwrap();
+    t3.join().unwrap();
 }
