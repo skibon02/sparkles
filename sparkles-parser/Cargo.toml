@@ -1,8 +1,10 @@
 [package]
 name = "sparkles-parser"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 license = "Apache-2.0"
+description = "Parser for sparkles tracing library"
+repository = "https://github.com/skibon02/sparkles"
 
 [dependencies]
 log = "0.4.22"
@@ -15,10 +17,7 @@ chrono = "0.4.38"
 prost = "0.13.3"
 bytes = "1.7.2"
 rand = "0.8.5"
-
-[dev-dependencies]
 simple_logger = "5.0.0"
-ctrlc = "3.4.4"
 
 [build-dependencies]
 prost-build = "0.13.3"

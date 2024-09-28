@@ -3,7 +3,7 @@ name = "sparkles-macro"
 version = "0.1.4"
 edition = "2021"
 license = "Apache-2.0"
-description = "Macro crate for sparkles"
+description = "Macro crate for sparkles tracing library"
 repository = "https://github.com/skibon02/sparkles"
 
 
