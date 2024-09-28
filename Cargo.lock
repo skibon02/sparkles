@@ -869,7 +869,6 @@ dependencies = [
  "log",
  "prost 0.13.3",
  "prost-build 0.13.3",
- "protobuf-src",
  "rand",
  "ringbuf",
  "simple_logger",

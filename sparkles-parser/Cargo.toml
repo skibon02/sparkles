@@ -1,6 +1,6 @@
 [package]
 name = "sparkles-parser"
-version = "0.0.3"
+version = "0.0.4"
 edition = "2021"
 license = "Apache-2.0"
 description = "Parser for sparkles tracing library"
@@ -21,4 +21,3 @@ simple_logger = "5.0.0"
 
 [build-dependencies]
 prost-build = "0.13.3"
-protobuf-src = "2.0.1"
