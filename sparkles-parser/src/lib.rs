@@ -41,6 +41,7 @@ pub struct ThreadParserState {
     cur_started_ranges: BTreeMap<u8, (TracingEventId, u64)>,
     // Current timestamp, accumulated from events
     cur_tm: u64,
+    zero_diff_cnt: u64,
 }
 
 #[derive(Debug, Error)]
@@ -98,6 +99,7 @@ impl SparklesParser {
                 parser_state.cur_tm = header.start_timestamp;
                 let mut first = true;
                 for event in events {
+                    let mut dif_tm_zero = false;
                     if first {
                         first = false;
                     }
@@ -107,10 +109,19 @@ impl SparklesParser {
                             TracingEvent::RangePart(_, dif_tm, _) => dif_tm,
                             TracingEvent::UnnamedRangeEnd(dif_tm, _) => dif_tm
                         };
+                        if *dif_tm == 0 {
+                            dif_tm_zero = true;
+                        }
                         parser_state.cur_tm += dif_tm;
                     }
+                    if !dif_tm_zero {
+                        parser_state.zero_diff_cnt = 0;
+                    }
+                    else {
+                        parser_state.zero_diff_cnt += 1;
+                    }
                     // add to trace file
-                    let timestamp = (parser_state.cur_tm as f64 / ticks_per_ns) as u64;
+                    let timestamp = (parser_state.cur_tm as f64 / ticks_per_ns) as u64 + parser_state.zero_diff_cnt * 10;
                     match event {
                         TracingEvent::Instant(id, _) => {
                             let (ev_name, _) = &header.id_store.tags[*id as usize];
