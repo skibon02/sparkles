@@ -13,7 +13,7 @@ use syn::token::Comma;
 pub fn instant_event(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as LitStr);
     let s = input.value();
-    let hash = calculate_hash(&s) as u32;
+    let hash = calculate_hash(&s);
 
     let expanded = quote! {
         sparkles::instant_event(#hash, #s)
@@ -41,7 +41,7 @@ pub fn instant_event(input: TokenStream) -> TokenStream {
 pub fn range_event_start(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as LitStr);
     let s = input.value();
-    let hash = calculate_hash(&s) as u32;
+    let hash = calculate_hash(&s);
 
     let expanded = quote! {
         sparkles::range_event_start(#hash, #s)
@@ -82,7 +82,7 @@ impl Parse for RangeEventStartInput {
 pub fn range_event_end(input: TokenStream) -> TokenStream {
     let RangeEventStartInput{guard, name, ..} = parse_macro_input!(input as RangeEventStartInput);
     let s = name.value();
-    let hash = calculate_hash(&s) as u32;
+    let hash = calculate_hash(&s);
 
     let expanded = quote! {
         #guard.end(#hash, #s)
@@ -91,11 +91,11 @@ pub fn range_event_end(input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-fn calculate_hash(s: &str) -> u64 {
+fn calculate_hash(s: &str) -> u32 {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
     let mut hasher = DefaultHasher::new();
     s.hash(&mut hasher);
-    hasher.finish()
+    hasher.finish() as u32
 }

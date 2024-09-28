@@ -1,19 +1,22 @@
 use alloc::string::{String, ToString};
 use serde::{Deserialize, Serialize};
-use crate::local_storage::id_mapping::IdStoreMap;
+use crate::local_storage::id_mapping::IdMapping;
 use crate::{Timestamp, TimestampProvider};
 
-/// This header describe byte buffer, full of encoded sparkles events.
-/// This header is thread-local, each thread has its own header and buffer.
+/// This header describe byte buffer filled with encoded sparkles events.
+/// This header is thread-local. Each thread events packet has its own header and buffer.
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct LocalPacketHeader {
+    /// Globally unique order number of the spawned thread
     pub thread_ord_id: u64,
     pub thread_info: Option<ThreadInfo>,
 
+    /// Timestamp of the first event in a buffer
     pub start_timestamp: u64,
+    /// Timestamp of the last event in a buffer
     pub end_timestamp: u64,
 
-    pub id_store: IdStoreMap,
+    pub id_store: IdMapping,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]

@@ -82,41 +82,46 @@ impl U32U8Map {
     }
 }
 
+/// ID to String mapping. Used to encode string into ID
 #[derive(Clone, Default)]
-pub struct IdStoreRepr {
+pub struct IdMappingState {
     /// Used internally for faster lookup
     id_map: U32U8Map,
     last_id: u8,
 
-    tags_store: IdStoreMap,
+    tags_store: IdMapping,
 }
 
+/// ID to String mapping. Used to decode events
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct IdStoreMap {
+pub struct IdMapping {
     pub tags: Vec<(String, EventType)>,
 }
-impl IdStoreMap {
+impl IdMapping {
+    /// Create a new empty mapping
     pub const fn new() -> Self {
         Self {
             tags: Vec::new()
         }
     }
 }
-impl From<IdStoreRepr> for IdStoreMap {
-    fn from(id_store: IdStoreRepr) -> Self {
+impl From<IdMappingState> for IdMapping {
+    fn from(id_store: IdMappingState) -> Self {
         id_store.tags_store
     }
 }
 
-impl IdStoreRepr {
+impl IdMappingState {
+    /// Create a new empty mapping
     pub const fn new() -> Self {
         Self {
             id_map: U32U8Map::new(),
             last_id: 0,
-            tags_store: IdStoreMap::new(),
+            tags_store: IdMapping::new(),
         }
     }
 
+    /// Lookup ID for the provided hash, or insert tag and acquire a new ID
     #[inline(always)]
     pub fn insert_and_get_id(&mut self, hash: u32, tag: &str, event_type: EventType) -> u8 {
         let offs = event_type.get_offs();

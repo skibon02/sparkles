@@ -4,12 +4,14 @@ pub mod sender;
 pub mod config;
 mod encoder;
 
+use std::sync::atomic::AtomicBool;
 pub use global_storage::finalize;
 
 use sparkles_core::local_storage::RangeStartRepr;
 use crate::config::SparklesConfig;
 use crate::global_storage::GlobalStorage;
 
+static GLOBAL_FLUSHING_RUNNING: AtomicBool = AtomicBool::new(false);
 
 /// Use `sparkles-macro::instant_event!("name")` instead
 pub fn instant_event(hash: u32, string: &'static str) {
@@ -18,7 +20,7 @@ pub fn instant_event(hash: u32, string: &'static str) {
     });
 }
 
-/// Created using macro `sparkles-macro::range_event_start!("name")`
+/// The value is created using macro `sparkles-macro::range_event_start!("name")`
 pub struct RangeStartGuard {
     repr: RangeStartRepr,
     ended: bool,
@@ -64,7 +66,7 @@ pub fn set_cur_thread_name(name: String) {
 /// Manually flush all events from thread-local buffer to the global buffer
 pub fn flush_thread_local() {
     thread_local_storage::with_thread_local_tracer(|tracer| {
-        tracer.flush(false);
+        tracer.flush(true);
     });
 }
 
@@ -74,6 +76,9 @@ pub struct FinalizeGuard;
 
 impl FinalizeGuard {
     pub fn early_drop(self) {}
+    pub fn forget(self) {
+        std::mem::forget(self)
+    }
 }
 
 impl Drop for FinalizeGuard {
@@ -85,6 +90,11 @@ impl Drop for FinalizeGuard {
 /// Init sparkles with the provided config
 ///
 /// Returns a guard that will finalize global buffer when dropped
+///
+/// # Attention
+/// Do not forget to save finalize guard, returned from this call!
+/// If you don't need to use it, call `forget()`.
+#[must_use]
 pub fn init(config: SparklesConfig) -> FinalizeGuard {
     // Init global storage
     global_storage::GLOBAL_STORAGE.lock().unwrap().get_or_insert_with(|| GlobalStorage::new(config));
@@ -95,9 +105,22 @@ pub fn init(config: SparklesConfig) -> FinalizeGuard {
 /// Init sparkles with default config
 ///
 /// Returns a guard that will finalize global buffer when dropped
+///
+/// # Attention
+/// Do not forget to save finalize guard, returned from this call!
+/// If you don't need to use it, call `forget()`.
 pub fn init_default() -> FinalizeGuard {
     // Init global storage
     global_storage::GLOBAL_STORAGE.lock().unwrap().get_or_insert_with(|| GlobalStorage::new(Default::default()));
 
     FinalizeGuard
+}
+
+pub(crate) fn calculate_hash(s: &str) -> u32 {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    s.hash(&mut hasher);
+    hasher.finish() as u32
 }

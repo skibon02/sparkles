@@ -4,7 +4,7 @@ use core::marker::PhantomData;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use crate::config::LocalStorageConfig;
 use crate::headers::{LocalPacketHeader, ThreadInfo};
-use crate::local_storage::id_mapping::{EventType, IdStoreRepr};
+use crate::local_storage::id_mapping::{EventType, IdMappingState};
 use crate::Timestamp;
 
 use crate::timestamp::TimestampProvider;
@@ -13,6 +13,8 @@ pub mod id_mapping;
 
 pub trait GlobalStorageImpl {
     fn flush(&self, header: &LocalPacketHeader, data: &[u8]);
+    fn try_flush(&self, header: &LocalPacketHeader, data: &[u8]) -> bool;
+    fn is_buf_available(&self) -> bool;
 }
 
 pub struct LocalStorage<G: GlobalStorageImpl> {
@@ -21,7 +23,7 @@ pub struct LocalStorage<G: GlobalStorageImpl> {
     prev_tm: u64,
 
     buf: Vec<u8>,
-    id_store: IdStoreRepr,
+    id_store: IdMappingState,
 
     local_packet_header: LocalPacketHeader,
 
@@ -161,12 +163,15 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
     #[inline(always)]
     pub fn auto_flush(&mut self) {
         if self.buf.len() >= self.config.flush_threshold {
+            self.flush(true);
+        }
+        else if self.buf.len() >= self.config.flush_attempt_threshold && self.global_storage_ref.is_buf_available() {
             self.flush(false);
         }
     }
 
     /// Flush whole event buffer data to the global storage
-    pub fn flush(&mut self, _finalize: bool) {
+    pub fn flush(&mut self, forced: bool) {
         if self.buf.is_empty() {
             // Nothing to flush, ignore
             return;
@@ -176,16 +181,24 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
         self.local_packet_header.end_timestamp = self.prev_tm;
         self.local_packet_header.id_store = self.id_store.clone().into();
 
-        self.global_storage_ref.flush(&self.local_packet_header, &self.buf);
-        self.buf.clear();
-        
-        //cleanup
-        if let Some(thread_info) = &mut self.local_packet_header.thread_info {
-            if thread_info.new_thread_name.is_some() {
-                thread_info.new_thread_name = None;
-            }
+        let success = if forced {
+            self.global_storage_ref.flush(&self.local_packet_header, &self.buf);
+            true
         }
-        self.local_packet_header.start_timestamp = 0;
+        else {
+            self.global_storage_ref.try_flush(&self.local_packet_header, &self.buf)
+        };
+
+        //cleanup
+        if success {
+            self.buf.clear();
+            if let Some(thread_info) = &mut self.local_packet_header.thread_info {
+                if thread_info.new_thread_name.is_some() {
+                    thread_info.new_thread_name = None;
+                }
+            }
+            self.local_packet_header.start_timestamp = 0;
+        }
     }
 }
 

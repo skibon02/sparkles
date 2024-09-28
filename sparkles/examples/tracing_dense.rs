@@ -59,7 +59,7 @@ fn main() {
             perform_tracing();
         }
     });
-    for _ in 0..100 {
+    for _ in 0..1000 {
         perform_tracing();
     }
 

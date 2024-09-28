@@ -14,6 +14,7 @@ use sparkles_core::{Timestamp, TimestampProvider};
 use sparkles_core::sender::{ConfiguredSender, Sender, SenderChain};
 use crate::config::SparklesConfig;
 use crate::encoder::{send_data_bytes, send_encoder_info_packet, send_failed_page_headers, send_timestamp_freq};
+use crate::GLOBAL_FLUSHING_RUNNING;
 use crate::sender::file_sender::FileSender;
 use crate::thread_local_storage::set_local_storage_config;
 
@@ -107,7 +108,7 @@ impl GlobalStorage {
 }
 
 fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
-    thread::spawn(move || {
+    thread::Builder::new().name("[Sparkles] Sender thread".to_string()).spawn(move || {
         debug!("[sparkles] Flush thread started!");
 
         let mut sender_chain = SenderChain::default();
@@ -151,18 +152,28 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
 
             // this thing should be fast
             let (slices, failed_pages) = {
-                if let Some(global_storage) = GLOBAL_STORAGE.lock().unwrap().as_mut() {
-                    let failed_pages = global_storage.take_failed_pages();
+                if is_finalizing {
+                    crate::flush_thread_local();
+                }
 
+                if let Some(global_storage) = GLOBAL_STORAGE.lock().unwrap().as_mut() {
+                    #[cfg(feature="self-tracing")]
+                    let grd = crate::range_event_start(crate::calculate_hash("[internal] Taking stored events"), "[internal] Taking stored events");
+                    let failed_pages = global_storage.take_failed_pages();
+                    
+                    GLOBAL_FLUSHING_RUNNING.store(true, Ordering::Relaxed);
                     (global_storage.try_take_buf(is_finalizing), failed_pages)
                 }
                 else {
                     (None, Vec::new())
                 }
             };
+            GLOBAL_FLUSHING_RUNNING.store(false, Ordering::Relaxed);
 
             // handle buffers
             if let Some((slice1, slice2)) = slices {
+                #[cfg(feature="self-tracing")]
+                let grd = crate::range_event_start(crate::calculate_hash("[internal] Send data bytes"), "[internal] Send data bytes");
                 send_data_bytes(&mut sender_chain, &slice1, &slice2);
             }
 
@@ -183,10 +194,10 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
         }
 
         debug!("[sparkles] Quit from flush thread!");
-    })
+    }).unwrap()
 }
 
-/// Wait for TCP sending thread to finish its job
+/// Blocking wait for global sending thread to finish its job
 pub fn finalize() {
     super::flush_thread_local();
 
@@ -238,13 +249,13 @@ impl TimestampFreqDetector {
         let now = Instant::now();
         let now_tm = Timestamp::now();
 
-        let elapsed_tm = now_tm.wrapping_sub(self.prev_tm);
-        let elapsed_ns = (now - self.prev_instant).as_nanos() as u64;
-        let ticks_per_ns = elapsed_tm * 1_000_000_000 / elapsed_ns;
+        let elapsed_tm = now_tm.wrapping_sub(self.prev_tm) as f64;
+        let elapsed_ns = (now - self.prev_instant).as_nanos() as f64;
+        let ticks_per_sec = elapsed_tm / elapsed_ns * 1_000_000_000.0;
 
         self.prev_tm = now_tm;
         self.prev_instant = now;
 
-        ticks_per_ns
+        ticks_per_sec as u64
     }
 }

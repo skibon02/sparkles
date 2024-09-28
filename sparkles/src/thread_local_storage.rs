@@ -1,9 +1,11 @@
 use std::cell::RefCell;
+use std::sync::atomic::Ordering;
 use std::sync::OnceLock;
 use std::thread;
 use sparkles_core::config::LocalStorageConfig;
 use sparkles_core::headers::{LocalPacketHeader, ThreadInfo};
 use sparkles_core::local_storage::{GlobalStorageImpl, LocalStorage};
+use crate::GLOBAL_FLUSHING_RUNNING;
 use crate::global_storage::{GlobalStorage, GLOBAL_STORAGE};
 
 pub struct GlobalStorageRef;
@@ -19,6 +21,19 @@ impl GlobalStorageImpl for GlobalStorageRef {
         let mut global_storage_ref = GLOBAL_STORAGE.lock().unwrap();
         let global_storage_ref = global_storage_ref.get_or_insert_with(|| GlobalStorage::new(Default::default()));
         global_storage_ref.push_buf(header, data);
+    }
+    fn try_flush(&self, header: &LocalPacketHeader, data: &[u8]) -> bool {
+        if let Ok(mut global_storage_ref) = GLOBAL_STORAGE.try_lock() {
+            let global_storage_ref = global_storage_ref.get_or_insert_with(|| GlobalStorage::new(Default::default()));
+            global_storage_ref.push_buf(header, data);
+            true
+        }
+        else {
+            false
+        }
+    }
+    fn is_buf_available(&self) -> bool {
+        !GLOBAL_FLUSHING_RUNNING.load(Ordering::Relaxed)
     }
 }
 

@@ -1,7 +1,8 @@
 //! Timestamps adaptively choose implementation depending on architecture, std support and `cortex-m` feature
 //!
 //! Priority order:
-//! 1. If your CPU architecture is x86, `X86Timestamp` is used
+//! 1. If your CPU architecture is x86 or x86_64, `X86Timestamp` is used
+//! 1. If your CPU architecture is aarch64, `Aarch64Timestamp` is used
 //! 2. Otherwise, if you're in std environment, `std::time::Instant` is selected as timestamp provider.
 //! 3. If feature `cortex-m` is active, `CortexMTimestamp` is used.
 //! 4. If none of above is true, compile error is emitted.

@@ -5,19 +5,31 @@ use crate::sender::udp_sender::UdpSenderConfig;
 #[derive(Clone, Debug)]
 pub struct SparklesConfig {
     /// Capacity of the global storage ring buffer in bytes
+    /// 
+    /// Default: 50MB
     pub global_capacity: usize,
+    
     /// Value should be in range [0.0, 1.0]
+    /// 
+    /// Default: 0.1
     pub flush_threshold: f64,
+    
     /// Cleanup threshold for the global storage ring buffer. When the buffer reaches this threshold,
     /// it will start to clean up the oldest events
     ///
     /// Value should be in range [0.0, 1.0]
+    /// 
+    /// Default: 0.9
     pub cleanup_threshold: f64,
+    
     /// Cleanup bottom threshold for the global storage ring buffer. When the buffer reaches this threshold,
     /// it will start to clean up the oldest events
     ///
     /// Value should be in range [0.0, 1.0]
+    /// 
+    /// Default: 0.7
     pub cleanup_bottom_threshold: f64,
+    
     /// Thread-local storage configuration
     pub local_storage_config: LocalStorageConfig,
 
@@ -68,6 +80,12 @@ impl SparklesConfig {
     }
 
     #[must_use]
+    pub fn with_thread_flush_attempt_threshold(mut self, flush_attempt_threshold: usize) -> Self {
+        self.local_storage_config.flush_attempt_threshold = flush_attempt_threshold;
+        self
+    }
+
+    #[must_use]
     pub fn with_thread_flush_threshold(mut self, flush_threshold: usize) -> Self {
         self.local_storage_config.flush_threshold = flush_threshold;
         self
@@ -91,15 +109,15 @@ impl SparklesConfig {
         self
     }
 
-    #[must_use]
-    pub fn with_default_udp_sender_config(mut self) -> Self {
-        self.udp_sender_config = Some(Default::default());
-        self
-    }
-
-    #[must_use]
-    pub fn with_udp_sender_config(mut self, config: UdpSenderConfig) -> Self {
-        self.udp_sender_config = Some(config);
-        self
-    }
+    // #[must_use]
+    // pub fn with_default_udp_sender_config(mut self) -> Self {
+    //     self.udp_sender_config = Some(Default::default());
+    //     self
+    // }
+    // 
+    // #[must_use]
+    // pub fn with_udp_sender_config(mut self, config: UdpSenderConfig) -> Self {
+    //     self.udp_sender_config = Some(config);
+    //     self
+    // }
 }

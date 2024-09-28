@@ -178,6 +178,7 @@ impl SparklesParser {
         let bytes = trace_res_file.get_bytes();
         file.write_all(&bytes).unwrap();
 
+        info!("Your `trace.perf` is ready! Now, navigate to https://ui.perfetto.dev/ and drag'n'drop the file onto the page.");
         Ok(())
     }
 
