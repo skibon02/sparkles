@@ -93,6 +93,7 @@ Ready: \
 🌟 aarch64 support
 
 TODO: \
+⚙️ Include git revision into build \
 ⚙️ Option to run without additional bg thread \
 ⚙️ Defmt support \
 ⚙️ Additional attached binary data \
