@@ -6,13 +6,13 @@ Performance-focused library for capturing execution flow of application.
 
 ![img_1.png](https://github.com/skibon02/sparkles/blob/main/img_1.png?raw=true)
 
-**What?**
-Simply add the instant_event! macro to your code with a string literal and you'll be able to view this event later on a timeline with CPU cycle precision. \
-**How?**
+**What?**  
+Simply add the instant_event! macro to your code with a string literal and you'll be able to view this event later on a timeline with CPU cycle precision.  
+**How?**  
 Fast. Blazingly fast. 🚀 Recording a single event incurs an overhead as low as 10ns and consumes only 3 bytes in the trace buffer (in dense tracing conditions).
 
-˚ ༘ ⋆｡˚ ✧ ˚ ༘ ⋆｡˚ ༘ ⋆｡˚ ✧ ˚ ༘ ⋆｡˚˚ ༘ ⋆｡˚ ✧ ˚ ༘ ⋆｡˚ ༘ ⋆｡˚ ✧ ˚ ༘ ⋆｡˚༘ ⋆｡˚ ✧ ˚ ༘\
-Up to 🫸100_000_000🫷 events per second can be captured in a local environment with no data loss. \
+˚ ༘ ⋆｡˚ ✧ ˚ ༘ ⋆｡˚ ༘ ⋆｡˚ ✧ ˚ ༘ ⋆｡˚˚ ༘ ⋆｡˚ ✧ ˚ ༘ ⋆｡˚ ༘ ⋆｡˚ ✧ ˚ ༘ ⋆｡˚༘ ⋆｡˚ ✧ ˚ ༘  
+Up to 🫸100_000_000🫷 events per second can be captured in a local environment with no data loss.  
 ༘ ⋆｡˚ ༘ ⋆｡˚ ✧ ˚ ༘ ⋆｡˚༘ ⋆｡˚ ✧ ˚ ༘ ⋆｡˚༘ ⋆｡˚ ✧ ˚ ༘ ⋆｡˚༘ ⋆｡˚ ✧ ˚ ༘ ⋆｡˚༘ ⋆｡˚ ✧ ˚
 
 ## ✧ Main parts
@@ -71,9 +71,9 @@ cargo run --example interactive
 
 
 ## ✧ Requirements
-🌟 STD support \
-🌟 x86/x86_64/aarch64 architecture. \
-**OR** \
+🌟 STD support  
+🌟 x86/x86_64/aarch64 architecture.  
+**OR**  
 🌟 Functioning `Instant::now()`
 
 ## ✧ Benches
@@ -81,37 +81,42 @@ Single event overhead on average x86 machine (Intel i5-12400) is 9ns.
 
 
 ## ✧ Implementation status
-Ready: \
-🌟 Timestamp provider \
-🌟 Event name hashing \
-🌟 ~~Perfetto json format compatibility~~ (replaced with protobuf) \
-🌟 Ranges (scopes) support \
-🌟 Configuration support \
-🌟 Perfetto protobuf format support \
-🌟 Abstraction over events sending type (UDP/File) \
-🌟 Automatic timestamp frequency detection \
+Ready:  
+🌟 Timestamp provider  
+🌟 Event name hashing  
+🌟 ~~Perfetto json format compatibility~~ (replaced with protobuf)  
+🌟 Ranges (scopes) support  
+🌟 Configuration support  
+🌟 Perfetto protobuf format support  
+🌟 Abstraction over events sending type (UDP/File)  
+🌟 Automatic timestamp frequency detection  
 🌟 aarch64 support
 
-TODO: \
-⚙️ Include git revision into build \
-⚙️ Option to run without additional bg thread \
-⚙️ Defmt support \
-⚙️ Additional attached binary data \
-⚙️ Option to limit total consumed TLS buffer allocation \
-⚙️ Module info support: full module path, line of code \
-⚙️ Capture and transfer loss detection with no corruption to other captured and transmitted data \
-⚙️ Async support \
-⚙️ NO_STD implementation \
-⚙️ tags / hierarchy of events \
-⚙️ Viewer app \
-⚙️ Multi-app sync \
-⚙️ Global ranges \
+TODO:  
+⚙️ More explicit and recoverable packets with known pattern  
+⚙️ Resistance to data loss during transmission  
+⚙️ UDP real-time reader and parser library API  
+⚙️ Profiler use-case  
+
+⚙️ Track changes in structs encoded/decoded by `bincode`  
+⚙️ Include git revision into build  
+⚙️ Option to run without additional bg thread  
+⚙️ Defmt support  
+⚙️ Additional attached binary data  
+⚙️ Option to limit total consumed TLS buffer allocation  
+⚙️ Module info support: full module path, line of code  
+⚙️ Async support  
+⚙️ NO_STD implementation  
+⚙️ tags / hierarchy of events  
+⚙️ Viewer app  
+⚙️ Multi-app sync  
+⚙️ Global ranges  
 ⚙️ Measurement overhead self-test
 
 ## Features
-✧ **accurate-timestamps-x86** - Enable serialization for x86/x86_64 timestamps \
+✧ **accurate-timestamps-x86** - Enable serialization for x86/x86_64 timestamps  
 ✧ **self-tracing** - Add global buffer flushing events
 
-｡ﾟﾟ･｡･ﾟﾟ｡\
-ﾟ。SkyGrel19 ✨\
+｡ﾟﾟ･｡･ﾟﾟ｡  
+ﾟ。SkyGrel19 ✨  
 　ﾟ･｡･
