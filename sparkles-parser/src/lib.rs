@@ -7,8 +7,8 @@ use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use log::{debug, error, info, warn};
 use thiserror::Error;
-use sparkles_core::headers::{LocalPacketHeader, SparklesEncoderInfo};
 use sparkles_core::local_storage::id_mapping::EventType;
+use sparkles_core::protocol::headers::{LocalPacketHeader, SparklesMachineInfo};
 use crate::decoder::StreamFrameDecoder;
 use crate::ParseError::Decode;
 use crate::perfetto_format::PerfettoTraceFile;
@@ -20,7 +20,7 @@ pub struct SparklesParser {
     total_event_bytes: u64,
     total_transport_bytes: u64,
 
-    encoder_info: Option<SparklesEncoderInfo>,
+    encoder_info: Option<SparklesMachineInfo>,
     ticks_per_ns: Option<f64>,
 
     event_parsers: BTreeMap<u64, ThreadParserState>,
@@ -55,7 +55,7 @@ pub enum DecodeError {
     #[error("Error while reading from stream")]
     Io(#[from] std::io::Error),
     #[error("Error while deserializing data")]
-    Bincode(#[from] bincode::Error),
+    Bincode(#[from] bincode::error::DecodeError),
 }
 
 type ParseResult<T> = Result<T, ParseError>;
@@ -63,7 +63,7 @@ type DecodeResult<T> = Result<T, DecodeError>;
 
 impl SparklesParser {
     /// Decode incoming events and save them to `trace.json` in Perfetto format
-    pub fn parse_and_save(&mut self, mut reader: impl Read) -> ParseResult<()> {
+    pub fn convert_file(&mut self, mut reader: impl Read) -> ParseResult<()> {
         if let Err(e) = self.decode_packets(&mut reader) {
             error!("Error handling client: {:?}", e);
             return Err(Decode(e));
@@ -78,7 +78,7 @@ impl SparklesParser {
 
         let encoder_info = self.encoder_info.take().unwrap_or_else(|| {
             warn!("Encoder info is not present in decoded data! Using default values");
-            SparklesEncoderInfo::default()
+            SparklesMachineInfo::default()
         });
 
         info!("Begin parsing... Encoder info: {:?}", encoder_info);
@@ -198,7 +198,7 @@ impl SparklesParser {
 
                     let mut info_bytes = vec![0u8; info_bytes_len];
                     con.read_exact(&mut info_bytes)?;
-                    let info = bincode::deserialize::<SparklesEncoderInfo>(&info_bytes)?;
+                    let info = bincode::decode_from_slice::<SparklesMachineInfo>(&info_bytes)?;
 
                     if info.ver != consts::ENCODER_VERSION {
                         warn!("Encoder version mismatch! Parser: {}, Encoder: {}", consts::ENCODER_VERSION, info.ver);
@@ -220,7 +220,7 @@ impl SparklesParser {
                         let mut header_bytes = vec![0u8; header_len];
                         con.read_exact(&mut header_bytes)?;
                         self.total_transport_bytes += header_len as u64;
-                        let header = bincode::deserialize::<LocalPacketHeader>(&header_bytes)?;
+                        let header = bincode::decode_from_slice::<LocalPacketHeader>(&header_bytes)?;
 
                         let mut buf_len = [0u8; 8];
                         con.read_exact(&mut buf_len)?;

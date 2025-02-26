@@ -9,11 +9,11 @@ use std::thread::{JoinHandle};
 use std::time::{Duration, Instant};
 use log::{debug, error, trace, warn};
 use ringbuf::traits::{Consumer, Observer, Producer};
-use sparkles_core::headers::{LocalPacketHeader, SparklesEncoderInfo};
 use sparkles_core::{Timestamp, TimestampProvider};
-use sparkles_core::sender::{ConfiguredSender, Sender, SenderChain};
+use sparkles_core::protocol::headers::{LocalPacketHeader, SparklesMachineInfo};
+use sparkles_core::protocol::packets::{send_failed_pages, send_graceful_shutdown, send_machine_info, send_timestamp_freq, send_trace_data};
+use sparkles_core::protocol::sender::{ConfiguredSender, SenderChain};
 use crate::config::SparklesConfig;
-use crate::encoder::{send_data_bytes, send_encoder_info_packet, send_failed_page_headers, send_timestamp_freq};
 use crate::GLOBAL_FLUSHING_RUNNING;
 use crate::sender::file_sender::FileSender;
 use crate::thread_local_storage::set_local_storage_config;
@@ -50,7 +50,7 @@ impl GlobalStorage {
 
     /// Called by thread local storage to put its contents into global storage
     pub fn push_buf(&mut self, header: &LocalPacketHeader, buf: &[u8]) {
-        let header = bincode::serialize(&header).unwrap();
+        let header = bincode::encode_to_vec(header, bincode::config::standard()).unwrap();
         let header_len = (header.len() as u64).to_le_bytes();
         let bufer_len = (buf.len() as u64).to_le_bytes();
 
@@ -70,7 +70,7 @@ impl GlobalStorage {
 
                 header_bytes.resize(header_len, 0);
                 self.inner.read_exact(&mut header_bytes).unwrap();
-                let header = bincode::deserialize::<LocalPacketHeader>(&header_bytes).unwrap();
+                let (header, _) = bincode::decode_from_slice(&header_bytes, bincode::config::standard()).unwrap();
 
                 self.inner.read_exact(&mut buf_len).unwrap();
                 let buf_len = u64::from_le_bytes(buf_len) as usize;
@@ -134,8 +134,8 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
 
         let mut freq_detector = TimestampFreqDetector::start(Duration::from_millis(100));
 
-        let info_header = SparklesEncoderInfo::new(process_name, pid);
-        send_encoder_info_packet(&mut sender_chain, info_header);
+        let info_header = SparklesMachineInfo::new(process_name, pid);
+        send_machine_info(&mut sender_chain, info_header);
 
         loop {
             thread::sleep(Duration::from_millis(1));
@@ -174,13 +174,13 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
             if let Some((slice1, slice2)) = slices {
                 #[cfg(feature="self-tracing")]
                 let grd = crate::range_event_start(crate::calculate_hash("[internal] Send data bytes"), "[internal] Send data bytes");
-                send_data_bytes(&mut sender_chain, &slice1, &slice2);
+                send_trace_data(&mut sender_chain, &slice1, &slice2);
             }
 
             // handle failed pages
             if !failed_pages.is_empty() {
                 trace!("Sending {} failed pages", failed_pages.len());
-                send_failed_page_headers(&mut sender_chain, &failed_pages)
+                send_failed_pages(&mut sender_chain, &failed_pages)
             }
 
             if is_finalizing {
@@ -188,7 +188,7 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
                 send_timestamp_freq(&mut sender_chain, ticks_per_sec);
                 
                 debug!("[sparkles] Finalize in process...");
-                sender_chain.send(&[0xff]);
+                send_graceful_shutdown(&mut sender_chain);
                 break;
             }
         }

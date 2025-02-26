@@ -3,6 +3,7 @@
 //! 2. Parse result file: `cargo run --release --example single_file trace.sprk`
 //! 3. Go to https://ui.perfetto.dev/ and drag'n'drop generated `trace.perf` file
 
+use std::path::PathBuf;
 use log::LevelFilter;
 use simple_logger::SimpleLogger;
 use sparkles::config::SparklesConfig;
@@ -14,9 +15,7 @@ fn main() {
     // `SparklesConfig` is a builder, you can easily add configuration using .with() chain.
     let config = SparklesConfig::default()
         // Provide custom name
-        .with_file_sender_config(FileSenderConfig {
-            output_filename: Some("trace.sprk".to_string())
-        })
+        .with_file_sender_config(FileSenderConfig::SingleFile(PathBuf::from("trace.sprk")))
         // Increase thread-local flush threshold, so flushing to global storage will be less frequent
         .with_thread_flush_attempt_threshold(100_000);
     

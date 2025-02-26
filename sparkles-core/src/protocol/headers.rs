@@ -1,11 +1,11 @@
 use alloc::string::{String, ToString};
-use serde::{Deserialize, Serialize};
+use bincode::{Decode, Encode};
 use crate::local_storage::id_mapping::IdMapping;
 use crate::{Timestamp, TimestampProvider};
 
 /// This header describe byte buffer filled with encoded sparkles events.
 /// This header is thread-local. Each thread events packet has its own header and buffer.
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Encode, Decode, Clone, Debug, Default)]
 pub struct LocalPacketHeader {
     /// Globally unique order number of the spawned thread
     pub thread_ord_id: u64,
@@ -19,21 +19,21 @@ pub struct LocalPacketHeader {
     pub id_store: IdMapping,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Encode, Decode, Clone, Debug, Default)]
 pub struct ThreadInfo {
     pub thread_id: u64,
     pub new_thread_name: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct SparklesEncoderInfo {
+#[derive(Encode, Decode, Clone, Debug)]
+pub struct SparklesMachineInfo {
     pub ver: u32,
     pub process_name: String,
     pub pid: u32,
     pub timestamp_max_value: u64
 }
 
-impl SparklesEncoderInfo {
+impl SparklesMachineInfo {
     pub fn new(process_name: String, pid: u32) -> Self {
         Self {
             pid,
@@ -44,7 +44,7 @@ impl SparklesEncoderInfo {
     }
 }
 
-impl Default for SparklesEncoderInfo {
+impl Default for SparklesMachineInfo {
     fn default() -> Self {
         Self {
             process_name: "unknown".to_string(),

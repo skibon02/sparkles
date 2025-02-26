@@ -2,7 +2,6 @@ mod thread_local_storage;
 mod global_storage;
 pub mod sender;
 pub mod config;
-mod encoder;
 
 use std::sync::atomic::AtomicBool;
 pub use global_storage::finalize;

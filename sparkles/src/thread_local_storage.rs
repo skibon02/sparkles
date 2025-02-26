@@ -3,8 +3,8 @@ use std::sync::atomic::Ordering;
 use std::sync::OnceLock;
 use std::thread;
 use sparkles_core::config::LocalStorageConfig;
-use sparkles_core::headers::{LocalPacketHeader, ThreadInfo};
 use sparkles_core::local_storage::{GlobalStorageImpl, LocalStorage};
+use sparkles_core::protocol::headers::{LocalPacketHeader, ThreadInfo};
 use crate::GLOBAL_FLUSHING_RUNNING;
 use crate::global_storage::{GlobalStorage, GLOBAL_STORAGE};
 

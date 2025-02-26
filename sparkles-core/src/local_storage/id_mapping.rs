@@ -7,9 +7,9 @@
 
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use serde::{Deserialize, Serialize};
+use bincode::{Decode, Encode};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub enum EventType {
     Instant,
     RangeStart,
@@ -93,7 +93,7 @@ pub struct IdMappingState {
 }
 
 /// ID to String mapping. Used to decode events
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Encode, Decode, Clone, Debug, Default)]
 pub struct IdMapping {
     pub tags: Vec<(String, EventType)>,
 }

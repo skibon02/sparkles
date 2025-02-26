@@ -3,8 +3,8 @@ use alloc::vec::Vec;
 use core::marker::PhantomData;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use crate::config::LocalStorageConfig;
-use crate::headers::{LocalPacketHeader, ThreadInfo};
 use crate::local_storage::id_mapping::{EventType, IdMappingState};
+use crate::protocol::headers::{LocalPacketHeader, ThreadInfo};
 use crate::Timestamp;
 
 use crate::timestamp::TimestampProvider;
