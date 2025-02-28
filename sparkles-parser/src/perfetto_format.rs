@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use prost::bytes::BytesMut;
 use prost::Message;
+use sparkles_core::protocol::headers::SparklesMachineInfo;
 use crate::perfetto_format::decl::trace_packet::{Data, OptionalTrustedPacketSequenceId};
 use crate::perfetto_format::decl::TracePacket;
 
@@ -14,7 +15,13 @@ pub struct PerfettoTraceFile {
     thread_descriptors: HashMap<u64, decl::TrackDescriptor>,
 
     sequence_id: u32,
-    pid: i32,
+}
+
+impl PerfettoTraceFile {
+    pub fn set_process_info(&mut self, name: String, pid: u32) {
+        self.proc_descriptor.process.as_mut().unwrap().pid = Some(pid as i32);
+        self.proc_descriptor.process.as_mut().unwrap().process_name = Some(name);
+    }
 }
 
 impl PerfettoTraceFile {
@@ -24,13 +31,13 @@ impl PerfettoTraceFile {
     fn uuid_for_thread_id(&self, thread_id: u64) -> u64 {
         self.thread_descriptors.get(&(thread_id)).map(|d| d.uuid).unwrap().unwrap()
     }
-    pub fn new(proc_name: String, pid: u32) -> Self {
+    pub fn new() -> Self {
         // emit process descriptor
         let trace = decl::Trace::default();
         let proc_descriptor = decl::TrackDescriptor {
             process: Some(decl::ProcessDescriptor {
-                pid: Some(pid as i32),
-                process_name: Some(proc_name),
+                pid: Some(0 as i32),
+                process_name: Some("Unknown".to_string()),
                 ..Default::default()
             }),
             uuid: Some(Self::new_uuid()),
@@ -42,15 +49,14 @@ impl PerfettoTraceFile {
             proc_descriptor,
             thread_descriptors,
             sequence_id: Self::new_uuid() as u32,
-            pid: pid as i32,
         }
     }
 
-    pub fn add_range_event(&mut self, name: String, thread_id: u64, begin: u64, end: u64) {
+    pub fn add_range_event(&mut self, name: &str, thread_id: u64, begin: u64, end: u64) {
         let uuid = self.uuid_for_thread_id(thread_id);
 
         let mut track_event = decl::TrackEvent::default();
-        track_event.name_field = Some(decl::track_event::NameField::Name(name));
+        track_event.name_field = Some(decl::track_event::NameField::Name(name.to_string()));
         track_event.set_type(decl::track_event::Type::SliceBegin);
         track_event.track_uuid = Some(uuid);
 
@@ -73,11 +79,11 @@ impl PerfettoTraceFile {
         self.trace.packet.push(packet);
     }
 
-    pub fn add_point_event(&mut self, name: String, thread_id: u64, timestamp: u64) {
+    pub fn add_point_event(&mut self, name: &str, thread_id: u64, timestamp: u64) {
         let uuid = self.uuid_for_thread_id(thread_id);
 
         let mut track_event = decl::TrackEvent::default();
-        track_event.name_field = Some(decl::track_event::NameField::Name(name));
+        track_event.name_field = Some(decl::track_event::NameField::Name(name.to_string()));
         track_event.set_type(decl::track_event::Type::Instant);
         track_event.track_uuid = Some(uuid);
 
@@ -88,14 +94,14 @@ impl PerfettoTraceFile {
 
         self.trace.packet.push(packet);
     }
-    pub fn set_thread_name(&mut self, thread_id: u64, thread_name: String) {
+    pub fn set_thread_name(&mut self, thread_id: u64, thread_name: &str) {
         self.thread_descriptors.entry(thread_id).or_insert_with(|| {
             let proc_uuid = self.proc_descriptor.uuid.unwrap();
             decl::TrackDescriptor {
                 thread: Some(decl::ThreadDescriptor {
-                    pid: Some(self.pid),
+                    pid: self.proc_descriptor.process.as_ref().unwrap().pid,
                     tid: Some(thread_id as i32),
-                    thread_name: Some(thread_name),
+                    thread_name: Some(thread_name.to_string()),
                     ..Default::default()
                 }),
                 parent_uuid: Some(proc_uuid),

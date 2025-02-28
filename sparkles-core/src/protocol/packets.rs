@@ -1,6 +1,7 @@
 use alloc::vec::Vec;
 use core::array::TryFromSliceError;
 use bincode::error::DecodeError;
+use sha2_const_stable::Sha256;
 use crate::protocol::headers::{LocalPacketHeader, SparklesMachineInfo};
 use crate::protocol::sender::Sender;
 
@@ -26,7 +27,7 @@ impl PacketType {
     }
     pub const fn header(&self) -> [u8; 32] {
         let str = self.get_str();
-        sha2_const::Sha256::new().update(str.as_bytes()).finalize()
+        Sha256::new().update(str.as_bytes()).finalize()
     }
 }
 
@@ -43,7 +44,7 @@ impl RequestPacketType {
     }
     pub const fn header(&self) -> [u8; 32] {
         let str = self.get_str();
-        sha2_const::Sha256::new().update(str.as_bytes()).finalize()
+        Sha256::new().update(str.as_bytes()).finalize()
     }
 }
 pub fn send_machine_info(sender: &mut impl Sender, sparkles_encoder_info: SparklesMachineInfo) {

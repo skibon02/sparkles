@@ -1,22 +1,28 @@
 mod perfetto_format;
 mod consts;
-mod decoder;
+mod tracing_decoder;
+mod parsed;
 
 use std::cmp::min;
 use std::collections::BTreeMap;
-use std::io::{Read, Write};
+use std::io::{Read};
+use std::net::UdpSocket;
+use bytes::BytesMut;
 use log::{debug, error, info, warn};
 use thiserror::Error;
 use sparkles_core::local_storage::id_mapping::EventType;
 use sparkles_core::protocol::headers::{LocalPacketHeader, SparklesMachineInfo};
-use crate::decoder::StreamFrameDecoder;
-use crate::ParseError::Decode;
+use crate::parsed::{ParsedEvent, ParsedEventGroup, ThreadInfoState};
+use crate::tracing_decoder::StreamFrameDecoder;
 use crate::perfetto_format::PerfettoTraceFile;
+use crate::SparklesSource::Stream;
 
 pub static PARSER_BUF_SIZE: usize = 1_000_000;
 
-#[derive(Default)]
 pub struct SparklesParser {
+    input: SparklesSource,
+    is_eof: bool,
+
     total_event_bytes: u64,
     total_transport_bytes: u64,
 
@@ -44,125 +50,118 @@ pub struct ThreadParserState {
     zero_diff_cnt: u64,
 }
 
-#[derive(Debug, Error)]
-pub enum ParseError {
-    #[error("Error while decoding frame")]
-    Decode(DecodeError),
+pub enum SparklesSource {
+    Stream(Box<dyn Read>),
+    Socket(UdpSocket)
 }
 
-#[derive(Debug, Error)]
-pub enum DecodeError {
-    #[error("Error while reading from stream")]
-    Io(#[from] std::io::Error),
-    #[error("Error while deserializing data")]
-    Bincode(#[from] bincode::error::DecodeError),
-}
-
-type ParseResult<T> = Result<T, ParseError>;
-type DecodeResult<T> = Result<T, DecodeError>;
+pub type ParseResult<T> = Result<T, ()>;
 
 impl SparklesParser {
-    /// Decode incoming events and save them to `trace.json` in Perfetto format
-    pub fn convert_file(&mut self, mut reader: impl Read) -> ParseResult<()> {
-        if let Err(e) = self.decode_packets(&mut reader) {
-            error!("Error handling client: {:?}", e);
-            return Err(Decode(e));
-        }
+    /// Initialize parser from byte stream
+    ///
+    pub fn from_stream(reader: impl Read + 'static) -> Self {
+        Self {
+            input: Stream(Box::new(reader)),
+            is_eof: false,
 
-        //some stats
+            encoder_info: None,
+            event_parsers: BTreeMap::new(),
+            ticks_per_ns: None,
+            total_event_bytes: 0,
+            total_transport_bytes: 0,
+        }
+    }
+    pub fn from_socket(socket: UdpSocket) -> Self {
+        Self {
+            input: SparklesSource::Socket(socket),
+            is_eof: false,
+
+            encoder_info: None,
+            event_parsers: BTreeMap::new(),
+            ticks_per_ns: None,
+            total_event_bytes: 0,
+            total_transport_bytes: 0,
+        }
+    }
+
+    pub fn is_eof(&self) -> bool {
+        self.is_eof
+    }
+
+    pub fn parse_to_end(&mut self, f: impl FnMut(&ParsedEventGroup, &ThreadInfoState)) -> ParseResult<()> {
         let mut total_events = 0;
         let mut min_timestamp = u64::MAX;
         let mut max_timestamp = 0;
         let mut covered_dur = 0;
 
-
-        let encoder_info = self.encoder_info.take().unwrap_or_else(|| {
-            warn!("Encoder info is not present in decoded data! Using default values");
-            SparklesMachineInfo::default()
-        });
-
-        info!("Begin parsing... Encoder info: {:?}", encoder_info);
-
-        let mut trace_res_file = PerfettoTraceFile::new(encoder_info.process_name, encoder_info.pid);
-        let ticks_per_ns = self.ticks_per_ns.unwrap_or_else( || {
-            warn!("Did not find timestamp frequency in decoded stream! Using default values");
-            1.0
-        });
-        // iterate over all threads
-        for (&thread_ord_id, parser_state) in &mut self.event_parsers {
-            let thread_name = parser_state.thread_name.clone().unwrap_or("".to_string());
-            let thread_id = parser_state.thread_id.unwrap_or(thread_ord_id);
-            // iterate over events
-            for (header, events) in &parser_state.event_buf {
-                trace_res_file.set_thread_name(thread_id, thread_name.clone());
-
-                parser_state.cur_tm = header.start_timestamp;
-                let mut first = true;
-                for event in events {
-                    let mut dif_tm_zero = false;
-                    if first {
-                        first = false;
-                    }
-                    else {
-                        let dif_tm = match event {
-                            TracingEvent::Instant(_, dif_tm) => dif_tm,
-                            TracingEvent::RangePart(_, dif_tm, _) => dif_tm,
-                            TracingEvent::UnnamedRangeEnd(dif_tm, _) => dif_tm
-                        };
-                        if *dif_tm == 0 {
-                            dif_tm_zero = true;
-                        }
-                        parser_state.cur_tm += dif_tm;
-                    }
-                    if !dif_tm_zero {
-                        parser_state.zero_diff_cnt = 0;
-                    }
-                    else {
-                        parser_state.zero_diff_cnt += 1;
-                    }
-                    // add to trace file
-                    let timestamp = (parser_state.cur_tm as f64 / ticks_per_ns) as u64 + parser_state.zero_diff_cnt * 10;
-                    match event {
-                        TracingEvent::Instant(id, _) => {
-                            let (ev_name, _) = &header.id_store.tags[*id as usize];
-                            trace_res_file.add_point_event(ev_name.clone(), thread_id, timestamp);
-                        }
-                        TracingEvent::RangePart(id, _, ord_id) => {
-                            let (ev_name, ev_type) = &header.id_store.tags[*id as usize];
-                            if let EventType::RangeEnd(start_id) = ev_type {
-                                let (start_name, _) = &header.id_store.tags[*start_id as usize];
-                                let start_info = parser_state.cur_started_ranges.remove(ord_id).unwrap();
-                                let start_tm = start_info.1;
-                                let end_tm = timestamp;
-                                trace_res_file.add_range_event(format!("{} -> {}", start_name, ev_name), thread_id, start_tm, end_tm);
-                            }
-                            else {
-                                // Range start
-                                parser_state.cur_started_ranges.insert(*ord_id, (*id, timestamp));
-                            }
-                        }
-                        TracingEvent::UnnamedRangeEnd(_, ord_id ) => {
-                            let start_info = parser_state.cur_started_ranges.remove(ord_id).unwrap();
-                            let range_id = start_info.0;
-                            let range_name = &header.id_store.tags[range_id as usize].0;
-                            let start_tm = start_info.1;
-                            let end_tm = timestamp;
-                            trace_res_file.add_range_event(range_name.clone(), thread_id, start_tm, end_tm);
-                        }
-                    }
-                }
-                total_events += events.len();
-                if header.start_timestamp < min_timestamp {
-                    min_timestamp = header.start_timestamp;
-                }
-                if header.end_timestamp > max_timestamp {
-                    max_timestamp = header.end_timestamp;
-                }
-                covered_dur += header.end_timestamp - header.start_timestamp;
-
-            }
-        }
-
+        // info!("Begin parsing... Encoder info: {:?}", encoder_info);
+        // 
+        // // iterate over all threads
+        // for (&thread_ord_id, parser_state) in &mut self.event_parsers {
+        //     let thread_name = parser_state.thread_name.clone().unwrap_or("".to_string());
+        //     let thread_id = parser_state.thread_id.unwrap_or(thread_ord_id);
+        //     // iterate over events
+        //     for (header, events) in &parser_state.event_buf {
+        //         parser_state.cur_tm = header.start_timestamp;
+        //         let mut first = true;
+        //         for event in events {
+        //             let mut dif_tm_zero = false;
+        //             if first {
+        //                 first = false;
+        //             }
+        //             else {
+        //                 let dif_tm = match event {
+        //                     TracingEvent::Instant(_, dif_tm) => dif_tm,
+        //                     TracingEvent::RangePart(_, dif_tm, _) => dif_tm,
+        //                     TracingEvent::UnnamedRangeEnd(dif_tm, _) => dif_tm
+        //                 };
+        //                 if *dif_tm == 0 {
+        //                     dif_tm_zero = true;
+        //                 }
+        //                 parser_state.cur_tm += dif_tm;
+        //             }
+        //             if !dif_tm_zero {
+        //                 parser_state.zero_diff_cnt = 0;
+        //             }
+        //             else {
+        //                 parser_state.zero_diff_cnt += 1;
+        //             }
+        //             // add to trace file
+        //             let timestamp = (parser_state.cur_tm as f64 / ticks_per_ns) as u64 + parser_state.zero_diff_cnt * 10;
+        //             match event {
+        //                 TracingEvent::Instant(id, _) => {
+        //                     let (ev_name, _) = &header.id_store.tags[*id as usize];
+        //                 }
+        //                 TracingEvent::RangePart(id, _, ord_id) => {
+        //                     let (ev_name, ev_type) = &header.id_store.tags[*id as usize];
+        //                     if let EventType::RangeEnd(start_id) = ev_type {
+        //                         let (start_name, _) = &header.id_store.tags[*start_id as usize];
+        //                         let start_info = parser_state.cur_started_ranges.remove(ord_id).unwrap();
+        //                     }
+        //                     else {
+        //                         // Range start
+        //                         parser_state.cur_started_ranges.insert(*ord_id, (*id, timestamp));
+        //                     }
+        //                 }
+        //                 TracingEvent::UnnamedRangeEnd(_, ord_id ) => {
+        //                     let start_info = parser_state.cur_started_ranges.remove(ord_id).unwrap();
+        //                 }
+        //             }
+        //         }
+        //         total_events += events.len();
+        //         if header.start_timestamp < min_timestamp {
+        //             min_timestamp = header.start_timestamp;
+        //         }
+        //         if header.end_timestamp > max_timestamp {
+        //             max_timestamp = header.end_timestamp;
+        //         }
+        //         covered_dur += header.end_timestamp - header.start_timestamp;
+        // 
+        //     }
+        // }
+        
+        let ticks_per_ns = self.ticks_per_ns.unwrap_or(1.0);
         let events_per_sec = total_events as f64 / ((max_timestamp - min_timestamp) as f64 / ticks_per_ns) * 1_000_000_000.0;
         let events_per_sec_covered = total_events as f64 / (covered_dur as f64 / ticks_per_ns) * 1_000_000_000.0;
         info!("Total events: {}", total_events);
@@ -171,15 +170,57 @@ impl SparklesParser {
         info!("Average event duration: {} ns", covered_dur as f64 / ticks_per_ns / total_events as f64);
         info!("Average bytes per event: {} bytes", self.total_event_bytes as f64 / total_events as f64);
         info!("Average transport bytes per event: {} bytes", self.total_transport_bytes as f64 / total_events as f64);
-
-        info!("Finished! Saving to trace.perf...");
-
-        let mut file = std::fs::File::create("trace.perf").unwrap();
-        let bytes = trace_res_file.get_bytes();
-        file.write_all(&bytes).unwrap();
-
-        info!("Your `trace.perf` is ready! Now, navigate to https://ui.perfetto.dev/ and drag'n'drop the file onto the page.");
         Ok(())
+    }
+
+    /// Continuously pull events until EOF.
+    /// Decode incoming events and save them to `trace.json` in Perfetto format
+    pub fn convert_to_perfetto(&mut self) -> ParseResult<BytesMut> {
+        let mut trace_res_file = PerfettoTraceFile::new();
+        self.parse_to_end(|group, thread_info| {
+            trace_res_file.set_thread_name(thread_info.thread_id, &thread_info.thread_name);
+            
+            for ev in group.iter() {
+                match ev {
+                    ParsedEvent::Instant {
+                        name,
+                        tm
+                    } => {
+                        trace_res_file.add_point_event(&name, thread_info.thread_id, tm);
+                    }
+                    ParsedEvent::Range {
+                        name,
+                        start,
+                        end
+                    } => {
+                        trace_res_file.add_range_event(&name, thread_info.thread_id,
+                                                       start, end);
+                    }
+                    ParsedEvent::NamedRange {
+                        name,
+                        end_name,
+                        start,
+                        end
+                    } => {
+
+                        trace_res_file.add_range_event(&format!("{} -> {}", name, end_name), thread_info.thread_id, 
+                                                       start, end);
+                    }
+                }
+            }
+        })?;
+        let encoder_info = self.encoder_info.take().unwrap_or_else(|| {
+            warn!("Encoder info is not present in decoded data! Using default values");
+            SparklesMachineInfo::default()
+        });
+        trace_res_file.set_process_info(encoder_info.process_name, encoder_info.pid);
+        let ticks_per_ns = self.ticks_per_ns.unwrap_or_else(|| {
+            warn!("Did not find timestamp frequency in decoded stream! Using default values");
+            1.0
+        });
+        
+        let bytes = trace_res_file.get_bytes();
+        Ok(bytes)
     }
 
     fn decode_packets(&mut self, con: &mut impl Read) -> DecodeResult<()> {

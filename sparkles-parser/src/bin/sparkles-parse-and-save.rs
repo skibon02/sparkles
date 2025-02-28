@@ -4,13 +4,13 @@
 //! 3. Go to https://ui.perfetto.dev/ and drag'n'drop generated `trace.perf` file
 
 use std::env::args;
+use std::io::Write;
 use log::{error, info, LevelFilter};
 use simple_logger::SimpleLogger;
 use sparkles_parser::SparklesParser;
 
 fn main() {
     SimpleLogger::new().with_level(LevelFilter::Info).init().unwrap();
-
 
     let filename = args().nth(1);
     let found_filename = if let Some(filename) = filename {
@@ -70,9 +70,14 @@ fn main() {
         latest.1.to_string()
     };
 
-    let mut parser = SparklesParser::default();
+    let file = std::fs::File::open(found_filename).unwrap();
+    let mut parser = SparklesParser::from_stream(file);
 
     // 3. parse the newest file
-    let file = std::fs::File::open(found_filename).unwrap();
-    parser.convert_file(file).unwrap()
+    info!("Finished! Saving to trace.perf...");
+    let data = parser.convert_to_perfetto().unwrap();
+    let mut res_file = std::fs::File::create("trace.perf").unwrap();
+    res_file.write_all(&data).unwrap();
+    info!("Your `trace.perf` is ready! Now, navigate to https://ui.perfetto.dev/ and drag'n'drop the file onto the page.");
+    Ok(())
 }

@@ -2,7 +2,7 @@ use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 use log::{info, warn};
-use sparkles_core::protocol::packets::PacketType;
+use sparkles_core::protocol::packets::{PacketType, RequestPacketType};
 use sparkles_core::protocol::sender::{ConfiguredSender, PacketFlags, Sender};
 
 
@@ -27,8 +27,8 @@ impl UdpSender {
     fn try_recv(&mut self) {
         let mut buf = [0u8; 32];
         match self.socket.recv_from(&mut buf) {
-            Ok((32, addr)) => {
-                info!("[sparkles] UDP client connected!");
+            Ok((32, addr)) if buf == RequestPacketType::Subscribe.header() => {
+                info!("[sparkles] UDP client connected: {addr:?}");
                 self.dst_addr = Some(addr);
                 SOMEONE_CONNECTED.store(true, std::sync::atomic::Ordering::Relaxed);
                 self.last_recv = Some(Instant::now());
