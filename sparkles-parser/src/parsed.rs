@@ -1,6 +1,5 @@
 use std::iter::once;
 use std::rc::Rc;
-use smallvec::SmallVec;
 
 #[derive(Clone)]
 pub enum ParsedEvent {
@@ -27,11 +26,11 @@ pub struct ThreadInfoState {
 }
 pub struct ParsedEventGroup {
     ev: ParsedEvent,
-    children: SmallVec<[ParsedEventGroup; 2]>
+    children: Vec<ParsedEventGroup>
 }
 
 impl ParsedEventGroup {
-    pub(crate) fn iter(&self) -> impl Iterator<Item=ParsedEvent> + use<'_> {
+    pub(crate) fn iter(&self) -> impl Iterator<Item=ParsedEvent> {
         once(self.ev.clone()).chain(self.children.iter().flat_map(|c| c.iter()))
     }
 }

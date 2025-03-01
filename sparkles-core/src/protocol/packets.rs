@@ -16,6 +16,7 @@ pub enum PacketType {
 }
 
 impl PacketType {
+    /// This string is used to calculate hash of the packet type
     pub const fn get_str(&self) -> &str {
         match self {
             PacketType::MachineInfo => "MachineInfo",
@@ -25,9 +26,30 @@ impl PacketType {
             PacketType::GracefulShutdown => "GracefulShutdown"
         }
     }
-    pub const fn header(&self) -> [u8; 32] {
+    pub const fn pattern(&self) -> [u8; 32] {
         let str = self.get_str();
         Sha256::new().update(str.as_bytes()).finalize()
+    }
+    
+    pub fn try_from_pattern(pattern: &[u8]) -> Option<Self> {
+        if pattern == Self::MachineInfo.pattern() {
+            Some(Self::MachineInfo)
+        }
+        else if pattern == Self::DataBytes.pattern() {
+            Some(Self::DataBytes)
+        }
+        else if pattern == Self::FailedPages.pattern() {
+            Some(Self::FailedPages)
+        }
+        else if pattern == Self::TimestampFreq.pattern() {
+            Some(Self::TimestampFreq)
+        }
+        else if pattern == Self::GracefulShutdown.pattern() {
+            Some(Self::GracefulShutdown)
+        }
+        else {
+            None
+        }
     }
 }
 
@@ -42,7 +64,7 @@ impl RequestPacketType {
             RequestPacketType::Subscribe => "Subscribe",
         }
     }
-    pub const fn header(&self) -> [u8; 32] {
+    pub const fn pattern(&self) -> [u8; 32] {
         let str = self.get_str();
         Sha256::new().update(str.as_bytes()).finalize()
     }

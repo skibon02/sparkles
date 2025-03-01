@@ -25,7 +25,7 @@ impl Default for FileSenderConfig {
 }
 impl Sender for FileSender {
     fn send_packet(&mut self, packet_type: PacketType, data: &[&[u8]]) {
-        self.file.write_all(&packet_type.header()).unwrap();
+        self.file.write_all(&packet_type.pattern()).unwrap();
         let full_size = data.iter().fold(0, |prev, sub| prev + sub.len()) as u32;
         let size_bytes = full_size.to_be_bytes();
         self.file.write_all(&size_bytes).unwrap();

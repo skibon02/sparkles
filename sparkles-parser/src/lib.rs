@@ -2,26 +2,24 @@ mod perfetto_format;
 mod consts;
 mod tracing_decoder;
 mod parsed;
+pub mod packet_decoder;
 
 use std::cmp::min;
 use std::collections::BTreeMap;
-use std::io::{Read};
-use std::net::UdpSocket;
+use std::io::Read;
+use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
 use bytes::BytesMut;
-use log::{debug, error, info, warn};
-use thiserror::Error;
-use sparkles_core::local_storage::id_mapping::EventType;
+use log::{debug, info, warn};
 use sparkles_core::protocol::headers::{LocalPacketHeader, SparklesMachineInfo};
+use crate::packet_decoder::PacketDecoder;
 use crate::parsed::{ParsedEvent, ParsedEventGroup, ThreadInfoState};
 use crate::tracing_decoder::StreamFrameDecoder;
 use crate::perfetto_format::PerfettoTraceFile;
-use crate::SparklesSource::Stream;
 
 pub static PARSER_BUF_SIZE: usize = 1_000_000;
 
 pub struct SparklesParser {
-    input: SparklesSource,
-    is_eof: bool,
+    packet_decoder: PacketDecoder,
 
     total_event_bytes: u64,
     total_transport_bytes: u64,
@@ -50,20 +48,13 @@ pub struct ThreadParserState {
     zero_diff_cnt: u64,
 }
 
-pub enum SparklesSource {
-    Stream(Box<dyn Read>),
-    Socket(UdpSocket)
-}
-
 pub type ParseResult<T> = Result<T, ()>;
 
 impl SparklesParser {
     /// Initialize parser from byte stream
-    ///
-    pub fn from_stream(reader: impl Read + 'static) -> Self {
+    pub fn from_decoder(decoder: PacketDecoder) -> Self {
         Self {
-            input: Stream(Box::new(reader)),
-            is_eof: false,
+            packet_decoder: decoder,
 
             encoder_info: None,
             event_parsers: BTreeMap::new(),
@@ -72,17 +63,15 @@ impl SparklesParser {
             total_transport_bytes: 0,
         }
     }
-    pub fn from_socket(socket: UdpSocket) -> Self {
-        Self {
-            input: SparklesSource::Socket(socket),
-            is_eof: false,
 
-            encoder_info: None,
-            event_parsers: BTreeMap::new(),
-            ticks_per_ns: None,
-            total_event_bytes: 0,
-            total_transport_bytes: 0,
-        }
+    pub fn from_stream(stream: impl Read + 'static) -> Self {
+        let decoder = PacketDecoder::from_stream(stream);
+        Self::from_decoder(decoder)
+    }
+
+    pub fn from_udp_addr(addr: SocketAddr) -> Self {
+        let decoder = PacketDecoder::from_socket(addr);
+        Self::from_decoder(decoder)
     }
 
     pub fn is_eof(&self) -> bool {
@@ -223,7 +212,7 @@ impl SparklesParser {
         Ok(bytes)
     }
 
-    fn decode_packets(&mut self, con: &mut impl Read) -> DecodeResult<()> {
+    fn decode_packets(&mut self) -> ParseResult<()> {
         loop {
             let mut packet_type = [0u8; 1];
             con.read_exact(&mut packet_type)?;

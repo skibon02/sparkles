@@ -15,19 +15,22 @@ pub(crate) struct UdpSender {
     socket: UdpSocket,
     dst_addr: Option<SocketAddr>,
     last_recv: Option<Instant>,
-    seq_id: u16,
+    seq_num: u16,
 }
 impl UdpSender {
-    fn new_seq_id(&mut self) -> u16 {
-        let seq_id = self.seq_id;
-        self.seq_id = self.seq_id.wrapping_add(1);
-        seq_id
+    fn new_seq_num(&mut self) -> u16 {
+        let seq_num = self.seq_num;
+        self.seq_num = self.seq_num.wrapping_add(1);
+        if self.seq_num == 0 {
+            self.seq_num = 1;
+        }
+        seq_num
     }
     
     fn try_recv(&mut self) {
         let mut buf = [0u8; 32];
         match self.socket.recv_from(&mut buf) {
-            Ok((32, addr)) if buf == RequestPacketType::Subscribe.header() => {
+            Ok((32, addr)) if buf == RequestPacketType::Subscribe.pattern() => {
                 info!("[sparkles] UDP client connected: {addr:?}");
                 self.dst_addr = Some(addr);
                 SOMEONE_CONNECTED.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -35,7 +38,6 @@ impl UdpSender {
             }
             Ok(_) => {
                 warn!("[sparkles] Incorrect packet received from client! Ignoring...");
-                return;
             }
             Err(e) => {
                 // Got nothing
@@ -44,7 +46,6 @@ impl UdpSender {
                 }
                 
                 warn!("[sparkles] Error receiving packet from client: {}", e);
-                return;
             }
         }
     }
@@ -74,10 +75,10 @@ impl Sender for UdpSender {
         let mut size = 0;
         for (chunk_num, chunk) in full_data.chunks(SHORT_PACKET_SIZE).enumerate() {
             // 1) Packet type pattern
-            packet_buf.extend_from_slice(&packet_type.header());
+            packet_buf.extend_from_slice(&packet_type.pattern());
 
             // 2) Seq id
-            let seq_id = self.new_seq_id();
+            let seq_id = self.new_seq_num();
             let seq_id_bytes = seq_id.to_be_bytes();
             packet_buf.extend_from_slice(&seq_id_bytes);
 
@@ -123,7 +124,7 @@ impl ConfiguredSender for UdpSender {
         Some(Self {
             socket,
             dst_addr: None,
-            seq_id: 0,
+            seq_num: 1,
             last_recv: None,
         })
     }

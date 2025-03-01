@@ -1012,6 +1012,7 @@ dependencies = [
  "bincode 2.0.0-rc.3",
  "bytes",
  "chrono",
+ "enumset",
  "lazy_static",
  "log",
  "prost 0.13.5",
