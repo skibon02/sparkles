@@ -30,7 +30,10 @@ pub struct ParsedEventGroup {
 }
 
 impl ParsedEventGroup {
-    pub(crate) fn iter(&self) -> impl Iterator<Item=ParsedEvent> {
-        once(self.ev.clone()).chain(self.children.iter().flat_map(|c| c.iter()))
+    pub fn iter(&self) -> Box<dyn Iterator<Item=ParsedEvent> + '_> {
+        Box::new(once(self.ev.clone()).chain(
+            self.children.iter()
+                .flat_map(|c| c.iter())
+        ))
     }
 }

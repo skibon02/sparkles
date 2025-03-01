@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use prost::bytes::BytesMut;
 use prost::Message;
-use sparkles_core::protocol::headers::SparklesMachineInfo;
 use crate::perfetto_format::decl::trace_packet::{Data, OptionalTrustedPacketSequenceId};
 use crate::perfetto_format::decl::TracePacket;
 

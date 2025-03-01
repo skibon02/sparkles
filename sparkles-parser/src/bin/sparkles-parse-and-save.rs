@@ -5,6 +5,7 @@
 
 use std::env::args;
 use std::io::Write;
+use std::path::PathBuf;
 use log::{error, info, LevelFilter};
 use simple_logger::SimpleLogger;
 use sparkles_parser::SparklesParser;
@@ -24,7 +25,7 @@ fn main() {
             error!("Provided path was not found!");
             return;
         }
-        filename
+        PathBuf::from(filename)
     }
     else {
         info!("No argument provided! Using latest trace file from `trace` directory");
@@ -67,7 +68,7 @@ fn main() {
         info!("Found {} trace files: {:?}", trace_files.len(), trace_files);
         info!("Selecting latest file: {:?}", latest.1);
 
-        latest.1.to_string()
+        latest.1.clone()
     };
 
     let file = std::fs::File::open(found_filename).unwrap();
@@ -79,5 +80,4 @@ fn main() {
     let mut res_file = std::fs::File::create("trace.perf").unwrap();
     res_file.write_all(&data).unwrap();
     info!("Your `trace.perf` is ready! Now, navigate to https://ui.perfetto.dev/ and drag'n'drop the file onto the page.");
-    Ok(())
 }

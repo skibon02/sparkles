@@ -90,12 +90,12 @@ pub fn parse_failed_pages(data: &[u8]) -> Result<(Vec<LocalPacketHeader>, usize)
 }
 
 pub fn send_timestamp_freq(sender: &mut impl Sender, ticks_per_sec: u64) {
-    let bytes = ticks_per_sec.to_le_bytes();
+    let bytes = ticks_per_sec.to_be_bytes();
     sender.send_packet(PacketType::TimestampFreq, &[&bytes]);
 }
 pub fn parse_timestamp_freq(data: &[u8]) -> Result<u64, TryFromSliceError> {
     let data = data.try_into()?;
-    Ok(u64::from_le_bytes(data))
+    Ok(u64::from_be_bytes(data))
 }
 
 pub fn send_graceful_shutdown(sender: &mut impl Sender) {

@@ -1,17 +1,18 @@
 mod perfetto_format;
 mod consts;
-mod tracing_decoder;
-mod parsed;
+pub mod tracing_decoder;
+pub mod parsed;
 pub mod packet_decoder;
 
-use std::cmp::min;
 use std::collections::BTreeMap;
 use std::io::Read;
-use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
+use std::net::SocketAddr;
+use std::thread;
+use std::time::Duration;
 use bytes::BytesMut;
 use log::{debug, info, warn};
 use sparkles_core::protocol::headers::{LocalPacketHeader, SparklesMachineInfo};
-use crate::packet_decoder::PacketDecoder;
+use crate::packet_decoder::{Packet, PacketDecoder, PacketReadError};
 use crate::parsed::{ParsedEvent, ParsedEventGroup, ThreadInfoState};
 use crate::tracing_decoder::StreamFrameDecoder;
 use crate::perfetto_format::PerfettoTraceFile;
@@ -21,10 +22,7 @@ pub static PARSER_BUF_SIZE: usize = 1_000_000;
 pub struct SparklesParser {
     packet_decoder: PacketDecoder,
 
-    total_event_bytes: u64,
-    total_transport_bytes: u64,
-
-    encoder_info: Option<SparklesMachineInfo>,
+    machine_info: Option<SparklesMachineInfo>,
     ticks_per_ns: Option<f64>,
 
     event_parsers: BTreeMap<u64, ThreadParserState>,
@@ -48,7 +46,7 @@ pub struct ThreadParserState {
     zero_diff_cnt: u64,
 }
 
-pub type ParseResult<T> = Result<T, ()>;
+pub type ParseResult<T> = Result<T, PacketReadError>;
 
 impl SparklesParser {
     /// Initialize parser from byte stream
@@ -56,11 +54,9 @@ impl SparklesParser {
         Self {
             packet_decoder: decoder,
 
-            encoder_info: None,
+            machine_info: None,
             event_parsers: BTreeMap::new(),
             ticks_per_ns: None,
-            total_event_bytes: 0,
-            total_transport_bytes: 0,
         }
     }
 
@@ -75,14 +71,80 @@ impl SparklesParser {
     }
 
     pub fn is_eof(&self) -> bool {
-        self.is_eof
+        self.packet_decoder.is_eof()
     }
 
     pub fn parse_to_end(&mut self, f: impl FnMut(&ParsedEventGroup, &ThreadInfoState)) -> ParseResult<()> {
-        let mut total_events = 0;
-        let mut min_timestamp = u64::MAX;
-        let mut max_timestamp = 0;
-        let mut covered_dur = 0;
+        // let mut total_events = 0;
+        // let mut min_timestamp = u64::MAX;
+        // let mut max_timestamp = 0;
+        // let mut covered_dur = 0;
+
+        info!("Waiting for encoder info...");
+        loop {
+            match self.packet_decoder.read_packet() {
+                Ok(packet) => {
+                    match packet {
+                        Packet::MachineInfo(info) => {
+                            if info.ver != consts::ENCODER_VERSION {
+                                warn!("Encoder version mismatch! Parser: {}, Encoder: {}", consts::ENCODER_VERSION, info.ver);
+                            }
+
+                            self.machine_info = Some(info);
+                        }
+                        Packet::TimestampFreq(ticks_per_sec) => {
+                            let ticks_per_ns = ticks_per_sec as f64 / 1_000_000_000.0;
+                            info!("Got timestamp frequency: {:?} t/ns", ticks_per_ns);
+
+                            self.ticks_per_ns = Some(ticks_per_ns);
+                        }
+                        Packet::DataBytes(packets) => {
+                            for (header, data) in packets {
+                                let thread_id = header.thread_ord_id;
+                                let cur_parser_state = self.event_parsers.entry(thread_id).or_default();
+
+                                //update thread name
+                                if let Some(thread_info) = &header.thread_info {
+                                    if let Some(thread_name) = thread_info.new_thread_name.clone() {
+                                        cur_parser_state.thread_name = Some(thread_name);
+                                        cur_parser_state.thread_id = Some(thread_info.thread_id);
+                                    }
+                                }
+
+                                let mut event_buf = vec![];
+                                let new_events = cur_parser_state.state_machine.decode_many(&data);
+                                let new_events_len = new_events.len();
+                                event_buf.extend_from_slice(&new_events);
+                                debug!("Parsed {} events", new_events_len);
+                                
+                                cur_parser_state.state_machine.ensure_buf_end();
+                                cur_parser_state.event_buf.push((header, event_buf));
+                            }
+                        }
+
+                        Packet::FailedPages(failed_pages) => {
+                            for header in failed_pages {
+                                info!("Got failed pages header: {:?}", header);
+
+                                let start = header.start_timestamp;
+                                let dur = header.end_timestamp - header.start_timestamp;
+                                let thread_ord_id = header.thread_ord_id;
+                                self.thread_parser_state(thread_ord_id).missed_events.push((start, dur));
+                            }
+                        }
+                        Packet::GracefulShutdown => {
+                            info!("GracefulShutdown received!");
+                            break;
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("Error while parsing: {:?}", e);
+                    thread::sleep(Duration::from_millis(500))
+                }
+            }
+
+        }
 
         // info!("Begin parsing... Encoder info: {:?}", encoder_info);
         // 
@@ -150,15 +212,15 @@ impl SparklesParser {
         //     }
         // }
         
-        let ticks_per_ns = self.ticks_per_ns.unwrap_or(1.0);
-        let events_per_sec = total_events as f64 / ((max_timestamp - min_timestamp) as f64 / ticks_per_ns) * 1_000_000_000.0;
-        let events_per_sec_covered = total_events as f64 / (covered_dur as f64 / ticks_per_ns) * 1_000_000_000.0;
-        info!("Total events: {}", total_events);
-        info!("Events per second (global): {} eps", events_per_sec);
-        info!("Events per second (covered): {} eps", events_per_sec_covered);
-        info!("Average event duration: {} ns", covered_dur as f64 / ticks_per_ns / total_events as f64);
-        info!("Average bytes per event: {} bytes", self.total_event_bytes as f64 / total_events as f64);
-        info!("Average transport bytes per event: {} bytes", self.total_transport_bytes as f64 / total_events as f64);
+        // let ticks_per_ns = self.ticks_per_ns.unwrap_or(1.0);
+        // let events_per_sec = total_events as f64 / ((max_timestamp - min_timestamp) as f64 / ticks_per_ns) * 1_000_000_000.0;
+        // let events_per_sec_covered = total_events as f64 / (covered_dur as f64 / ticks_per_ns) * 1_000_000_000.0;
+        // info!("Total events: {}", total_events);
+        // info!("Events per second (global): {} eps", events_per_sec);
+        // info!("Events per second (covered): {} eps", events_per_sec_covered);
+        // info!("Average event duration: {} ns", covered_dur as f64 / ticks_per_ns / total_events as f64);
+        // info!("Average bytes per event: {} bytes", self.total_event_bytes as f64 / total_events as f64);
+        // info!("Average transport bytes per event: {} bytes", self.total_transport_bytes as f64 / total_events as f64);
         Ok(())
     }
 
@@ -198,7 +260,7 @@ impl SparklesParser {
                 }
             }
         })?;
-        let encoder_info = self.encoder_info.take().unwrap_or_else(|| {
+        let encoder_info = self.machine_info.take().unwrap_or_else(|| {
             warn!("Encoder info is not present in decoded data! Using default values");
             SparklesMachineInfo::default()
         });
@@ -211,126 +273,6 @@ impl SparklesParser {
         let bytes = trace_res_file.get_bytes();
         Ok(bytes)
     }
-
-    fn decode_packets(&mut self) -> ParseResult<()> {
-        loop {
-            let mut packet_type = [0u8; 1];
-            con.read_exact(&mut packet_type)?;
-            info!("Packet id: {}", packet_type[0]);
-
-            let mut events_bytes = vec![0; 10_000];
-
-            match packet_type[0] {
-                0x00 => {
-                    let mut info_bytes_len = [0u8; 8];
-                    con.read_exact(&mut info_bytes_len)?;
-                    let info_bytes_len = u64::from_le_bytes(info_bytes_len) as usize;
-
-                    let mut info_bytes = vec![0u8; info_bytes_len];
-                    con.read_exact(&mut info_bytes)?;
-                    let info = bincode::decode_from_slice::<SparklesMachineInfo>(&info_bytes)?;
-
-                    if info.ver != consts::ENCODER_VERSION {
-                        warn!("Encoder version mismatch! Parser: {}, Encoder: {}", consts::ENCODER_VERSION, info.ver);
-                    }
-
-                    self.encoder_info = Some(info);
-                }
-                0x01 => {
-                    let mut total_bytes = [0u8; 8];
-                    con.read_exact(&mut total_bytes)?;
-                    let mut total_bytes = u64::from_le_bytes(total_bytes) as usize;
-
-                    while total_bytes > 0 {
-                        let mut header_len = [0u8; 8];
-                        con.read_exact(&mut header_len)?;
-                        self.total_transport_bytes += 8;
-                        let header_len = u64::from_le_bytes(header_len) as usize;
-
-                        let mut header_bytes = vec![0u8; header_len];
-                        con.read_exact(&mut header_bytes)?;
-                        self.total_transport_bytes += header_len as u64;
-                        let header = bincode::decode_from_slice::<LocalPacketHeader>(&header_bytes)?;
-
-                        let mut buf_len = [0u8; 8];
-                        con.read_exact(&mut buf_len)?;
-                        self.total_transport_bytes += 8;
-                        let buf_len = u64::from_le_bytes(buf_len) as usize;
-
-                        let mut event_buf = Vec::with_capacity(PARSER_BUF_SIZE);
-                        info!("Got packet header: {:?}", header);
-
-                        let thread_id = header.thread_ord_id;
-                        let cur_parser_state = self.event_parsers.entry(thread_id).or_default();
-
-                        //update thread name
-                        if let Some(thread_info) = &header.thread_info {
-                            if let Some(thread_name) = thread_info.new_thread_name.clone() {
-                                cur_parser_state.thread_name = Some(thread_name);
-                                cur_parser_state.thread_id = Some(thread_info.thread_id);
-                            }
-                        }
-
-                        let mut remaining_size = buf_len;
-                        while remaining_size > 0 {
-                            let cur_size = min(PARSER_BUF_SIZE, remaining_size);
-                            events_bytes.resize(cur_size, 0);
-                            con.read_exact(&mut events_bytes)?;
-                            self.total_transport_bytes += cur_size as u64;
-
-                            let new_events = cur_parser_state.state_machine.decode_many(&events_bytes);
-                            let new_events_len = new_events.len();
-                            event_buf.extend_from_slice(&new_events);
-                            debug!("Got {} bytes, Parsed {} events", cur_size, new_events_len);
-                            self.total_event_bytes += cur_size as u64;
-
-                            remaining_size -= cur_size;
-                        }
-                        cur_parser_state.state_machine.ensure_buf_end();
-
-                        total_bytes -= 8 + 8 + header_len + buf_len;
-
-                        cur_parser_state.event_buf.push((header, event_buf));
-                    }
-                },
-                0x02 => {
-                    let mut header_len = [0u8; 8];
-                    con.read_exact(&mut header_len)?;
-                    self.total_transport_bytes += 8;
-                    let header_len = u64::from_le_bytes(header_len) as usize;
-
-                    let mut header_bytes = vec![0u8; header_len];
-                    con.read_exact(&mut header_bytes)?;
-                    self.total_transport_bytes += header_len as u64;
-                    let header = bincode::deserialize::<LocalPacketHeader>(&header_bytes)?;
-
-                    info!("Got failed packet header: {:?}", header);
-
-                    let start = header.start_timestamp;
-                    let dur = header.end_timestamp - header.start_timestamp;
-                    let thread_ord_id = header.thread_ord_id;
-                    self.thread_parser_state(thread_ord_id).missed_events.push((start, dur));
-
-                },
-                0x03 => {
-                    let mut bytes = [0u8; 8];
-                    con.read_exact(&mut bytes)?;
-                    let ticks_per_sec = u64::from_le_bytes(bytes);
-                    let ticks_per_ns = ticks_per_sec as f64 / 1_000_000_000.0;
-                    info!("Got timestamp frequency: {:?} t/ns", ticks_per_ns);
-
-                    self.ticks_per_ns = Some(ticks_per_ns);
-                }
-                0xff => {
-                    info!("Client was gracefully disconnected!");
-
-                    return Ok(());
-                }
-                _ => panic!("Unknown packet type!")
-            }
-        }
-    }
-
     fn thread_parser_state(&mut self, thread_id: u64) -> &mut ThreadParserState {
         self.event_parsers.entry(thread_id).or_default()
     }

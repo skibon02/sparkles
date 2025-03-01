@@ -1,12 +1,11 @@
 use std::io;
 use std::io::{BufRead, Read};
 use std::net::{SocketAddr, UdpSocket};
-use enumset::__internal::EnumSetTypePrivate;
 use enumset::EnumSet;
-use log::warn;
+use log::{info, warn};
 use thiserror::Error;
 use sparkles_core::protocol::headers::{LocalPacketHeader, SparklesMachineInfo};
-use sparkles_core::protocol::packets::PacketType;
+use sparkles_core::protocol::packets::{PacketType, RequestPacketType};
 use sparkles_core::protocol::sender::PacketFlags;
 
 pub enum Packet {
@@ -16,14 +15,23 @@ pub enum Packet {
     TimestampFreq(u64),
     GracefulShutdown,
 }
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct ProtocolCounters {
+    pub protocol_overhead: usize,
+    pub trace_buf: usize,
+    pub secondary_packets: usize,
+}
 pub enum PacketDecoder {
     Stream{
         stream: Box<dyn BufRead>,
         is_eof: bool,
+        counters: ProtocolCounters,
     },
     Socket{
         socket: UdpSocket,
         is_eof: bool,
+        counters: ProtocolCounters,
         
         last_seq_num: u16,
 
@@ -64,6 +72,7 @@ impl PacketDecoder {
         PacketDecoder::Stream{
             stream,
             is_eof: false,
+            counters: ProtocolCounters::default(),
         }
     }
 
@@ -74,15 +83,27 @@ impl PacketDecoder {
         PacketDecoder::Socket{
             socket,
             is_eof: false,
+            counters: ProtocolCounters::default(),
             partial_packet_info: None,
             last_seq_num: 0,
         }
     }
 
+    pub fn subscribe(&mut self) -> ReadResult<()> {
+        match self {
+            PacketDecoder::Socket { socket, .. } => {
+                socket.send(&RequestPacketType::Subscribe.pattern())?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
     pub fn read_packet(&mut self) -> ReadResult<Packet> {
         match self {
             PacketDecoder::Stream {
-                stream, is_eof
+                stream, is_eof,
+                counters
             } => {
                 if *is_eof {
                     return Err(PacketReadError::Eof);
@@ -91,6 +112,7 @@ impl PacketDecoder {
                 // read packet header and length
                 let mut packet_type_buf = vec![0; 32];
                 stream.read_exact(&mut packet_type_buf)?;
+                counters.protocol_overhead += 32;
                 
                 let mut read_find_packet_start = || -> Result<PacketType, io::Error> {
                     loop {
@@ -102,6 +124,7 @@ impl PacketDecoder {
                         packet_type_buf.remove(0);
                         let mut new_byte = [0; 1];
                         stream.read_exact(&mut new_byte)?;
+                        counters.protocol_overhead += 32;
                         packet_type_buf.push(new_byte[0]);
                     }
                 };
@@ -112,6 +135,7 @@ impl PacketDecoder {
                 };
                 let mut length_buf = [0; 4];
                 stream.read_exact(&mut length_buf)?;
+                counters.protocol_overhead += 4;
                 let length = u32::from_be_bytes(length_buf);
                 if length < 4_000_000 {
                     // Parse packet data
@@ -121,6 +145,12 @@ impl PacketDecoder {
                     let res = parse_packet_from_data(packet_type, &data)?;
                     if matches!(res, Packet::GracefulShutdown) {
                         *is_eof = true;
+                    }
+                    if matches!(res, Packet::DataBytes(_)) {
+                        counters.trace_buf += length as usize;
+                    }
+                    else {
+                        counters.secondary_packets += length as usize;
                     }
                     Ok(res)
                 }
@@ -132,7 +162,8 @@ impl PacketDecoder {
             PacketDecoder::Socket{
                 socket, is_eof,
                 partial_packet_info,
-                last_seq_num
+                last_seq_num,
+                counters
             } => unsafe {
                 if *is_eof {
                     return Err(PacketReadError::Eof);
@@ -150,7 +181,9 @@ impl PacketDecoder {
                     warn!("[PacketDecoder] Udp packet type not recognized! Ignoring...");
                     return Err(PacketReadError::IncorrectPattern);
                 };
+                counters.protocol_overhead += 32;
                 let seq_num = u16::from_be_bytes(packet[32..34].try_into().unwrap());
+                counters.protocol_overhead += 2;
                 
                 if *last_seq_num < u16::MAX - 100 {
                     if seq_num < *last_seq_num {
@@ -168,11 +201,19 @@ impl PacketDecoder {
                         }
                         
                         let flags = EnumSet::from_repr_unchecked(buf[34]);
+                        counters.protocol_overhead += 1;
                         if flags.contains(PacketFlags::ShortPacket) {
                             let data = &buf[35..];
+                            let data_len = data.len();
                             let res = parse_packet_from_data(packet_type, data)?;
                             if matches!(res, Packet::GracefulShutdown) {
                                 *is_eof = true;
+                            }
+                            if matches!(res, Packet::DataBytes(_)) {
+                                counters.trace_buf += data_len;
+                            }
+                            else {
+                                counters.secondary_packets += data_len;
                             }
                             return Ok(res);
                         }
@@ -188,7 +229,19 @@ impl PacketDecoder {
             }
         }
     }
-    
+
+    pub(crate) fn is_eof(&self) -> bool {
+        match self {
+            PacketDecoder::Socket{is_eof, ..} |
+            PacketDecoder::Stream{is_eof, ..} => *is_eof
+        }
+    }
+    fn counters(&self) -> ProtocolCounters {
+        match self {
+            PacketDecoder::Socket{counters, ..} |
+            PacketDecoder::Stream{counters, ..} => *counters
+        }
+    }
 }
 
 fn parse_packet_from_data(packet_type: PacketType, data: &[u8]) -> ReadResult<Packet> {
@@ -197,6 +250,7 @@ fn parse_packet_from_data(packet_type: PacketType, data: &[u8]) -> ReadResult<Pa
             Ok(Packet::GracefulShutdown)
         }
         PacketType::MachineInfo => {
+            info!("Got MachineInfo packet!");
             let (machine_info, sz) = bincode::decode_from_slice(&data, bincode_config())?;
             if sz != data.len() {
                 warn!("[PacketDecoder] Assertion failed! MachineInfo packet size mismatch!");
