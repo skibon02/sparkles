@@ -98,26 +98,29 @@ impl SparklesConfig {
     }
     
     #[must_use]
-    pub fn with_default_file_sender_config(mut self) -> Self {
+    pub fn with_default_file_sender(mut self) -> Self {
         self.file_sender_config = Some(Default::default());
         self
     }
 
     #[must_use]
-    pub fn with_file_sender_config(mut self, config: FileSenderConfig) -> Self {
+    pub fn with_file_sender(mut self, config: FileSenderConfig) -> Self {
         self.file_sender_config = Some(config);
         self
     }
 
-    // #[must_use]
-    // pub fn with_default_udp_sender_config(mut self) -> Self {
-    //     self.udp_sender_config = Some(Default::default());
-    //     self
-    // }
-    // 
-    // #[must_use]
-    // pub fn with_udp_sender_config(mut self, config: UdpSenderConfig) -> Self {
-    //     self.udp_sender_config = Some(config);
-    //     self
-    // }
+    #[must_use]
+    pub fn with_default_udp_sender(mut self) -> Self {
+        self.udp_sender_config = Some(Default::default());
+        self
+    }
+    
+    #[must_use]
+    pub fn with_udp_sender(mut self, port: u16) -> Self {
+        let config = UdpSenderConfig {
+            local_port: Some(port)
+        };
+        self.udp_sender_config = Some(config);
+        self
+    }
 }

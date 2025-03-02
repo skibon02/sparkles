@@ -1,10 +1,12 @@
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use std::time::Instant;
+use std::thread;
+use std::time::{Duration, Instant};
 use log::{info, warn};
 use sparkles_core::protocol::packets::{PacketType, RequestPacketType};
 use sparkles_core::protocol::sender::{ConfiguredSender, PacketFlags, Sender};
-
+use crate::on_client_connect;
 
 static SOMEONE_CONNECTED: AtomicBool = AtomicBool::new(false);
 pub fn is_someone_connected() -> bool {
@@ -16,6 +18,8 @@ pub(crate) struct UdpSender {
     dst_addr: Option<SocketAddr>,
     last_recv: Option<Instant>,
     seq_num: u16,
+    
+    timestamp_freq_request: Arc<AtomicBool>,
 }
 impl UdpSender {
     fn new_seq_num(&mut self) -> u16 {
@@ -35,6 +39,13 @@ impl UdpSender {
                 self.dst_addr = Some(addr);
                 SOMEONE_CONNECTED.store(true, std::sync::atomic::Ordering::Relaxed);
                 self.last_recv = Some(Instant::now());
+                self.timestamp_freq_request.store(true, std::sync::atomic::Ordering::Relaxed);
+                on_client_connect();
+                
+                self.socket.connect(addr).unwrap();
+                if let Err(e) = self.socket.send(&PacketType::ConnectionAccepted.pattern()) {
+                    warn!("[sparkles] Error sending ConnectionAccepted packet to client: {}", e);
+                }
             }
             Ok(_) => {
                 warn!("[sparkles] Incorrect packet received from client! Ignoring...");
@@ -73,6 +84,7 @@ impl Sender for UdpSender {
         let full_data = data.iter().fold(Vec::new(), |mut acc, x| { acc.extend_from_slice(x); acc });
         
         let mut size = 0;
+        // info!("UDP packet chunks: {}", (full_len + 1299) / 1300);
         for (chunk_num, chunk) in full_data.chunks(SHORT_PACKET_SIZE).enumerate() {
             // 1) Packet type pattern
             packet_buf.extend_from_slice(&packet_type.pattern());
@@ -97,20 +109,44 @@ impl Sender for UdpSender {
             
             if !flags.contains(PacketFlags::ShortPacket) {
                 // 4) chunk num
-                let chunk_num_bytes = (chunk_num as u8).to_be_bytes();
-                packet_buf.extend_from_slice(&chunk_num_bytes);
+                packet_buf.extend_from_slice(&[chunk_num as u8]);
             }
 
             // 5) Data
             packet_buf.extend_from_slice(chunk);
             
-            if let Err(e) = self.socket.send_to(&packet_buf, dst_addr) {
+            if let Err(e) = self.socket.send(&packet_buf) {
                 warn!("Error sending packet to client: {}", e);
                 return;
             }
             packet_buf.clear();
             size += chunk.len();
+            
+            // Throttle sending
+            if size % 100_000 > 100_000 - SHORT_PACKET_SIZE {
+                thread::sleep(Duration::from_micros(100));
+            }
         }
+        // Special case 
+        if data.is_empty() {
+            let mut packet_buf = Vec::new();
+            packet_buf.extend_from_slice(&packet_type.pattern());
+            let seq_id = self.new_seq_num();
+            let seq_id_bytes = seq_id.to_be_bytes();
+            packet_buf.extend_from_slice(&seq_id_bytes);
+            let flags = PacketFlags::PacketStart | PacketFlags::PacketEnd | PacketFlags::ShortPacket;
+            packet_buf.push(flags.as_u8());
+            if let Err(e) = self.socket.send(&packet_buf) {
+                warn!("Error sending packet to client: {}", e);;
+            }
+        }
+    }
+    fn with_timestamp_freq_request(mut self, timestamp_freq_request: Arc<AtomicBool>) -> Self
+    where
+        Self: Sized,
+    {
+        self.timestamp_freq_request = timestamp_freq_request;
+        self
     }
 }
 
@@ -126,6 +162,7 @@ impl ConfiguredSender for UdpSender {
             dst_addr: None,
             seq_num: 1,
             last_recv: None,
+            timestamp_freq_request: Arc::new(AtomicBool::new(false)),
         })
     }
 }

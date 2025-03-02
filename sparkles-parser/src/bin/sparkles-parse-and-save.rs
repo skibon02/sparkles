@@ -75,8 +75,8 @@ fn main() {
     let mut parser = SparklesParser::from_stream(file);
 
     // 3. parse the newest file
-    info!("Finished! Saving to trace.perf...");
-    let data = parser.convert_to_perfetto().unwrap();
+    info!("Begin parsing...");
+    let data = parser.parse_and_convert_to_perfetto().unwrap();
     let mut res_file = std::fs::File::create("trace.perf").unwrap();
     res_file.write_all(&data).unwrap();
     info!("Your `trace.perf` is ready! Now, navigate to https://ui.perfetto.dev/ and drag'n'drop the file onto the page.");

@@ -1,7 +1,9 @@
 use std::fs;
 use std::fs::File;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use log::debug;
 use sparkles_core::protocol::packets::PacketType;
 use sparkles_core::protocol::sender::{ConfiguredSender, Sender};
@@ -32,6 +34,13 @@ impl Sender for FileSender {
         for d in data {
             self.file.write_all(d).unwrap();
         }
+    }
+    fn with_timestamp_freq_request(self, _timestamp_freq_request: Arc<AtomicBool>) -> Self
+    where
+        Self: Sized,
+    {
+        // not applicable
+        self
     }
 }
 

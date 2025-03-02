@@ -14,7 +14,7 @@ use sparkles_core::protocol::headers::{LocalPacketHeader, SparklesMachineInfo};
 use sparkles_core::protocol::packets::{send_failed_pages, send_graceful_shutdown, send_machine_info, send_timestamp_freq, send_trace_data};
 use sparkles_core::protocol::sender::{ConfiguredSender, SenderChain};
 use crate::config::SparklesConfig;
-use crate::GLOBAL_FLUSHING_RUNNING;
+use crate::{on_client_connect, GLOBAL_FLUSHING_RUNNING};
 use crate::sender::file_sender::FileSender;
 use crate::thread_local_storage::set_local_storage_config;
 
@@ -51,8 +51,8 @@ impl GlobalStorage {
     /// Called by thread local storage to put its contents into global storage
     pub fn push_buf(&mut self, header: &LocalPacketHeader, buf: &[u8]) {
         let header = bincode::encode_to_vec(header, bincode::config::standard()).unwrap();
-        let header_len = (header.len() as u64).to_le_bytes();
-        let bufer_len = (buf.len() as u64).to_le_bytes();
+        let header_len = (header.len() as u64).to_be_bytes();
+        let bufer_len = (buf.len() as u64).to_be_bytes();
 
         self.inner.push_slice(&header_len);
         self.inner.push_slice(&header);
@@ -66,14 +66,14 @@ impl GlobalStorage {
             let mut header_bytes = Vec::new();
             while self.inner.occupied_len() > (self.config.cleanup_bottom_threshold * self.config.global_capacity as f64) as usize {
                 self.inner.read_exact(&mut header_len).unwrap();
-                let header_len = u64::from_le_bytes(header_len) as usize;
+                let header_len = u64::from_be_bytes(header_len) as usize;
 
                 header_bytes.resize(header_len, 0);
                 self.inner.read_exact(&mut header_bytes).unwrap();
                 let (header, _) = bincode::decode_from_slice(&header_bytes, bincode::config::standard()).unwrap();
 
                 self.inner.read_exact(&mut buf_len).unwrap();
-                let buf_len = u64::from_le_bytes(buf_len) as usize;
+                let buf_len = u64::from_be_bytes(buf_len) as usize;
                 self.inner.skip(buf_len);
                 self.skipped_msr_pages_headers.push(header);
             }
@@ -126,7 +126,11 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
             }
             else {
                 warn!("[sparkles] Failed to create UDP sender!");
+                on_client_connect();
             }
+        }
+        else {
+            on_client_connect();
         }
 
         let process_name = std::env::current_exe().unwrap().file_name().unwrap().to_str().unwrap().to_string();
@@ -135,13 +139,23 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
         let mut freq_detector = TimestampFreqDetector::start(Duration::from_millis(100));
 
         let info_header = SparklesMachineInfo::new(process_name, pid);
-        send_machine_info(&mut sender_chain, info_header);
+        send_machine_info(&mut sender_chain, info_header.clone());
 
+        thread::sleep(Duration::from_millis(1));
+
+        let ticks_per_sec = freq_detector.next_forced();
+        send_timestamp_freq(&mut sender_chain, ticks_per_sec);
+        
         loop {
             thread::sleep(Duration::from_millis(1));
 
             if let Some(ticks_per_sec) = freq_detector.next() {
                 send_timestamp_freq(&mut sender_chain, ticks_per_sec);
+            }
+            else if sender_chain.take_tm_freq_requested() {
+                let ticks_per_sec = freq_detector.next_forced();
+                send_timestamp_freq(&mut sender_chain, ticks_per_sec);
+                send_machine_info(&mut sender_chain, info_header.clone());
             }
 
             // Read value before flushing
@@ -157,8 +171,10 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
                 }
 
                 if let Some(global_storage) = GLOBAL_STORAGE.lock().unwrap().as_mut() {
+                    use crate as sparkles;
+                    
                     #[cfg(feature="self-tracing")]
-                    let grd = crate::range_event_start(crate::calculate_hash("[internal] Taking stored events"), "[internal] Taking stored events");
+                    let g = sparkles_macro::range_event_start!("[internal] Taking stored events");
                     let failed_pages = global_storage.take_failed_pages();
                     
                     GLOBAL_FLUSHING_RUNNING.store(true, Ordering::Relaxed);
@@ -184,9 +200,6 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
             }
 
             if is_finalizing {
-                let ticks_per_sec = freq_detector.next_forced();
-                send_timestamp_freq(&mut sender_chain, ticks_per_sec);
-                
                 debug!("[sparkles] Finalize in process...");
                 send_graceful_shutdown(&mut sender_chain);
                 break;
@@ -245,7 +258,6 @@ impl TimestampFreqDetector {
     }
 
     pub fn next_forced(&mut self) -> u64 {
-
         let now = Instant::now();
         let now_tm = Timestamp::now();
 

@@ -28,7 +28,10 @@ pub struct LocalStorage<G: GlobalStorageImpl> {
     local_packet_header: LocalPacketHeader,
 
     global_storage_ref: G,
-    last_range_ord_id: u8
+    last_range_ord_id: u8,
+    
+    started_ranges: [bool; 256],
+    started_ranges_cnt: usize,
 }
 
 static CUR_THREAD_ID: AtomicUsize = AtomicUsize::new(1);
@@ -51,14 +54,28 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
             },
 
             global_storage_ref,
-            last_range_ord_id: 0
+            last_range_ord_id: 0,
+            started_ranges: [false; 256],
+            started_ranges_cnt: 0,
         }
     }
 
     fn new_range_ord_id(&mut self) -> u8 {
         let range_ord_id = self.last_range_ord_id;
-        self.last_range_ord_id = self.last_range_ord_id.wrapping_add(1);
-        range_ord_id
+        if self.started_ranges_cnt == 256 {
+            self.last_range_ord_id = self.last_range_ord_id.wrapping_add(1);
+            range_ord_id
+        }
+        else {
+            self.last_range_ord_id = self.last_range_ord_id.wrapping_add(1);
+            while self.started_ranges[self.last_range_ord_id as usize] {
+                self.last_range_ord_id = self.last_range_ord_id.wrapping_add(1);
+            }
+            
+            self.started_ranges[range_ord_id as usize] = true;
+            self.started_ranges_cnt += 1;
+            range_ord_id
+        }
     }
 
     #[inline(always)]
@@ -79,6 +96,8 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
     #[inline(always)]
     pub fn event_range_end(&mut self, range_start: RangeStartRepr, hash: u32, name: &str) {
         let range_ord_id = range_start.range_ord_id;
+        self.started_ranges[range_start.range_ord_id as usize] = false;
+        self.started_ranges_cnt -= 1;
         let start_id = range_start.range_start_id;
         if hash != 0 {
             let end_id = self.id_store.insert_and_get_id(hash, name, EventType::RangeEnd(start_id));

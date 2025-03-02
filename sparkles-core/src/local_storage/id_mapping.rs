@@ -9,7 +9,7 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use bincode::{Decode, Encode};
 
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Copy, Clone, Encode, Decode, Debug, PartialEq)]
 pub enum EventType {
     Instant,
     RangeStart,

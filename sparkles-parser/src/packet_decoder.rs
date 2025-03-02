@@ -1,8 +1,9 @@
-use std::io;
+use std::{io, thread};
 use std::io::{BufRead, Read};
-use std::net::{SocketAddr, UdpSocket};
+use std::net::{ToSocketAddrs, UdpSocket};
+use std::time::Duration;
 use enumset::EnumSet;
-use log::{info, warn};
+use log::{debug, info, warn};
 use thiserror::Error;
 use sparkles_core::protocol::headers::{LocalPacketHeader, SparklesMachineInfo};
 use sparkles_core::protocol::packets::{PacketType, RequestPacketType};
@@ -14,6 +15,7 @@ pub enum Packet {
     FailedPages(Vec<LocalPacketHeader>),
     TimestampFreq(u64),
     GracefulShutdown,
+    ConnectionAccepted,
 }
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -22,6 +24,13 @@ pub struct ProtocolCounters {
     pub trace_buf: usize,
     pub secondary_packets: usize,
 }
+
+impl ProtocolCounters {
+    pub fn total_bytes(&self) -> usize {
+        self.protocol_overhead + self.trace_buf + self.secondary_packets
+    }
+}
+
 pub enum PacketDecoder {
     Stream{
         stream: Box<dyn BufRead>,
@@ -40,7 +49,42 @@ pub enum PacketDecoder {
 }
 
 pub struct UdpParserState {
+    received_chunks: Vec<(usize, Vec<u8>)>,
+    starting_num: usize,
+}
 
+impl UdpParserState {
+    pub fn new(chunk_num: u8, data: &[u8]) -> Self {
+        UdpParserState {
+            received_chunks: vec![(chunk_num as usize, data.to_vec())],
+            starting_num: 0,
+        }
+    }
+    pub fn push(&mut self, chunk_num: u8, chunk: Vec<u8>) -> bool {
+        if chunk_num == 0 && !self.received_chunks.is_empty() {
+            self.starting_num += 256;
+        }
+        
+        let chunk_num = chunk_num as usize + self.starting_num;
+        if self.received_chunks.iter().any(|(num, _)| *num == chunk_num) {
+            return false;
+        }
+        self.received_chunks.push((chunk_num, chunk));
+        true
+    }
+    pub fn build(&mut self) -> Option<Vec<u8>> {
+        let max_chunk_num = *self.received_chunks.iter().map(|(num, _)| num).max().unwrap();
+        if max_chunk_num + 1 != self.received_chunks.len() {
+            return None;
+        }
+
+        let mut res = Vec::new();
+        self.received_chunks.sort_by_key(|(num, _)| *num);
+        for (_, chunk) in &self.received_chunks {
+            res.extend_from_slice(chunk);
+        }
+        Some(res)
+    }
 }
 
 
@@ -65,6 +109,8 @@ pub enum PacketReadError {
     IncorrectPattern,
     #[error("Out of order sequence number")]
     OutOfOrderSeqNum,
+    #[error("Incomplete long packet")]
+    IncompleteLongPacket,
 }
 impl PacketDecoder {
     pub fn from_stream(stream: impl Read + 'static) -> Self {
@@ -76,9 +122,32 @@ impl PacketDecoder {
         }
     }
 
-    pub fn from_socket(addr: SocketAddr) -> Self {
-        let socket = UdpSocket::bind("0.0.0.0").unwrap();
+    pub fn from_socket(addr: impl ToSocketAddrs) -> Self {
+        let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         socket.connect(addr).unwrap();
+
+        loop {
+            socket.send(&RequestPacketType::Subscribe.pattern()).unwrap();
+
+            socket.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
+            let mut buf = [0u8; 32];
+            match socket.recv(&mut buf) {
+                Ok(32) if buf == PacketType::ConnectionAccepted.pattern() => {
+                    break;
+                }
+                Ok(_) => {
+                    warn!("Incorrect packet received from server! Ignoring...");
+                    thread::sleep(Duration::from_millis(500));
+                }
+                Err(e) => {
+                    if e.kind() == io::ErrorKind::WouldBlock {
+                        continue;
+                    }
+                    warn!("Error receiving packet from server: {}", e);
+                    thread::sleep(Duration::from_millis(500));
+                }
+            }
+        }
 
         PacketDecoder::Socket{
             socket,
@@ -89,17 +158,7 @@ impl PacketDecoder {
         }
     }
 
-    pub fn subscribe(&mut self) -> ReadResult<()> {
-        match self {
-            PacketDecoder::Socket { socket, .. } => {
-                socket.send(&RequestPacketType::Subscribe.pattern())?;
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    pub fn read_packet(&mut self) -> ReadResult<Packet> {
+    pub fn read_packet(&mut self) -> ReadResult<Option<Packet>> {
         match self {
             PacketDecoder::Stream {
                 stream, is_eof,
@@ -137,7 +196,7 @@ impl PacketDecoder {
                 stream.read_exact(&mut length_buf)?;
                 counters.protocol_overhead += 4;
                 let length = u32::from_be_bytes(length_buf);
-                if length < 4_000_000 {
+                if length < 100_000_000 {
                     // Parse packet data
                     let mut data = vec![0; length as usize];
                     stream.read_exact(&mut data)?;
@@ -152,7 +211,7 @@ impl PacketDecoder {
                     else {
                         counters.secondary_packets += length as usize;
                     }
-                    Ok(res)
+                    Ok(Some(res))
                 }
                 else {
                     warn!("[PacketDecoder] Packet size too large! Ignoring...");
@@ -172,7 +231,7 @@ impl PacketDecoder {
                 let mut buf = vec![0; 1400];
                 let new_packet_sz = socket.recv(&mut buf)?;
                 let packet = &buf[..new_packet_sz];
-                if new_packet_sz < 32 + 4 {
+                if new_packet_sz < 32 + 3 {
                     warn!("[PacketDecoder] Udp packet too short! Ignoring...");
                     return Err(PacketReadError::UdpPacketTooShort);
                 }
@@ -184,41 +243,85 @@ impl PacketDecoder {
                 counters.protocol_overhead += 32;
                 let seq_num = u16::from_be_bytes(packet[32..34].try_into().unwrap());
                 counters.protocol_overhead += 2;
-                
+
                 if *last_seq_num < u16::MAX - 100 {
-                    if seq_num < *last_seq_num {
-                        warn!("[PacketDecoder] Udp packet sequence number out of order! Ignoring...");
-                        return Err(PacketReadError::OutOfOrderSeqNum);
-                    }
-                    else if seq_num == *last_seq_num {
-                        warn!("[PacketDecoder] Udp packet sequence number repeated! Ignoring...");
-                        return Err(PacketReadError::OutOfOrderSeqNum);
-                    }
-                    else {
-                        *last_seq_num = seq_num;
-                        if seq_num > *last_seq_num + 1 {
-                            warn!("[PacketDecoder] We lost some packets!");
+                    match seq_num.cmp(&(*last_seq_num)) {
+                        std::cmp::Ordering::Less => {
+                            warn!("[PacketDecoder] Udp packet sequence number out of order! Ignoring...");
+                            Err(PacketReadError::OutOfOrderSeqNum)
                         }
-                        
-                        let flags = EnumSet::from_repr_unchecked(buf[34]);
-                        counters.protocol_overhead += 1;
-                        if flags.contains(PacketFlags::ShortPacket) {
-                            let data = &buf[35..];
-                            let data_len = data.len();
-                            let res = parse_packet_from_data(packet_type, data)?;
-                            if matches!(res, Packet::GracefulShutdown) {
-                                *is_eof = true;
+                        std::cmp::Ordering::Equal => {
+                            warn!("[PacketDecoder] Udp packet sequence number repeated! Ignoring...");
+                            Err(PacketReadError::OutOfOrderSeqNum)
+                        }
+                        std::cmp::Ordering::Greater => {
+                            if seq_num > *last_seq_num + 1 {
+                                let lost_cnt = seq_num - *last_seq_num - 1;
+                                warn!("[PacketDecoder] We lost {} packets!", lost_cnt);
                             }
-                            if matches!(res, Packet::DataBytes(_)) {
+                            *last_seq_num = seq_num;
+
+                            let flags = EnumSet::from_repr_unchecked(packet[34]);
+                            counters.protocol_overhead += 1;
+                            let (res, data_len) = if flags.contains(PacketFlags::ShortPacket) {
+                                let data = &packet[35..];
+                                let data_len = data.len();
+
+                                if partial_packet_info.is_some() {
+                                    warn!("[PacketDecoder] Resetting partial packet info!");
+                                    *partial_packet_info = None;
+                                }
+                                (Some(parse_packet_from_data(packet_type, data)?), data_len)
+                            }
+                            else {
+                                let chunk_num = packet[35];
+                                let data = &packet[36..];
+                                let data_len = data.len();
+
+
+                                if let Some(udp_state) = partial_packet_info {
+                                    // info!("Long packet: chunk {chunk_num}, data_size: {data_len}");
+                                    if !udp_state.push(chunk_num, data.to_vec()) {
+                                        warn!("[PacketDecoder] Duplicate or incomplete chunks for long packet! Ignoring...");
+                                        return Err(PacketReadError::IncompleteLongPacket);
+                                    }
+                                    if flags.contains(PacketFlags::PacketEnd) {
+                                        info!("It was last chunk, building packet...");
+                                        let long_packet_data = udp_state.build();
+                                        *partial_packet_info = None;
+                                        if let Some(data) = long_packet_data {
+                                            (Some(parse_packet_from_data(packet_type, &data)?), data_len)
+                                        }
+                                        else {
+                                            warn!("Some chunks of long packet are missing! Skipping...");
+                                            return Err(PacketReadError::IncompleteLongPacket)
+                                        }
+                                    }
+                                    else {
+                                        (None, data_len)
+                                    }
+                                }
+                                else {
+                                    if !flags.contains(PacketFlags::PacketStart) {
+                                        warn!("Assertion failed! Udp packet chunk without start flag!");
+                                    }
+                                    *partial_packet_info = Some(UdpParserState::new(chunk_num, data));
+                                    (None, data_len)
+                                }
+                            };
+
+
+                            if packet_type == PacketType::DataBytes {
                                 counters.trace_buf += data_len;
                             }
                             else {
                                 counters.secondary_packets += data_len;
+
+                                if packet_type == PacketType::GracefulShutdown {
+                                    *is_eof = true;
+                                }
                             }
-                            return Ok(res);
-                        }
-                        else {
-                            unimplemented!("Got a long packet!");
+                            Ok(res)
                         }
                     }
                 }
@@ -230,13 +333,13 @@ impl PacketDecoder {
         }
     }
 
-    pub(crate) fn is_eof(&self) -> bool {
+    pub fn is_eof(&self) -> bool {
         match self {
             PacketDecoder::Socket{is_eof, ..} |
             PacketDecoder::Stream{is_eof, ..} => *is_eof
         }
     }
-    fn counters(&self) -> ProtocolCounters {
+    pub fn counters(&self) -> ProtocolCounters {
         match self {
             PacketDecoder::Socket{counters, ..} |
             PacketDecoder::Stream{counters, ..} => *counters
@@ -251,7 +354,7 @@ fn parse_packet_from_data(packet_type: PacketType, data: &[u8]) -> ReadResult<Pa
         }
         PacketType::MachineInfo => {
             info!("Got MachineInfo packet!");
-            let (machine_info, sz) = bincode::decode_from_slice(&data, bincode_config())?;
+            let (machine_info, sz) = bincode::decode_from_slice(data, bincode_config())?;
             if sz != data.len() {
                 warn!("[PacketDecoder] Assertion failed! MachineInfo packet size mismatch!");
             }
@@ -261,31 +364,45 @@ fn parse_packet_from_data(packet_type: PacketType, data: &[u8]) -> ReadResult<Pa
             let mut res = Vec::new();
             let mut cursor = 0;
             loop {
-                cursor += 8;
-                if cursor >= data.len() {
+                if cursor + 8 >= data.len() {
                     warn!("[PacketDecoder] DataBytes partial data received!");
                     break;
                 }
-                let length = u64::from_be_bytes(data[cursor..cursor + 8].try_into().unwrap());
+                let length = u64::from_be_bytes(data[cursor..cursor + 8].try_into().unwrap()) as usize;
+                cursor += 8;
+                debug!("local packet header len: {length}");
 
-                cursor += length as usize;
-                if cursor >= data.len() {
+                if cursor + length >= data.len() {
                     warn!("[PacketDecoder] DataBytes partial data received!");
                     break;
                 }
                 let (local_packet_header, sz) = bincode::decode_from_slice(&data[cursor..], bincode_config())?;
+                if sz != length {
+                    warn!("[PacketDecoder] Assertion failed! LocalPacketHeader packet size mismatch!");
+                }
+                cursor += length;
+                
+                debug!("LocalPacketHeader received!");
 
-                cursor += 8;
-                if cursor >= data.len() {
+                if cursor + 8 >= data.len() {
                     warn!("[PacketDecoder] DataBytes partial data received!");
                     break;
                 }
-                let buf_len = u64::from_be_bytes(data[cursor..cursor + 8].try_into().unwrap());
-                let buf = data[cursor..cursor + buf_len as usize].to_vec();
-                res.push((local_packet_header, buf));
+                let buf_len = u64::from_be_bytes(data[cursor..cursor + 8].try_into().unwrap()) as usize;
+                cursor += 8;
 
-                cursor += buf_len as usize;
-                if cursor >= data.len() {
+                debug!("Data len received: {buf_len}");
+
+                if cursor + buf_len > data.len() {
+                    warn!("[PacketDecoder] DataBytes partial data received!");
+                    break;
+                }
+                let buf = data[cursor..cursor + buf_len].to_vec();
+                res.push((local_packet_header, buf));
+                cursor += buf_len;
+                debug!("Got {}KB of data!", buf_len as f32 / 1024.0);
+                
+                if cursor == data.len() {
                     break;
                 }
             }
@@ -301,6 +418,9 @@ fn parse_packet_from_data(packet_type: PacketType, data: &[u8]) -> ReadResult<Pa
         PacketType::TimestampFreq => {
             let freq = u64::from_be_bytes(data[..8].try_into().unwrap());
             Ok(Packet::TimestampFreq(freq))
+        }
+        PacketType::ConnectionAccepted => {
+            Ok(Packet::ConnectionAccepted)
         }
     }
 }

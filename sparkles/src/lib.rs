@@ -4,6 +4,8 @@ pub mod sender;
 pub mod config;
 
 use std::sync::atomic::AtomicBool;
+use std::sync::{Condvar, Mutex};
+use log::info;
 pub use global_storage::finalize;
 
 use sparkles_core::local_storage::RangeStartRepr;
@@ -122,4 +124,32 @@ pub(crate) fn calculate_hash(s: &str) -> u32 {
     let mut hasher = DefaultHasher::new();
     s.hash(&mut hasher);
     hasher.finish() as u32
+}
+
+
+static SOMEONE_CONNECTED: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
+pub(crate) fn on_client_connect() {
+    let (lock, cvar) = &SOMEONE_CONNECTED;
+    let mut connected = lock.lock().unwrap();
+    *connected = true;
+    cvar.notify_all();
+}
+
+/// If you use UDP, you can wait until someone connects to the server to start sending data
+/// 
+/// This function will block until someone connects without timeouts!
+/// 
+/// If UDP is not used, this function will return immediately
+pub fn wait_client_connected() {
+    use crate as sparkles;
+    #[cfg(feature="self-tracing")]
+    let g = sparkles_macro::range_event_start!("[internal] Waiting for client connect");
+    let (lock, cvar) = &SOMEONE_CONNECTED;
+    let mut connected = lock.lock().unwrap();
+    if !*connected {
+        info!("Waiting for client connection...");
+    }
+    while !*connected {
+        connected = cvar.wait(connected).unwrap();
+    }
 }

@@ -1,4 +1,3 @@
-use std::iter::once;
 use std::rc::Rc;
 
 #[derive(Clone)]
@@ -21,19 +20,6 @@ pub enum ParsedEvent {
 }
 
 pub struct ThreadInfoState {
-    pub thread_id: u64,
-    pub thread_name: String,
-}
-pub struct ParsedEventGroup {
-    ev: ParsedEvent,
-    children: Vec<ParsedEventGroup>
-}
-
-impl ParsedEventGroup {
-    pub fn iter(&self) -> Box<dyn Iterator<Item=ParsedEvent> + '_> {
-        Box::new(once(self.ev.clone()).chain(
-            self.children.iter()
-                .flat_map(|c| c.iter())
-        ))
-    }
+    pub thread_id: Option<u64>,
+    pub thread_name: Option<String>,
 }

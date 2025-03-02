@@ -1,19 +1,27 @@
 //! How to use example
 //! 1. Run `cargo run --example how_to_use --release`
-//! 2. Parse result file: `cargo run --release --example interactive`
+//! 2. Parse result file: `sparkles-parse-and-save`
 //! 3. Go to https://ui.perfetto.dev/ and drag'n'drop generated `trace.perf` file
 
 use std::thread;
 use std::time::Duration;
 use log::LevelFilter;
 use simple_logger::SimpleLogger;
+use sparkles::config::SparklesConfig;
 use sparkles_macro::{instant_event, range_event_end, range_event_start};
 
 fn main() {
     SimpleLogger::default().with_level(LevelFilter::Debug).init().unwrap();
     // Init and acquire finalize guard to automatically finalize event collection and 
     // flush them to the destination when the main thread finished
-    let finalize_guard = sparkles::init_default();
+    let finalize_guard = sparkles::init(
+        SparklesConfig::default()
+        // .with_udp_sender(38338)
+    );
+    
+    // If you use UDP sender, you can wait for client connection
+    sparkles::wait_client_connected();
+    
     // Start range event
     // It's finished when guard is dropped
     let g = range_event_start!("main()");

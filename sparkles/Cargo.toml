@@ -9,6 +9,7 @@ readme = "../README.md"
 
 [dependencies]
 sparkles-core = {version = "0.1.4", path = "../sparkles-core"}
+sparkles-macro = {version = "0.1.4", path = "../sparkles-macro"}
 bincode = "2.0.0-rc.3"
 log = { version = "0.4.26", default-features = false }
 ringbuf = "0.4.7"
@@ -27,7 +28,6 @@ tracing-perfetto = "0.1.5"
 tracing-subscriber = "0.3.19"
 anyhow = "1.0.96"
 
-sparkles-macro = {path = "../sparkles-macro"}
 
 [features]
 default = ["self-tracing"]
