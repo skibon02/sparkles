@@ -9,7 +9,7 @@ use std::io::Read;
 use std::net::{ToSocketAddrs};
 use std::ops::Deref;
 use std::rc::Rc;
-use std::thread;
+use std::{mem, thread};
 use std::time::Duration;
 use bytes::BytesMut;
 use log::{debug, error, info, warn};
@@ -29,12 +29,18 @@ pub struct SparklesParser {
     ticks_per_ns: Option<f64>,
 
     event_parsers: BTreeMap<u64, ThreadParserState>,
+    local_packet_ranges: Vec<(usize, usize, u64, u64, u64)>,
+    global_i: usize,
 }
 
 #[derive(Default)]
 pub struct ThreadParserState {
     thread_name: Option<String>,
     thread_id: Option<u64>,
+    last_thread_ord_id: u64,
+
+    prev_reference_tm: u64,
+    prev_reference_ns: u64,
 
     // start timestamp and duration for missed events packet
     missed_events: Vec<(u64, u64)>,
@@ -77,7 +83,22 @@ impl ThreadParserState {
         ThreadInfoState {
             thread_id: self.thread_id,
             thread_name: self.thread_name.clone(),
+            thread_ord_id: self.last_thread_ord_id,
         }
+    }
+
+    fn project_cur_tm(&mut self, ticks_per_ns: f64) -> u64 {
+        let tm = self.cur_tm;
+        let res = self.project_tm(tm, ticks_per_ns);
+        if tm > self.prev_reference_tm {
+            // update reference point
+            self.prev_reference_tm = tm;
+            self.prev_reference_ns = res;
+        }
+        res
+    }
+    pub fn project_tm(&self, tm: u64, ticks_per_ns: f64) -> u64 {
+        self.prev_reference_ns + ((tm - self.prev_reference_tm) as f64 / ticks_per_ns) as u64
     }
 }
 
@@ -92,6 +113,9 @@ impl SparklesParser {
             machine_info: None,
             event_parsers: BTreeMap::new(),
             ticks_per_ns: None,
+
+            local_packet_ranges: Vec::new(),
+            global_i: 0,
         }
     }
 
@@ -129,9 +153,17 @@ impl SparklesParser {
                             self.ticks_per_ns = Some(ticks_per_ns);
                         }
                         Packet::DataBytes(packets) => {
-                            for (header, data) in packets {
+                            let global_i = self.global_i;
+                            self.global_i += 1;
+                            for (local_i, (header, data)) in packets.into_iter().enumerate() {
                                 let thread_id = header.thread_ord_id;
                                 let parser_state = self.event_parsers.entry(thread_id).or_default();
+
+                                if self.ticks_per_ns.is_none() {
+                                    error!("Timestamp frequency is not set! Using default one...");
+                                }
+                                let ticks_per_ns = self.ticks_per_ns.unwrap_or(1.0);
+                                self.local_packet_ranges.push((global_i, local_i, thread_id, parser_state.project_tm(header.start_timestamp, ticks_per_ns), parser_state.project_tm(header.end_timestamp, ticks_per_ns)));
 
                                 //update thread name
                                 if let Some(thread_info) = &header.thread_info {
@@ -140,6 +172,7 @@ impl SparklesParser {
                                         parser_state.thread_id = Some(thread_info.thread_id);
                                     }
                                 }
+                                parser_state.last_thread_ord_id = thread_id;
 
                                 let new_events = parser_state.state_machine.decode_many(&data);
                                 let new_events_len = new_events.len();
@@ -157,10 +190,6 @@ impl SparklesParser {
                                     parser_state.id_store.insert(id, (Rc::from(name.deref()), *r#type));
                                 }
                                 
-                                if self.ticks_per_ns.is_none() {
-                                    error!("Timestamp frequency is not set! Using default one...");
-                                }
-                                let ticks_per_ns = self.ticks_per_ns.unwrap_or(1.0);
                                 parser_state.cur_tm = header.start_timestamp;
                                 let mut first = true;
                                 for evt in new_events {
@@ -185,9 +214,12 @@ impl SparklesParser {
                                     else {
                                         parser_state.zero_diff_cnt += 1;
                                     }
-                                    
+                                    if parser_state.cur_tm > header.end_timestamp {
+                                        warn!("Parsing issue: Timestamp is outside local packet! diff: {}",  parser_state.cur_tm - header.end_timestamp);
+                                    }
+
                                     // Create ParsedEvent
-                                    let timestamp = (parser_state.cur_tm as f64 / ticks_per_ns) as u64 + parser_state.zero_diff_cnt * 10;
+                                    let timestamp = parser_state.project_cur_tm(ticks_per_ns) + parser_state.zero_diff_cnt * 10;
                                     match evt {
                                         TracingEvent::Instant(id, _) => {
                                             let ev_name = if let Some((ev_name, ev_type)) = parser_state.id_store.get(&id) {
@@ -350,6 +382,7 @@ impl SparklesParser {
             let thread_id = thread_info.thread_id.unwrap_or(999);
             let thread_name = thread_info.thread_name.clone().unwrap_or("Unknown thread".to_string());
             trace_res_file.set_thread_name(thread_id, &thread_name);
+            trace_res_file.set_thread_name(999666 + thread_info.thread_ord_id, "[not thread] local packets");
             
             match ev {
                 ParsedEvent::Instant {
@@ -378,12 +411,17 @@ impl SparklesParser {
                 }
             }
         })?;
+
+        for (global_i, local_i, thread_ord_id, start,end) in mem::take(&mut self.local_packet_ranges).into_iter() {
+            trace_res_file.add_range_event(&format!("Local packet #{global_i}.{local_i}"), 999666 + thread_ord_id, start, end);
+        }
+
         let encoder_info = self.machine_info.take().unwrap_or_else(|| {
             warn!("Encoder info is not present in decoded data! Using default values");
             SparklesMachineInfo::default()
         });
         trace_res_file.set_process_info(encoder_info.process_name, encoder_info.pid);
-        let ticks_per_ns = self.ticks_per_ns.unwrap_or_else(|| {
+        self.ticks_per_ns.unwrap_or_else(|| {
             warn!("Did not find timestamp frequency in decoded stream! Using default values");
             1.0
         });

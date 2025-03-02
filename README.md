@@ -113,7 +113,13 @@ TODO:
 ⚙️ Global ranges  
 ⚙️ Measurement overhead self-test
 
-## Features
+## Known issues and limitations
+✧ Converting timestamp to nanosecond time only have local consistency. Long sessions (day and more) can go out of sync with system clock.  
+✧ Currently can have only 256 unique event names per thread
+✧ Currently up to 256 opened but not closed ranges at a time supported
+✧ No std support for now  
+
+## Crate features
 ✧ **accurate-timestamps-x86** - Enable serialization for x86/x86_64 timestamps  
 ✧ **self-tracing** - Add global buffer flushing events
 

@@ -50,6 +50,7 @@ impl GlobalStorage {
 
     /// Called by thread local storage to put its contents into global storage
     pub fn push_buf(&mut self, header: &LocalPacketHeader, buf: &[u8]) {
+        // info!("Got new local buffer. start: {}, end: {}", header.start_timestamp, header.end_timestamp);
         let header = bincode::encode_to_vec(header, bincode::config::standard()).unwrap();
         let header_len = (header.len() as u64).to_be_bytes();
         let bufer_len = (buf.len() as u64).to_be_bytes();
@@ -149,13 +150,13 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
         loop {
             thread::sleep(Duration::from_millis(1));
 
-            if let Some(ticks_per_sec) = freq_detector.next() {
-                send_timestamp_freq(&mut sender_chain, ticks_per_sec);
-            }
-            else if sender_chain.take_tm_freq_requested() {
+            if sender_chain.take_tm_freq_requested() {
                 let ticks_per_sec = freq_detector.next_forced();
                 send_timestamp_freq(&mut sender_chain, ticks_per_sec);
                 send_machine_info(&mut sender_chain, info_header.clone());
+            }
+            else if let Some(ticks_per_sec) = freq_detector.next() {
+                send_timestamp_freq(&mut sender_chain, ticks_per_sec);
             }
 
             // Read value before flushing
@@ -178,12 +179,18 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
                     let failed_pages = global_storage.take_failed_pages();
                     
                     GLOBAL_FLUSHING_RUNNING.store(true, Ordering::Relaxed);
+                    // let cur_tm = Timestamp::now();
+                    // info!("Started flushing at {}", cur_tm);
                     (global_storage.try_take_buf(is_finalizing), failed_pages)
                 }
                 else {
                     (None, Vec::new())
                 }
             };
+            // if slices.is_some() {
+            //     let cur_tm = Timestamp::now();
+            //     info!("Finished flushing at {}", cur_tm);
+            // }
             GLOBAL_FLUSHING_RUNNING.store(false, Ordering::Relaxed);
 
             // handle buffers

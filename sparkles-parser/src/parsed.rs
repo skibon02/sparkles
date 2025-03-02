@@ -22,4 +22,5 @@ pub enum ParsedEvent {
 pub struct ThreadInfoState {
     pub thread_id: Option<u64>,
     pub thread_name: Option<String>,
+    pub thread_ord_id: u64
 }

@@ -35,7 +35,7 @@ impl PerfettoTraceFile {
         let trace = decl::Trace::default();
         let proc_descriptor = decl::TrackDescriptor {
             process: Some(decl::ProcessDescriptor {
-                pid: Some(0 as i32),
+                pid: Some(0),
                 process_name: Some("Unknown".to_string()),
                 ..Default::default()
             }),
