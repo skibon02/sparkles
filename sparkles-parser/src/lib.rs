@@ -24,13 +24,57 @@ pub static PARSER_BUF_SIZE: usize = 1_000_000;
 
 pub struct SparklesParser {
     packet_decoder: PacketDecoder,
-
     machine_info: Option<SparklesMachineInfo>,
-    ticks_per_ns: Option<f64>,
 
     event_parsers: BTreeMap<u64, ThreadParserState>,
     local_packet_ranges: Vec<(usize, usize, u64, u64, u64)>,
     global_i: usize,
+    interpolation_points: InterpolationPoints,
+}
+
+struct InterpolationPoints(BTreeMap<u64, (f64, u64)>); // key: cpu tm, value: (ticks_per_ns, timestamp nanos)
+
+impl InterpolationPoints {
+    pub fn new() -> Self {
+        Self(BTreeMap::new())
+    }
+    
+    fn add_interpolation_point(&mut self, ticks_per_ns: f64, cur_tm: u64) {
+        let ns = self.project_tm(cur_tm);
+        self.0.insert(cur_tm, (ticks_per_ns, ns));
+    }
+    fn get_avg_ticks_per_ns(&self) -> f64 {
+        self.0.values().map(|v| v.0).sum::<f64>() / self.0.len() as f64
+    }
+    
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    fn project_tm(&self, tm: u64) -> u64 {
+        let inter_points = &self.0;
+        let closest_left = inter_points.range(..=tm).next_back();
+        let closest_right = inter_points.range(tm..).next();
+        if let Some((left_tm, (left_slope, left_ns))) = closest_left {
+            // interpolate using left slope
+            let left_ns = *left_ns as f64;
+
+            let slope = *left_slope;
+
+            (left_ns + ((tm - *left_tm) as f64) / slope) as u64
+        }
+        else if let Some((right_tm, (right_slope, right_ns))) = closest_right {
+            // interpolate using right slope
+            let right_ns = *right_ns as f64;
+
+            let slope = *right_slope;
+
+            (right_ns - ((*right_tm - tm) as f64) / slope) as u64
+        }
+        else {
+            tm
+        }
+    }
 }
 
 #[derive(Default)]
@@ -38,9 +82,6 @@ pub struct ThreadParserState {
     thread_name: Option<String>,
     thread_id: Option<u64>,
     last_thread_ord_id: u64,
-
-    prev_reference_tm: u64,
-    prev_reference_ns: u64,
 
     // start timestamp and duration for missed events packet
     missed_events: Vec<(u64, u64)>,
@@ -86,20 +127,6 @@ impl ThreadParserState {
             thread_ord_id: self.last_thread_ord_id,
         }
     }
-
-    fn project_cur_tm(&mut self, ticks_per_ns: f64) -> u64 {
-        let tm = self.cur_tm;
-        let res = self.project_tm(tm, ticks_per_ns);
-        if tm > self.prev_reference_tm {
-            // update reference point
-            self.prev_reference_tm = tm;
-            self.prev_reference_ns = res;
-        }
-        res
-    }
-    pub fn project_tm(&self, tm: u64, ticks_per_ns: f64) -> u64 {
-        self.prev_reference_ns + ((tm - self.prev_reference_tm) as f64 / ticks_per_ns) as u64
-    }
 }
 
 pub type ParseResult<T> = Result<T, PacketReadError>;
@@ -112,10 +139,10 @@ impl SparklesParser {
 
             machine_info: None,
             event_parsers: BTreeMap::new(),
-            ticks_per_ns: None,
 
             local_packet_ranges: Vec::new(),
             global_i: 0,
+            interpolation_points: InterpolationPoints::new(),
         }
     }
 
@@ -133,6 +160,7 @@ impl SparklesParser {
         self.packet_decoder.is_eof()
     }
 
+
     pub fn parse_to_end(&mut self, mut f: impl FnMut(&ParsedEvent, &ThreadInfoState)) -> ParseResult<()> {
         info!("Waiting for encoder info...");
         loop {
@@ -146,11 +174,11 @@ impl SparklesParser {
 
                             self.machine_info = Some(info);
                         }
-                        Packet::TimestampFreq(ticks_per_sec) => {
+                        Packet::TimestampFreq(ticks_per_sec, cur_tm) => {
                             let ticks_per_ns = ticks_per_sec as f64 / 1_000_000_000.0;
                             info!("Got timestamp frequency: {:?} t/ns", ticks_per_ns);
 
-                            self.ticks_per_ns = Some(ticks_per_ns);
+                            self.interpolation_points.add_interpolation_point(ticks_per_ns, cur_tm);
                         }
                         Packet::DataBytes(packets) => {
                             let global_i = self.global_i;
@@ -159,11 +187,10 @@ impl SparklesParser {
                                 let thread_id = header.thread_ord_id;
                                 let parser_state = self.event_parsers.entry(thread_id).or_default();
 
-                                if self.ticks_per_ns.is_none() {
-                                    error!("Timestamp frequency is not set! Using default one...");
+                                if self.interpolation_points.is_empty() {
+                                    error!("Timestamp frequency is not set! Using default...");
                                 }
-                                let ticks_per_ns = self.ticks_per_ns.unwrap_or(1.0);
-                                self.local_packet_ranges.push((global_i, local_i, thread_id, parser_state.project_tm(header.start_timestamp, ticks_per_ns), parser_state.project_tm(header.end_timestamp, ticks_per_ns)));
+                                self.local_packet_ranges.push((global_i, local_i, thread_id, self.interpolation_points.project_tm(header.start_timestamp), self.interpolation_points.project_tm(header.end_timestamp)));
 
                                 //update thread name
                                 if let Some(thread_info) = &header.thread_info {
@@ -219,7 +246,7 @@ impl SparklesParser {
                                     }
 
                                     // Create ParsedEvent
-                                    let timestamp = parser_state.project_cur_tm(ticks_per_ns) + parser_state.zero_diff_cnt * 10;
+                                    let timestamp = self.interpolation_points.project_tm(parser_state.cur_tm) + parser_state.zero_diff_cnt * 10;
                                     match evt {
                                         TracingEvent::Instant(id, _) => {
                                             let ev_name = if let Some((ev_name, ev_type)) = parser_state.id_store.get(&id) {
@@ -349,7 +376,7 @@ impl SparklesParser {
     }
     
     pub fn print_stats(&self) {
-        let ticks_per_ns = self.ticks_per_ns.unwrap_or(1.0);
+        let ticks_per_ns = self.interpolation_points.get_avg_ticks_per_ns();
         info!("Printing stats...");
         
         let mut total_events = 0;
@@ -421,11 +448,7 @@ impl SparklesParser {
             SparklesMachineInfo::default()
         });
         trace_res_file.set_process_info(encoder_info.process_name, encoder_info.pid);
-        self.ticks_per_ns.unwrap_or_else(|| {
-            warn!("Did not find timestamp frequency in decoded stream! Using default values");
-            1.0
-        });
-        
+
         let bytes = trace_res_file.get_bytes();
         Ok(bytes)
     }

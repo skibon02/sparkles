@@ -13,7 +13,7 @@ pub enum Packet {
     MachineInfo(SparklesMachineInfo),
     DataBytes(Vec<(LocalPacketHeader, Vec<u8>)>),
     FailedPages(Vec<LocalPacketHeader>),
-    TimestampFreq(u64),
+    TimestampFreq(u64, u64),
     GracefulShutdown,
     ConnectionAccepted,
 }
@@ -417,7 +417,8 @@ fn parse_packet_from_data(packet_type: PacketType, data: &[u8]) -> ReadResult<Pa
         }
         PacketType::TimestampFreq => {
             let freq = u64::from_be_bytes(data[..8].try_into().unwrap());
-            Ok(Packet::TimestampFreq(freq))
+            let cur_tm = u64::from_be_bytes(data[8..16].try_into().unwrap());
+            Ok(Packet::TimestampFreq(freq, cur_tm))
         }
         PacketType::ConnectionAccepted => {
             Ok(Packet::ConnectionAccepted)

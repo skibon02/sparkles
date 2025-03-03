@@ -144,19 +144,19 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
 
         thread::sleep(Duration::from_millis(1));
 
-        let ticks_per_sec = freq_detector.next_forced();
-        send_timestamp_freq(&mut sender_chain, ticks_per_sec);
+        let (ticks_per_sec, cur_tm) = freq_detector.next_forced();
+        send_timestamp_freq(&mut sender_chain, ticks_per_sec, cur_tm);
         
         loop {
             thread::sleep(Duration::from_millis(1));
 
             if sender_chain.take_tm_freq_requested() {
-                let ticks_per_sec = freq_detector.next_forced();
-                send_timestamp_freq(&mut sender_chain, ticks_per_sec);
+                let (ticks_per_sec, cur_tm) = freq_detector.next_forced();
+                send_timestamp_freq(&mut sender_chain, ticks_per_sec, cur_tm);
                 send_machine_info(&mut sender_chain, info_header.clone());
             }
-            else if let Some(ticks_per_sec) = freq_detector.next() {
-                send_timestamp_freq(&mut sender_chain, ticks_per_sec);
+            else if let Some((ticks_per_sec, cur_tm)) = freq_detector.next() {
+                send_timestamp_freq(&mut sender_chain, ticks_per_sec, cur_tm);
             }
 
             // Read value before flushing
@@ -255,7 +255,7 @@ impl TimestampFreqDetector {
             capture_interval: interval,
         }
     }
-    pub fn next(&mut self) -> Option<u64> {
+    pub fn next(&mut self) -> Option<(u64, u64)> {
         if self.prev_instant.elapsed() > self.capture_interval {
             Some(self.next_forced())
         }
@@ -264,7 +264,7 @@ impl TimestampFreqDetector {
         }
     }
 
-    pub fn next_forced(&mut self) -> u64 {
+    pub fn next_forced(&mut self) -> (u64, u64) {
         let now = Instant::now();
         let now_tm = Timestamp::now();
 
@@ -275,6 +275,6 @@ impl TimestampFreqDetector {
         self.prev_tm = now_tm;
         self.prev_instant = now;
 
-        ticks_per_sec as u64
+        (ticks_per_sec as u64, now_tm)
     }
 }

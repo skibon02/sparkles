@@ -80,9 +80,10 @@ pub fn send_failed_pages(sender: &mut impl Sender, failed_pages: &[LocalPacketHe
     let header = bincode::encode_to_vec(failed_pages, bincode::config::standard()).unwrap();
     sender.send_packet(PacketType::FailedPages, &[&header]);
 }
-pub fn send_timestamp_freq(sender: &mut impl Sender, ticks_per_sec: u64) {
-    let bytes = ticks_per_sec.to_be_bytes();
-    sender.send_packet(PacketType::TimestampFreq, &[&bytes]);
+pub fn send_timestamp_freq(sender: &mut impl Sender, ticks_per_sec: u64, cur_tm: u64) {
+    let freq_bytes = ticks_per_sec.to_be_bytes();
+    let tm_bytes = cur_tm.to_be_bytes();
+    sender.send_packet(PacketType::TimestampFreq, &[&freq_bytes, &tm_bytes]);
 }
 pub fn send_graceful_shutdown(sender: &mut impl Sender) {
     sender.send_packet(PacketType::GracefulShutdown, &[]);
