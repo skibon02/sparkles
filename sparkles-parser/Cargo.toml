@@ -23,4 +23,3 @@ enumset = { version = "1.1.5", features = ["std"] }
 
 [build-dependencies]
 prost-build = "0.13.5"
-protobuf-src = "2.1.1"
