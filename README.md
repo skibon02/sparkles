@@ -2,7 +2,7 @@
 <img src="https://img.shields.io/crates/v/sparkles"></img>
 <img src="https://img.shields.io/crates/size/sparkles"></img>
 
-Performance-focused library for capturing execution flow of application.
+Performance-focused library for capturing execution flow of your application.
 
 ![img_1.png](https://github.com/skibon02/sparkles/blob/main/img_1.png?raw=true)
 
@@ -17,9 +17,9 @@ Up to 🫸100_000_000🫷 events per second can be captured in a local environme
 
 ## ✧ Main parts
 - **sparkles**: Ready-to-use library for capturing events and saving them to file in lightweight encoded format.
-- **sparkles-core**: Common functionality for std and no_std (todo) version of sparkles.
+- **sparkles-core**: Common functionality for std and no_std (todo) version of sparkles and protocol packets.
 - **sparkles-macro**: instant_event! and range_event_start! macro to encode event name into integer value.
-- **sparkles-parser**: This binary will parse tracing data, decode events and save them to file in Perfetto protobuf format.
+- **sparkles-parser**: Provides easy to use way of converting recorded trace data to Perfetto format as well as library for realtime parsing.
 
 ## ✧ How to use
 1. Add sparkles as a dependency to your project
@@ -91,13 +91,12 @@ Ready:
 🌟 Abstraction over events sending type (UDP/File)  
 🌟 Automatic timestamp frequency detection  
 🌟 aarch64 support
+🌟 More explicit and recoverable packets with known pattern  
+🌟 Resistance to data loss during transmission  
+🌟 UDP real-time reader and parser library API
+🌟 Better timestamp speed interpolation in parser
 
 TODO:  
-⚙️ More explicit and recoverable packets with known pattern  
-⚙️ Resistance to data loss during transmission  
-⚙️ UDP real-time reader and parser library API  
-⚙️ Profiler use-case  
-
 ⚙️ Track changes in structs encoded/decoded by `bincode`  
 ⚙️ Include git revision into build  
 ⚙️ Option to run without additional bg thread  
@@ -116,7 +115,7 @@ TODO:
 ## Known issues and limitations
 ✧ Converting timestamp to nanosecond time only have local consistency. Long sessions (day and more) can go out of sync with system clock.  
 ✧ Currently can have only 256 unique event names per thread
-✧ Currently up to 256 opened but not closed ranges at a time supported
+✧ Currently up to 256 opened but not closed ranges at a time are supported
 ✧ No std support for now  
 
 ## Crate features
