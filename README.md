@@ -117,6 +117,7 @@ TODO:
 ✧ Currently can have only 256 unique event names per thread
 ✧ Currently up to 256 opened but not closed ranges at a time are supported
 ✧ No std support for now  
+✧ UDP parser binary currently cannot be manually stopped to save collected data
 
 ## Crate features
 ✧ **accurate-timestamps-x86** - Enable serialization for x86/x86_64 timestamps  
