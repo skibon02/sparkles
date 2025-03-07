@@ -143,7 +143,7 @@ impl PacketDecoder {
                     if e.kind() == io::ErrorKind::WouldBlock {
                         continue;
                     }
-                    if e.kind() != io::ErrorKind::ConnectionReset {
+                    if !matches!(e.kind(), io::ErrorKind::ConnectionReset | io::ErrorKind::ConnectionRefused) {
                         warn!("Error receiving packet from server: {}", e);
                     }
                     thread::sleep(Duration::from_millis(500));

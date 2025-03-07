@@ -153,7 +153,7 @@ impl Sender for UdpSender {
 impl ConfiguredSender for UdpSender {
     type Config = UdpSenderConfig;
     fn new(cfg: &Self::Config) -> Option<Self> {
-        let socket = UdpSocket::bind((Ipv4Addr::new(127, 0, 0, 1), cfg.local_port.unwrap_or(38338))).ok()?;
+        let socket = UdpSocket::bind(("0.0.0.0", cfg.local_port.unwrap_or(38338))).ok()?;
         
         socket.set_nonblocking(true).ok()?;
 
