@@ -439,8 +439,10 @@ impl SparklesParser {
             }
         })?;
 
-        for (global_i, local_i, thread_ord_id, start,end) in mem::take(&mut self.local_packet_ranges).into_iter() {
-            trace_res_file.add_range_event(&format!("Local packet #{global_i}.{local_i}"), 999666 + thread_ord_id, start, end);
+        if cfg!(feature="local-packet-bounds") {
+            for (global_i, local_i, thread_ord_id, start,end) in mem::take(&mut self.local_packet_ranges).into_iter() {
+                trace_res_file.add_range_event(&format!("Local packet #{global_i}.{local_i}"), 999666 + thread_ord_id, start, end);
+            }
         }
 
         let encoder_info = self.machine_info.take().unwrap_or_else(|| {
