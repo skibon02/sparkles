@@ -1,4 +1,6 @@
 /target
 .idea
+
 trace
 parser-trace
+trace.perf
