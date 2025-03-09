@@ -14,7 +14,7 @@ use sparkles_core::protocol::headers::{LocalPacketHeader, SparklesMachineInfo};
 use sparkles_core::protocol::packets::{send_failed_pages, send_graceful_shutdown, send_machine_info, send_timestamp_freq, send_trace_data};
 use sparkles_core::protocol::sender::{ConfiguredSender, SenderChain};
 use crate::config::SparklesConfig;
-use crate::{flush_thread_local, on_client_connect, GLOBAL_FLUSHING_RUNNING};
+use crate::{flush_thread_local, on_client_connect, GLOBAL_FLUSHING_RUNNING, THREAD_LOCAL_NOTIFICATION};
 use crate::sender::file_sender::FileSender;
 use crate::thread_local_storage::set_local_storage_config;
 
@@ -93,6 +93,10 @@ impl GlobalStorage {
             self.config.flush_threshold
         };
         if self.inner.occupied_len() > threshold {
+            use crate as sparkles;
+            #[cfg(feature="self-tracing")]
+            let g = sparkles_macro::range_event_start!("[internal] Taking stored events");
+            
             debug!("[sparkles] Flushing..");
             let slices = self.inner.as_slices();
             let slices = (slices.0.to_vec(), slices.1.to_vec());
@@ -160,6 +164,8 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
             use crate as sparkles;
             
             if sender_chain.take_tm_freq_requested() {
+                THREAD_LOCAL_NOTIFICATION.fetch_add(1, Ordering::Relaxed);
+                
                 let (ticks_per_sec, cur_tm) = freq_detector.next_forced();
                 send_timestamp_freq(&mut sender_chain, ticks_per_sec, cur_tm);
                 send_machine_info(&mut sender_chain, info_header.clone());
@@ -176,15 +182,13 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
 
             // this thing should be fast
             let (slices, failed_pages) = {
+                #[cfg(feature="self-tracing")]
                 if is_finalizing {
-                    #[cfg(feature="self-tracing")]
                     sparkles_macro::instant_event!("[internal] Finalizing");
                     flush_thread_local();
                 }
 
                 if let Some(global_storage) = GLOBAL_STORAGE.lock().as_mut() {
-                    #[cfg(feature="self-tracing")]
-                    let g = sparkles_macro::range_event_start!("[internal] Taking stored events");
                     let failed_pages = global_storage.take_failed_pages();
                     
                     GLOBAL_FLUSHING_RUNNING.store(true, Ordering::Relaxed);
@@ -194,10 +198,6 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
                     (None, Vec::new())
                 }
             };
-            // if slices.is_some() {
-            //     let cur_tm = Timestamp::now();
-            //     info!("Finished flushing at {}", cur_tm);
-            // }
             GLOBAL_FLUSHING_RUNNING.store(false, Ordering::Relaxed);
 
             // handle buffers
@@ -206,9 +206,6 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
                 let grd = crate::range_event_start(crate::calculate_hash("[internal] Send data bytes"), "[internal] Send data bytes");
                 send_trace_data(&mut sender_chain, &slice1, &slice2);
             }
-            
-            #[cfg(feature="self-tracing")]
-            flush_thread_local();
 
             // handle failed pages
             if !failed_pages.is_empty() {
@@ -217,7 +214,7 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
             }
 
             if is_finalizing {
-                debug!("[sparkles] Finalize in process...");
+                debug!("[internal] Finalize in process...");
                 send_graceful_shutdown(&mut sender_chain);
                 break;
             }
@@ -225,7 +222,7 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
             if !FINALIZE_STARTED.load(Ordering::Relaxed) {
                 let mut mutex = tmp_mutex.lock();
                 #[cfg(feature="self-tracing")]
-                let g = sparkles_macro::range_event_start!("Waiting for signal");
+                let g = sparkles_macro::range_event_start!("[internal] Waiting for signal");
                 if SENDER_THREAD_ITERATION.wait_for(&mut mutex, Duration::from_millis(50)).timed_out() {
                     #[cfg(feature="self-tracing")]
                     sparkles_macro::range_event_end!(g, "Timeout!");
@@ -241,8 +238,9 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
 pub fn finalize() {
     use crate as sparkles;
     #[cfg(feature="self-tracing")]
-    sparkles_macro::instant_event!("[sparkles] Finalize requested");
+    sparkles_macro::instant_event!("[internal] Finalize requested");
     
+    // Flush current thread
     flush_thread_local();
 
     FINALIZE_STARTED.store(true, Ordering::SeqCst);

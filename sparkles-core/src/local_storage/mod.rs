@@ -15,6 +15,7 @@ pub trait GlobalStorageImpl {
     fn flush(&self, header: &LocalPacketHeader, data: &[u8]);
     fn try_flush(&self, header: &LocalPacketHeader, data: &[u8]) -> bool;
     fn is_buf_available(&self) -> bool;
+    fn take_new_update(&mut self) -> bool;
 }
 
 pub struct LocalStorage<G: GlobalStorageImpl> {
@@ -32,14 +33,17 @@ pub struct LocalStorage<G: GlobalStorageImpl> {
     
     started_ranges: [bool; 256],
     started_ranges_cnt: usize,
+    
+    thread_name: Option<String>,
 }
 
 static CUR_THREAD_ID: AtomicUsize = AtomicUsize::new(1);
 
 impl<G: GlobalStorageImpl> LocalStorage<G> {
-    pub fn new(global_storage_ref: G, thread_info: Option<ThreadInfo>, config: LocalStorageConfig)-> Self {
+    pub fn new(global_storage_ref: G, thread_info: ThreadInfo, config: LocalStorageConfig)-> Self {
         let thread_ord_id = CUR_THREAD_ID.fetch_add(1, Ordering::Relaxed) as u64;
 
+        let thread_name = thread_info.new_thread_name.clone();
         LocalStorage {
             config,
             buf: Vec::new(),
@@ -57,6 +61,8 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
             last_range_ord_id: 0,
             started_ranges: [false; 256],
             started_ranges_cnt: 0,
+            
+            thread_name,
         }
     }
 
@@ -173,9 +179,8 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
     }
 
     pub fn set_cur_thread_name(&mut self, name: String) {
-        if let Some(thread_info) = &mut self.local_packet_header.thread_info {
-            thread_info.new_thread_name = Some(name);
-        }
+        self.thread_name = Some(name);
+        self.local_packet_header.thread_info.new_thread_name = self.thread_name.clone();
     }
 
     /// Check buffer length, and flush if the buffer is full
@@ -190,17 +195,21 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
     }
 
     /// Flush whole event buffer data to the global storage
-    pub fn flush(&mut self, forced: bool) {
+    pub fn flush(&mut self, blocking: bool) {
         if self.buf.is_empty() {
             // Nothing to flush, ignore
             return;
+        }
+        let new_update = self.global_storage_ref.take_new_update();
+        if new_update {
+            self.local_packet_header.thread_info.new_thread_name = self.thread_name.clone();
         }
 
         // Fill header
         self.local_packet_header.end_timestamp = self.prev_tm;
         self.local_packet_header.id_store = self.id_store.clone().into();
 
-        let success = if forced {
+        let success = if blocking {
             self.global_storage_ref.flush(&self.local_packet_header, &self.buf);
             true
         }
@@ -211,10 +220,8 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
         //cleanup
         if success {
             self.buf.clear();
-            if let Some(thread_info) = &mut self.local_packet_header.thread_info {
-                if thread_info.new_thread_name.is_some() {
-                    thread_info.new_thread_name = None;
-                }
+            if self.local_packet_header.thread_info.new_thread_name.is_some() {
+                self.local_packet_header.thread_info.new_thread_name = None;
             }
             self.local_packet_header.start_timestamp = 0;
         }

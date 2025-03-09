@@ -12,14 +12,36 @@ For protocol used by both crates there are some guarantees based on version numb
 - When major proto version is the same, but decoder's minor version is higher or equal than encoder's, correct parsing is guaranteed.
 
 ## Versions
-### [0.1.0] sparkles-parser (proto-1.0) - 2025-03-09
-- New protocol version: 1.0
-
 ### [0.1.5] sparkles (proto-1.0) - 2025-03-09
 - New protocol version: 1.0
+- Config: Now have two options for the destination (file or directory).
+- Config: Flush threshold is now specified in bytes (default 64K).
+- Config: Add UDP sender configuration.
+- Added some config parameters validation
+- UDP support: `wait_client_connected()` can be used to suspend execution until UDP client is connected and ready to receive data.
+- Init: add warning if sparkles was already initialized earlier (implicitly).
+- Sender thread: Improve sleeping 
+- Send timestamp frequency before any events
+- Use `parking-lot` mutexes
+- Examples: improve examples, add params
+
+### [0.1.0] sparkles-parser (proto-1.0) - 2025-03-09
+- New protocol version: 1.0
+- Prepare library for creating custom parsers
+- Unify structure to work the same with UDP and file sources
+- Add "self-tracing" feature to analyze parser performance and packet receive timings
+- Improve time calculation by using timestamp frequency interpolation
+- Receive and parse packets in separate threads
 
 ### [proto-1.0]
-- something
+- Define two flavors of protocol: One for byte stream with ordering and delivery guarantees (saving to file, sending over TCP...). The other is
+  for a new possible configuration: UDP packets (without ordering or delivery guarantee, but with per-packet integrity).
+- For UDP protocol server need to receive Subscribe packet from client. After this packet is received, server can begin sending trace packets to this client.
+- Define packet type as a 32-byte pseudo-random pattern (sha256 of header name) so it can potentially be easier to locate when data is corrupted.
+- Introduce x.x versioning in protocol version. Both encoder and decoder know protocol version it was compiled with.
+- Remove `serde` dependency. Now pure `bincode` is used for packet encoding.
+- Timestamp frequency: send timestamp together with timestamp frequency for better time interpolation in parser.
+- Use big-endian
 
 
 ### [0.1.4] - 2024-09-28

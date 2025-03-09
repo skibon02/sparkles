@@ -39,12 +39,13 @@ fn main() {
     SimpleLogger::new().init().unwrap();
     let finalize_guard = sparkles::init(
         SparklesConfig::default()
-            // .with_udp_sender(38338) // Uncomment this to enable UDP sender
+            .with_udp_sender(38338) // Uncomment this to enable UDP sender
     );
     
     // Only relevant if using UDP sender
     sparkles::wait_client_connected();
 
+    // Arguments
     let thread_count = env::args().nth(1).unwrap_or("0".to_string()).parse::<usize>().unwrap_or(0);
     let duration = env::args().nth(2).unwrap_or("100".to_string()).parse::<u64>().unwrap_or(100);
     

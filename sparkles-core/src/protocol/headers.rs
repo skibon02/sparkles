@@ -10,7 +10,7 @@ use crate::consts::PROTOCOL_VERSION;
 pub struct LocalPacketHeader {
     /// Globally unique order number of the spawned thread
     pub thread_ord_id: u64,
-    pub thread_info: Option<ThreadInfo>,
+    pub thread_info: ThreadInfo,
 
     /// Timestamp of the first event in a buffer
     pub start_timestamp: u64,

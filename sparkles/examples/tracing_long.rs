@@ -46,15 +46,16 @@ fn main() {
     let finalize_guard = sparkles::init(SparklesConfig::default()
         // .with_udp_sender(38338) // Uncomment this to enable UDP sender
         .with_flush_threshold(4096)
-        .with_thread_flush_threshold(8092)
+        .with_thread_flush_attempt_threshold(16000)
     );
     
     // Only relevant if using UDP sender
     sparkles::wait_client_connected();
-    
-    let duration_s = env::args().nth(1).unwrap_or("10".to_string()).parse::<u64>().unwrap_or(10);
-    info!("Begin generating trace data for {duration_s}s");
 
+    // Arguments
+    let duration_s = env::args().nth(1).unwrap_or("10".to_string()).parse::<u64>().unwrap_or(10);
+    
+    info!("Begin generating trace data for {duration_s}s");
     for _ in 0..duration_s * 100 {
         perform_tracing();
     }

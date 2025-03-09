@@ -1,7 +1,7 @@
 //! Configuration example
 //! 
 //! 1. Run `cargo run --example configuration --release`
-//! 2. Parse result file: `sparkles-parse-and-save trace.sprk`
+//! 2. Parse result file: `sparkles-parse-and-save --file trace.sprk`
 //! 3. Go to https://ui.perfetto.dev/ and drag'n'drop generated `trace.perf` file
 
 use std::path::PathBuf;

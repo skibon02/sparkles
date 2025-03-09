@@ -236,31 +236,25 @@ impl SparklesParser {
                 self.interpolation_points.add_interpolation_point(ticks_per_ns, cur_tm);
             }
             Packet::DataBytes(packets) => {
+                if self.interpolation_points.is_empty() {
+                    error!("Timestamp frequency is not set! Dropping packet.");
+                }
+                
                 let global_i = self.global_i;
                 self.global_i += 1;
                 for (local_i, (header, data)) in packets.into_iter().enumerate() {
                     #[cfg(feature="self-tracing")]
-                    let g = sparkles_macro::range_event_start!("Parse raw events");
+                    let g = sparkles_macro::range_event_start!("Parse header");
                     let thread_id = header.thread_ord_id;
                     let parser_state = self.event_parsers.entry(thread_id).or_default();
-
-                    if self.interpolation_points.is_empty() {
-                        error!("Timestamp frequency is not set! Using default...");
-                    }
                     self.local_packet_ranges.push((global_i, local_i, thread_id, self.interpolation_points.project_tm(header.start_timestamp), self.interpolation_points.project_tm(header.end_timestamp)));
 
                     //update thread name
-                    if let Some(thread_info) = &header.thread_info {
-                        if let Some(thread_name) = thread_info.new_thread_name.clone() {
-                            parser_state.thread_name = Some(thread_name);
-                            parser_state.thread_id = Some(thread_info.thread_id);
-                        }
+                    parser_state.thread_id = Some(header.thread_info.thread_id);
+                    if let Some(thread_name) = header.thread_info.new_thread_name.clone() {
+                        parser_state.thread_name = Some(thread_name);
                     }
                     parser_state.last_thread_ord_id = thread_id;
-
-                    let new_events = parser_state.state_machine.decode_many(&data);
-                    let new_events_len = new_events.len();
-                    debug!("Received {} events", new_events_len);
 
                     // Merge id store
                     for (id, (name, r#type)) in header.id_store.tags.iter().enumerate() {
@@ -276,8 +270,20 @@ impl SparklesParser {
                     #[cfg(feature="self-tracing")]
                     drop(g);
 
+                    if self.interpolation_points.is_empty() {
+                        continue;
+                    }
+
                     #[cfg(feature="self-tracing")]
-                    let g = sparkles_macro::range_event_start!("Parse events");
+                    let g = sparkles_macro::range_event_start!("Decode raw events");
+                    let new_events = parser_state.state_machine.decode_many(&data);
+                    let new_events_len = new_events.len();
+                    debug!("Received {} events", new_events_len);
+                    #[cfg(feature="self-tracing")]
+                    drop(g);
+
+                    #[cfg(feature="self-tracing")]
+                    let g = sparkles_macro::range_event_start!("Parse new events");
                     let mut cur_tm = header.start_timestamp;
                     let mut first = true;
                     for evt in new_events {
@@ -454,23 +460,23 @@ impl SparklesParser {
         let mut trace_res_file = PerfettoTraceFile::new();
         self.parse_to_end(packet_decoder, |ev, thread_info| {
             let thread_id = thread_info.thread_id.unwrap_or(999);
-            let thread_name = thread_info.thread_name.clone().unwrap_or("Unknown thread".to_string());
-            trace_res_file.set_thread_name(thread_id, &thread_name);
-            trace_res_file.set_thread_name(999666 + thread_info.thread_ord_id, "[not thread] local packets");
+            trace_res_file.set_thread_name(thread_id, thread_info.thread_name.as_deref());
+            #[cfg(feature="local-packet-bounds")]
+            trace_res_file.set_thread_name(999666 + thread_info.thread_ord_id, Some("[not thread] local packets"));
             
             match ev {
                 ParsedEvent::Instant {
                     name,
                     tm
                 } => {
-                    trace_res_file.add_point_event(&name, thread_id, *tm);
+                    trace_res_file.add_point_event(name, thread_id, *tm);
                 }
                 ParsedEvent::Range {
                     name,
                     start,
                     end
                 } => {
-                    trace_res_file.add_range_event(&name, thread_id,
+                    trace_res_file.add_range_event(name, thread_id,
                                                    *start, *end);
                 }
                 ParsedEvent::NamedRange {

@@ -96,8 +96,10 @@ impl SparklesConfig {
         self
     }
 
-    /// Soft threshold for flushing. Will flush automatically only if global buffer is available at the moment.
+    /// Soft threshold for flushing. Will flush automatically if global buffer is available at the moment.
     ///
+    /// Note: This should less than `thread_flush_threshold`
+    /// 
     /// Default: 32KB
     #[must_use]
     pub fn with_thread_flush_attempt_threshold(mut self, flush_attempt_threshold: usize) -> Self {
@@ -107,6 +109,8 @@ impl SparklesConfig {
 
     /// Max capacity of the thread-local storage buffer in bytes. After reaching this threshold,
     /// the buffer will be flushed to the global storage. Thread will be blocked until the flushing operation is finished.
+    /// 
+    /// Note: This should not be less than thread_flush_threshold. Most of the time you would need to change thread_flush_attempt_threshold.
     ///
     /// Default: 1MB
     #[must_use]

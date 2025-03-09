@@ -32,9 +32,9 @@ Navigate to https://ui.perfetto.dev/ and drag'n'drop generated file.
 
 ## Crate features
 ✧ **local-packet-bounds** - Add received packet bounds to the result  
-✧ **self-tracing** - Add event receive and parse events to the result  
-✧ **perfetto** - Add saving in perfetto format method to the library
-✧ **bin-deps** - Should not be used if you are using library
+✧ **self-tracing** - Create trace file to analyze parser work
+✧ **perfetto** - Add saving in perfetto format method to the library crate
+✧ **bin-deps** - Should not be used if you are using library crate
 
 ｡ﾟﾟ･｡･ﾟﾟ｡  
 ﾟ。SkyGrel19 ✨  

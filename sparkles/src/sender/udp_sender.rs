@@ -137,7 +137,7 @@ impl Sender for UdpSender {
             let flags = PacketFlags::PacketStart | PacketFlags::PacketEnd | PacketFlags::ShortPacket;
             packet_buf.push(flags.as_u8());
             if let Err(e) = self.socket.send(&packet_buf) {
-                warn!("Error sending packet to client: {}", e);;
+                warn!("Error sending packet to client: {}", e);
             }
         }
     }

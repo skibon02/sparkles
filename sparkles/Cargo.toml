@@ -13,7 +13,6 @@ sparkles-macro = {version = "0.1.4", path = "../sparkles-macro"}
 bincode = "2.0.0-rc.3"
 log = { version = "0.4.26", default-features = false }
 ringbuf = "0.4.7"
-drop_guard = "0.3.0"
 thread-id = { version = "5.0.0" }
 chrono = "0.4.39"
 parking_lot = "0.12.3"
@@ -24,10 +23,6 @@ simple_logger = "5.0.0"
 # for puffin tests
 puffin_http = "0.16.1"
 puffin = { version = "0.19.0" }
-tracing = "0.1.40"
-tracing-perfetto = "0.1.5"
-tracing-subscriber = "0.3.19"
-anyhow = "1.0.96"
 
 
 [features]

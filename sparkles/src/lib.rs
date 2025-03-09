@@ -3,7 +3,7 @@ mod global_storage;
 pub mod sender;
 pub mod config;
 
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicUsize};
 use parking_lot::{Condvar, Mutex};
 use log::{info, warn};
 pub use global_storage::finalize;
@@ -13,6 +13,7 @@ use crate::config::SparklesConfig;
 use crate::global_storage::GlobalStorage;
 
 static GLOBAL_FLUSHING_RUNNING: AtomicBool = AtomicBool::new(false);
+static THREAD_LOCAL_NOTIFICATION: AtomicUsize = AtomicUsize::new(0);
 
 /// Use `sparkles-macro::instant_event!("name")` instead
 pub fn instant_event(hash: u32, string: &'static str) {

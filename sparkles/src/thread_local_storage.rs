@@ -5,10 +5,13 @@ use std::thread;
 use sparkles_core::config::LocalStorageConfig;
 use sparkles_core::local_storage::{GlobalStorageImpl, LocalStorage};
 use sparkles_core::protocol::headers::{LocalPacketHeader, ThreadInfo};
-use crate::GLOBAL_FLUSHING_RUNNING;
+use crate::{GLOBAL_FLUSHING_RUNNING, THREAD_LOCAL_NOTIFICATION};
 use crate::global_storage::{GlobalStorage, GLOBAL_STORAGE};
 
-pub struct GlobalStorageRef;
+#[derive(Default)]
+pub struct GlobalStorageRef {
+    last_update_cnt: usize,
+}
 pub type ThreadLocalStorage = LocalStorage<GlobalStorageRef>;
 
 static LOCAL_CONFIG: OnceLock<LocalStorageConfig> = OnceLock::new();
@@ -37,6 +40,17 @@ impl GlobalStorageImpl for GlobalStorageRef {
     fn is_buf_available(&self) -> bool {
         !GLOBAL_FLUSHING_RUNNING.load(Ordering::Relaxed)
     }
+
+    fn take_new_update(&mut self) -> bool {
+        let new_update_cnt = THREAD_LOCAL_NOTIFICATION.load(Ordering::Relaxed);
+        if new_update_cnt > self.last_update_cnt {
+            self.last_update_cnt = new_update_cnt;
+            true
+        }
+        else {
+            false
+        }
+    }
 }
 
 fn new_local_storage() -> LocalStorage<GlobalStorageRef> {
@@ -48,7 +62,7 @@ fn new_local_storage() -> LocalStorage<GlobalStorageRef> {
         thread_id,
     };
     let config = *LOCAL_CONFIG.get_or_init(LocalStorageConfig::default);
-    LocalStorage::new(GlobalStorageRef, Some(thread_info), config)
+    LocalStorage::new(GlobalStorageRef::default(), thread_info, config)
 }
 
 #[inline(always)]

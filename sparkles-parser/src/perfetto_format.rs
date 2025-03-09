@@ -20,6 +20,10 @@ impl PerfettoTraceFile {
     pub fn set_process_info(&mut self, name: String, pid: u32) {
         self.proc_descriptor.process.as_mut().unwrap().pid = Some(pid as i32);
         self.proc_descriptor.process.as_mut().unwrap().process_name = Some(name);
+
+        for thread in self.thread_descriptors.values_mut() {
+            thread.thread.as_mut().unwrap().pid = Some(pid as i32);
+        }
     }
 }
 
@@ -31,7 +35,6 @@ impl PerfettoTraceFile {
         self.thread_descriptors.get(&(thread_id)).map(|d| d.uuid).unwrap().unwrap()
     }
     pub fn new() -> Self {
-        // emit process descriptor
         let trace = decl::Trace::default();
         let proc_descriptor = decl::TrackDescriptor {
             process: Some(decl::ProcessDescriptor {
@@ -93,14 +96,15 @@ impl PerfettoTraceFile {
 
         self.trace.packet.push(packet);
     }
-    pub fn set_thread_name(&mut self, thread_id: u64, thread_name: &str) {
-        self.thread_descriptors.entry(thread_id).or_insert_with(|| {
-            let proc_uuid = self.proc_descriptor.uuid.unwrap();
+    pub fn set_thread_name(&mut self, thread_id: u64, thread_name: Option<&str>) {
+        let proc_uuid = self.proc_descriptor.uuid.unwrap();
+        let entry = self.thread_descriptors.entry(thread_id);
+        let entry = entry.or_insert_with(|| {
             decl::TrackDescriptor {
                 thread: Some(decl::ThreadDescriptor {
-                    pid: self.proc_descriptor.process.as_ref().unwrap().pid,
+                    pid: None,
                     tid: Some(thread_id as i32),
-                    thread_name: Some(thread_name.to_string()),
+                    thread_name: thread_name.map(|s| s.to_string()),
                     ..Default::default()
                 }),
                 parent_uuid: Some(proc_uuid),
@@ -108,6 +112,11 @@ impl PerfettoTraceFile {
                 ..Default::default()
             }
         });
+        if let Some(name) = thread_name {
+            if entry.thread.as_mut().unwrap().thread_name.as_deref() != Some(name) {
+                entry.thread.as_mut().unwrap().thread_name = Some(name.to_string());
+            }
+        }
     }
 
     pub fn get_bytes(&mut self) -> BytesMut {

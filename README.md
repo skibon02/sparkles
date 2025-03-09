@@ -121,6 +121,7 @@ TODO:
 ✧ Naive handling for bad network conditions: if at least one packet lost, the whole tracing data packet is dropped.  
 ✧ Cannot specify UDP address to listen on  
 ✧ Proper using of sparkles-macro::range_event_start!("name") gives warning
+✧ Timestamp wrap-around is not handled well (not an issue for 64-bit systems)
 
 ## Crate features
 ✧ **accurate-timestamps-x86** - Enable serialization for x86/x86_64 timestamps. Trade off timestamp accuracy for higher overhead (slightly).  
