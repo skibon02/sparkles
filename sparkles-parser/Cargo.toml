@@ -20,9 +20,13 @@ rand = "0.9.0"
 simple_logger = "5.0.0"
 smallvec = "1.14.0"
 enumset = { version = "1.1.5", features = ["std"] }
+sparkles = { version = "0.1.5", path = "../sparkles", default-features = false, optional = true }
+sparkles-macro = { version = "0.1.4", optional = true }
+ctrlc = "3.4.5"
 
 [build-dependencies]
 prost-build = "0.13.5"
 
 [features]
 local-packet-bounds = []
+self-tracing = ["sparkles", "sparkles-macro"]

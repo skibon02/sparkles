@@ -10,11 +10,10 @@ pub struct SparklesConfig {
     /// Default: 50MB
     pub global_capacity: usize,
     
-    /// Value must be in range [0.0, 1.0]
     /// After reaching flush threshold, data will be available for sending (saving to file or sending over UDP)
     /// 
-    /// Default: 0.1
-    pub flush_threshold: f64,
+    /// Default: 64KB
+    pub flush_threshold: usize,
     
     /// Cleanup threshold for the global storage ring buffer. When the buffer reaches this threshold,
     /// it will start to clean up the oldest events
@@ -46,7 +45,7 @@ impl Default for SparklesConfig {
     fn default() -> Self {
         Self {
             global_capacity: 50*1024*1024,
-            flush_threshold: 0.1,
+            flush_threshold: 64*1024,
             cleanup_threshold: 0.9,
             cleanup_bottom_threshold: 0.7,
             local_storage_config: Default::default(),
@@ -68,12 +67,10 @@ impl SparklesConfig {
     }
 
     /// After reaching flush threshold, data will be available for sending (saving to file or sending over UDP)
-    /// Value must be in range [0.0, 1.0]
     ///
-    /// Default: 0.1
+    /// Default: 64KB
     #[must_use]
-    pub fn with_flush_threshold(mut self, mut flush_threshold: f64) -> Self {
-        check_range(&mut flush_threshold, "flush_threshold");
+    pub fn with_flush_threshold(mut self, flush_threshold: usize) -> Self {
         self.flush_threshold = flush_threshold;
         self
     }

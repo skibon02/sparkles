@@ -1,4 +1,5 @@
 //! Configuration example
+//! 
 //! 1. Run `cargo run --example configuration --release`
 //! 2. Parse result file: `sparkles-parse-and-save trace.sprk`
 //! 3. Go to https://ui.perfetto.dev/ and drag'n'drop generated `trace.perf` file
@@ -22,7 +23,7 @@ fn main() {
     let finalize_guard = sparkles::init(config);
     let g = range_event_start!("main()");
 
-    // We expect to have ~3 flushes, because single event in dense tracing conditions is 3 bytes long
+    // We expect to have ~3 big flushes, because single event in dense tracing conditions is 3 bytes long
     for _ in 0..50_000 {
         instant_event!("✨✨✨");
     }

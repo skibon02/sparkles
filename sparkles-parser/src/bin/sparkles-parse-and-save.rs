@@ -1,6 +1,7 @@
-//! Interactive file parser
+//! Sparkles trace file parser. Take latest file in `trace` folder and prepare `trace.perf` in Perfetto format.
+//! 
 //! 1. Run your application with sparkles with default file sender configuration. `trace` folder will be generated.
-//! 2. Use this example to parse latest trace file in this folder: `cargo run --release --example interactive`
+//! 2. Use this tool to parse latest trace file in this folder: `sparkles-parse-and-save`
 //! 3. Go to https://ui.perfetto.dev/ and drag'n'drop generated `trace.perf` file
 
 use std::env::args;
@@ -8,6 +9,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use log::{error, info, LevelFilter};
 use simple_logger::SimpleLogger;
+use sparkles_parser::packet_decoder::PacketDecoder;
 use sparkles_parser::SparklesParser;
 
 fn main() {
@@ -72,11 +74,11 @@ fn main() {
     };
 
     let file = std::fs::File::open(found_filename).unwrap();
-    let mut parser = SparklesParser::from_stream(file);
+    let decoder = PacketDecoder::from_stream(file);
 
     // 3. parse the newest file
     info!("Begin parsing...");
-    let data = parser.parse_and_convert_to_perfetto().unwrap();
+    let data = SparklesParser::new().parse_and_convert_to_perfetto(decoder).unwrap();
     let mut res_file = std::fs::File::create("trace.perf").unwrap();
     res_file.write_all(&data).unwrap();
     info!("Your `trace.perf` is ready! Now, navigate to https://ui.perfetto.dev/ and drag'n'drop the file onto the page.");

@@ -18,14 +18,16 @@ pub(crate) fn set_local_storage_config(config: LocalStorageConfig) {
 
 impl GlobalStorageImpl for GlobalStorageRef {
     fn flush(&self, header: &LocalPacketHeader, data: &[u8]) {
-        let mut global_storage_ref = GLOBAL_STORAGE.lock().unwrap();
+        let mut global_storage_ref = GLOBAL_STORAGE.lock();
         let global_storage_ref = global_storage_ref.get_or_insert_with(|| GlobalStorage::new(Default::default()));
         global_storage_ref.push_buf(header, data);
+        global_storage_ref.check_notify();
     }
     fn try_flush(&self, header: &LocalPacketHeader, data: &[u8]) -> bool {
-        if let Ok(mut global_storage_ref) = GLOBAL_STORAGE.try_lock() {
+        if let Some(mut global_storage_ref) = GLOBAL_STORAGE.try_lock() {
             let global_storage_ref = global_storage_ref.get_or_insert_with(|| GlobalStorage::new(Default::default()));
             global_storage_ref.push_buf(header, data);
+            global_storage_ref.check_notify();
             true
         }
         else {

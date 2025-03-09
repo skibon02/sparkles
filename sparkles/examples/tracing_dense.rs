@@ -1,10 +1,11 @@
-//! Tracing dense example
+//! Example of dense tracing conditions to test overall tracing throughput.
+//! 
 //! 1. Run `cargo run --example tracing_dense --release`
 //! 2. Parse result file: `sparkles-parse-and-save`
 //! 3. Go to https://ui.perfetto.dev/ and drag'n'drop generated `trace.perf` file
 
 use std::hint::black_box;
-use std::thread;
+use std::{env, thread};
 use std::time::Instant;
 use log::info;
 use simple_logger::SimpleLogger;
@@ -38,42 +39,36 @@ fn main() {
     SimpleLogger::new().init().unwrap();
     let finalize_guard = sparkles::init(
         SparklesConfig::default()
-            // .with_default_udp_sender()
+            // .with_udp_sender(38338)
     );
     
+    // Only relevant if using UDP sender
     sparkles::wait_client_connected();
 
-    let start = Instant::now();
-    let t1 = thread::spawn(|| {
-        sparkles::set_cur_thread_name("thread#2".to_string());
-        let g = range_event_start!("thread#2");
-        for _ in 0..100 {
-            perform_tracing();
-        }
-    });
-    let t2 = thread::spawn(|| {
-        sparkles::set_cur_thread_name("thread#3".to_string());
-        let g = range_event_start!("thread#3");
-        for _ in 0..100 {
-            perform_tracing();
-        }
-    });
-    let t3 = thread::spawn(|| {
-        sparkles::set_cur_thread_name("thread#4".to_string());
-        let g = range_event_start!("thread#4");
-        for _ in 0..100 {
-            perform_tracing();
-        }
-    });
-    for _ in 0..100 {
-        perform_tracing();
+    let thread_count = env::args().nth(1).unwrap_or("0".to_string()).parse::<usize>().unwrap_or(0);
+    let duration = env::args().nth(2).unwrap_or("100".to_string()).parse::<u64>().unwrap_or(100);
+    
+    info!("Launching tracing_dense example with {thread_count} additional threads and {duration} iterations");
+
+    let mut jh_lst = vec![];
+    for i in 0..thread_count {
+        jh_lst.push(thread::spawn(move || {
+            sparkles::set_cur_thread_name(format!("thread #{i}"));
+            let g = range_event_start!("thread");
+            for _ in 0..duration {
+                perform_tracing();
+            }
+        }));
+    }
+    for jh in jh_lst.into_iter() {
+        jh.join().unwrap();
     }
 
-    let dur = start.elapsed().as_nanos() as f64 / (100 * (3_000 + 9)) as f64;
+    let start = Instant::now();
+    for _ in 0..duration {
+        perform_tracing();
+    }
+    let dur = start.elapsed().as_nanos() as f64 / (duration * (3_000 + 9)) as f64;
     info!("Finished! waiting for tracer send...");
-    info!("Each event took {:?} ns", dur);
-
-    t1.join().unwrap();
-    t2.join().unwrap();
-    t3.join().unwrap();
+    info!("Each event took {:?} ns on average", dur);
 }

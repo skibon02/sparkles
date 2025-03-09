@@ -16,6 +16,7 @@ ringbuf = "0.4.7"
 drop_guard = "0.3.0"
 thread-id = { version = "5.0.0" }
 chrono = "0.4.39"
+parking_lot = "0.12.3"
 
 [dev-dependencies]
 # for examples

@@ -1,12 +1,13 @@
 //! Tracing long example
+//! 
 //! 1. Run `cargo run --example tracing_long --release`
 //! 2. Parse result file: `sparkles-parse-and-save`
 //! 3. Go to https://ui.perfetto.dev/ and drag'n'drop generated `trace.perf` file
 
 use std::hint::black_box;
-use std::thread;
+use std::{env, thread};
 use std::time::{Duration, Instant};
-use log::info;
+use log::{info, LevelFilter};
 use simple_logger::SimpleLogger;
 use sparkles::config::SparklesConfig;
 use sparkles_macro::{instant_event, range_event_start};
@@ -36,49 +37,26 @@ fn perform_tracing() {
         instant_event!("✨✨");
         instant_event!("✨✨✨");
     }
-    thread::sleep(Duration::from_millis(1));
+    thread::sleep(Duration::from_millis(10));
     black_box(v);
 }
 
 fn main() {
-    SimpleLogger::new().init().unwrap();
+    SimpleLogger::new().with_level(LevelFilter::Info).init().unwrap();
     let finalize_guard = sparkles::init(SparklesConfig::default()
-        // .with_default_udp_sender()
-        .with_flush_threshold(0.003));
+        // .with_udp_sender(38338)
+        .with_flush_threshold(4096)
+        .with_thread_flush_threshold(8092)
+    );
     
+    // Only relevant if using UDP sender
     sparkles::wait_client_connected();
+    
+    let duration_s = env::args().nth(1).unwrap_or("10".to_string()).parse::<u64>().unwrap_or(10);
+    info!("Begin generating trace data for {duration_s}s");
 
-    let start = Instant::now();
-    let t1 = thread::spawn(|| {
-        sparkles::set_cur_thread_name("thread#2".to_string());
-        let g = range_event_start!("thread#2");
-        for _ in 0..500 {
-            perform_tracing();
-        }
-    });
-    let t2 = thread::spawn(|| {
-        sparkles::set_cur_thread_name("thread#3".to_string());
-        let g = range_event_start!("thread#3");
-        for _ in 0..500 {
-            perform_tracing();
-        }
-    });
-    let t3 = thread::spawn(|| {
-        sparkles::set_cur_thread_name("thread#4".to_string());
-        let g = range_event_start!("thread#4");
-        for _ in 0..500 {
-            perform_tracing();
-        }
-    });
-    for _ in 0..500 {
+    for _ in 0..duration_s * 100 {
         perform_tracing();
     }
-
-    let dur = start.elapsed().as_nanos() as f64 / (100 * (3_000 + 9)) as f64;
-    info!("Finished! waiting for tracer send...");
-    info!("Each event took {:?} ns", dur);
-
-    t1.join().unwrap();
-    t2.join().unwrap();
-    t3.join().unwrap();
+    info!("Done!");
 }

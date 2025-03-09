@@ -4,8 +4,8 @@ pub mod sender;
 pub mod config;
 
 use std::sync::atomic::AtomicBool;
-use std::sync::{Condvar, Mutex};
-use log::info;
+use parking_lot::{Condvar, Mutex};
+use log::{info, warn};
 pub use global_storage::finalize;
 
 use sparkles_core::local_storage::RangeStartRepr;
@@ -48,6 +48,7 @@ impl Drop for RangeStartGuard {
 }
 
 /// Use `sparkles-macro::range_event_start!("name")` instead
+#[must_use]
 pub fn range_event_start(hash: u32, string: &'static str) -> RangeStartGuard {
     thread_local_storage::with_thread_local_tracer(|tracer| {
         RangeStartGuard {
@@ -98,7 +99,11 @@ impl Drop for FinalizeGuard {
 #[must_use]
 pub fn init(config: SparklesConfig) -> FinalizeGuard {
     // Init global storage
-    global_storage::GLOBAL_STORAGE.lock().unwrap().get_or_insert_with(|| GlobalStorage::new(config));
+    let mut storage_lock = global_storage::GLOBAL_STORAGE.lock();
+    if storage_lock.is_some() {
+        warn!("Global storage was initialized before! Ignoring new config");
+    }
+    storage_lock.get_or_insert_with(|| GlobalStorage::new(config));
 
     FinalizeGuard
 }
@@ -112,7 +117,7 @@ pub fn init(config: SparklesConfig) -> FinalizeGuard {
 /// If you don't need to use it, call `forget()`.
 pub fn init_default() -> FinalizeGuard {
     // Init global storage
-    global_storage::GLOBAL_STORAGE.lock().unwrap().get_or_insert_with(|| GlobalStorage::new(Default::default()));
+    global_storage::GLOBAL_STORAGE.lock().get_or_insert_with(|| GlobalStorage::new(Default::default()));
 
     FinalizeGuard
 }
@@ -130,7 +135,7 @@ pub(crate) fn calculate_hash(s: &str) -> u32 {
 static SOMEONE_CONNECTED: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
 pub(crate) fn on_client_connect() {
     let (lock, cvar) = &SOMEONE_CONNECTED;
-    let mut connected = lock.lock().unwrap();
+    let mut connected = lock.lock();
     *connected = true;
     cvar.notify_all();
 }
@@ -145,11 +150,11 @@ pub fn wait_client_connected() {
     #[cfg(feature="self-tracing")]
     let g = sparkles_macro::range_event_start!("[internal] Waiting for client connect");
     let (lock, cvar) = &SOMEONE_CONNECTED;
-    let mut connected = lock.lock().unwrap();
+    let mut connected = lock.lock();
     if !*connected {
         info!("Waiting for client connection...");
     }
     while !*connected {
-        connected = cvar.wait(connected).unwrap();
+        cvar.wait(&mut connected);
     }
 }

@@ -1,4 +1,5 @@
 //! How to use example
+//! 
 //! 1. Run `cargo run --example how_to_use --release`
 //! 2. Parse result file: `sparkles-parse-and-save`
 //! 3. Go to https://ui.perfetto.dev/ and drag'n'drop generated `trace.perf` file

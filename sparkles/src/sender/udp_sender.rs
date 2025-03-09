@@ -1,9 +1,9 @@
-use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
+use std::net::{SocketAddr, UdpSocket};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::thread;
 use std::time::{Duration, Instant};
-use log::{info, warn};
+use log::{debug, info, warn};
 use sparkles_core::protocol::packets::{PacketType, RequestPacketType};
 use sparkles_core::protocol::sender::{ConfiguredSender, PacketFlags, Sender};
 use crate::on_client_connect;
@@ -79,12 +79,12 @@ impl Sender for UdpSender {
         };
         
         let mut packet_buf = Vec::new();
-        
+
         let full_len = data.iter().fold(0, |acc, x| acc + x.len());
         let full_data = data.iter().fold(Vec::new(), |mut acc, x| { acc.extend_from_slice(x); acc });
-        
+
         let mut size = 0;
-        // info!("UDP packet chunks: {}", (full_len + 1299) / 1300);
+        debug!("UDP packet chunks: {}", full_len.div_ceil(1300));
         for (chunk_num, chunk) in full_data.chunks(SHORT_PACKET_SIZE).enumerate() {
             // 1) Packet type pattern
             packet_buf.extend_from_slice(&packet_type.pattern());
@@ -123,9 +123,9 @@ impl Sender for UdpSender {
             size += chunk.len();
             
             // Throttle sending
-            if size % 100_000 > 100_000 - SHORT_PACKET_SIZE {
-                thread::sleep(Duration::from_micros(100));
-            }
+            // if size % 100_000 > 100_000 - SHORT_PACKET_SIZE {
+            //     thread::sleep(Duration::from_micros(100));
+            // }
         }
         // Special case 
         if data.is_empty() {

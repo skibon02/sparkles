@@ -90,11 +90,12 @@ Ready:
 🌟 Perfetto protobuf format support  
 🌟 Abstraction over events sending type (UDP/File)  
 🌟 Automatic timestamp frequency detection  
-🌟 aarch64 support
+🌟 aarch64 support  
 🌟 More explicit and recoverable packets with known pattern  
 🌟 Resistance to data loss during transmission  
-🌟 UDP real-time reader and parser library API
-🌟 Better timestamp speed interpolation in parser
+🌟 UDP real-time reader and parser library API  
+🌟 Better timestamp speed interpolation in parser  
+🌟 Sparkles-parser: read and parse in separate threads  
 
 TODO:  
 ⚙️ Track changes in structs encoded/decoded by `bincode`  
@@ -114,10 +115,12 @@ TODO:
 
 ## Known issues and limitations
 ✧ Converting timestamp to nanosecond time only have local consistency. Long sessions (day and more) can go out of sync with system clock.  
-✧ Currently can have only 256 unique event names per thread
-✧ Currently up to 256 opened but not closed ranges at a time are supported
+✧ Currently can have only 256 unique event names per thread  
+✧ Currently up to 256 opened but not closed ranges at a time are supported  
 ✧ No std support for now  
-✧ UDP parser binary currently cannot be manually stopped to save collected data
+✧ Naive handling for bad network conditions: if at least one packet lost, the whole tracing data packet is dropped.
+✧ Cannot specify UDP address to listen on  
+✧ Proper using of sparkles-macro::range_event_start!("name") gives warning
 
 ## Crate features
 ✧ **accurate-timestamps-x86** - Enable serialization for x86/x86_64 timestamps  

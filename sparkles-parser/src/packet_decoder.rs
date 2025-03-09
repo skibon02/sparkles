@@ -1,6 +1,7 @@
 use std::{io, thread};
 use std::io::{BufRead, Read};
 use std::net::{ToSocketAddrs, UdpSocket};
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use enumset::EnumSet;
 use log::{debug, info, warn};
@@ -8,6 +9,7 @@ use thiserror::Error;
 use sparkles_core::protocol::headers::{LocalPacketHeader, SparklesMachineInfo};
 use sparkles_core::protocol::packets::{PacketType, RequestPacketType};
 use sparkles_core::protocol::sender::PacketFlags;
+use crate::SHUTDOWN_SIGNAL;
 
 pub enum Packet {
     MachineInfo(SparklesMachineInfo),
@@ -33,7 +35,7 @@ impl ProtocolCounters {
 
 pub enum PacketDecoder {
     Stream{
-        stream: Box<dyn BufRead>,
+        stream: Box<dyn BufRead + Send>,
         is_eof: bool,
         counters: ProtocolCounters,
     },
@@ -45,6 +47,8 @@ pub enum PacketDecoder {
         last_seq_num: u16,
 
         partial_packet_info: Option<UdpParserState>,
+        
+        read_buffer: Vec<u8>,
     }
 }
 
@@ -113,7 +117,7 @@ pub enum PacketReadError {
     IncompleteLongPacket,
 }
 impl PacketDecoder {
-    pub fn from_stream(stream: impl Read + 'static) -> Self {
+    pub fn from_stream(stream: impl Read + Send + 'static) -> Self {
         let stream = Box::new(io::BufReader::new(stream));
         PacketDecoder::Stream{
             stream,
@@ -125,11 +129,13 @@ impl PacketDecoder {
     pub fn from_socket(addr: impl ToSocketAddrs) -> Self {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         socket.connect(addr).unwrap();
+        socket.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
 
+        #[cfg(feature="self-tracing")]
+        let g = sparkles_macro::range_event_start!("Subscribing to events...");
         loop {
             socket.send(&RequestPacketType::Subscribe.pattern()).unwrap();
 
-            socket.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
             let mut buf = [0u8; 32];
             match socket.recv(&mut buf) {
                 Ok(32) if buf == PacketType::ConnectionAccepted.pattern() => {
@@ -149,6 +155,10 @@ impl PacketDecoder {
                     thread::sleep(Duration::from_millis(500));
                 }
             }
+            
+            if SHUTDOWN_SIGNAL.load(Ordering::Relaxed) {
+                break;
+            }
         }
 
         PacketDecoder::Socket{
@@ -157,6 +167,7 @@ impl PacketDecoder {
             counters: ProtocolCounters::default(),
             partial_packet_info: None,
             last_seq_num: 0,
+            read_buffer: vec![0; 1400],
         }
     }
 
@@ -224,15 +235,22 @@ impl PacketDecoder {
                 socket, is_eof,
                 partial_packet_info,
                 last_seq_num,
-                counters
+                counters,
+                read_buffer,
             } => unsafe {
                 if *is_eof {
                     return Err(PacketReadError::Eof);
                 }
 
-                let mut buf = vec![0; 1400];
-                let new_packet_sz = socket.recv(&mut buf)?;
-                let packet = &buf[..new_packet_sz];
+                #[cfg(feature="self-tracing")]
+                let g = sparkles_macro::range_event_start!("Recv packet");
+                let new_packet_sz = socket.recv(read_buffer)?;
+                #[cfg(feature="self-tracing")]
+                drop(g);
+                #[cfg(feature="self-tracing")]
+                let g = sparkles_macro::range_event_start!("Decode packet");
+                
+                let packet = &read_buffer[..new_packet_sz];
                 if new_packet_sz < 32 + 3 {
                     warn!("[PacketDecoder] Udp packet too short! Ignoring...");
                     return Err(PacketReadError::UdpPacketTooShort);
@@ -289,10 +307,21 @@ impl PacketDecoder {
                                     }
                                     if flags.contains(PacketFlags::PacketEnd) {
                                         info!("It was last chunk, building packet...");
+                                        #[cfg(feature="self-tracing")]
+                                        let g = sparkles_macro::range_event_start!("Building long packet");
+                                        #[cfg(feature="self-tracing")]
+                                        let g = sparkles_macro::range_event_start!("Assemple packet");
                                         let long_packet_data = udp_state.build();
+                                        #[cfg(feature="self-tracing")]
+                                        drop(g);
                                         *partial_packet_info = None;
                                         if let Some(data) = long_packet_data {
-                                            (Some(parse_packet_from_data(packet_type, &data)?), data_len)
+                                            #[cfg(feature="self-tracing")]
+                                            let g = sparkles_macro::range_event_start!("Parse trace packet");
+                                            let res = parse_packet_from_data(packet_type, &data)?;
+                                            #[cfg(feature="self-tracing")]
+                                            drop(g);
+                                            (Some(res), data_len)
                                         }
                                         else {
                                             warn!("Some chunks of long packet are missing! Skipping...");
