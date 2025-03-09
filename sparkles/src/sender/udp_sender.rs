@@ -122,10 +122,10 @@ impl Sender for UdpSender {
             packet_buf.clear();
             size += chunk.len();
             
-            // Throttle sending
-            // if size % 100_000 > 100_000 - SHORT_PACKET_SIZE {
-            //     thread::sleep(Duration::from_micros(100));
-            // }
+            // Throttle sending to roughly 60MB/s
+            if size % 10_000 > 10_000 - SHORT_PACKET_SIZE {
+                thread::sleep(Duration::from_micros(100));
+            }
         }
         // Special case 
         if data.is_empty() {

@@ -1,8 +1,11 @@
 # Sparkles parser
 
-Library for parsing sparkles byte stream.
+Library for parsing [sparkles](https://crates.io/crates/sparkles) trace data.
 
-After trace information is recorded to `*.sprk` file, you need to convert it to the perfetto format.
+Tracing information can be either saved to file or transmitted over UDP socket.
+These two flavors of sparkles tracing data protocol can be parsed and converted to Perfetto format file using this library.
+
+Files compatible with Perfetto format can be easily viewed in browser on the [Perfetto](https://ui.perfetto.dev) website.
 
 ## ✧ Installation
 ```bash
@@ -10,16 +13,19 @@ cargo install sparkles-parser
 ```
 
 Two binaries are included
-## ✧ interactive
-Used for default sparkles configuration. Opens director `trace` and begin parsing the latest saved file.
+## ✧ sparkles-parse-and-save
+Used for default sparkles configuration. 
+It will open directory `trace` and parse the latest saved file, or parse specific file provided as an argument.
 
 The result is saved with filename `trace.perf`
 
-## ✧ single-file
-A single command line argument is required: sparkles trace filename.
+## ✧ sparkles-udp-parse-and-save
+Application need to enable udp sender in config first.
+Connect to running application and collect tracing data over UDP until it is finished.
+If you want to interrupt tracing data collection early, just press Ctrl-C.
 
 The result is saved with filename `trace.perf`
 
 ## ✧ How to use
-Run one of described binaries to convert `*.sprk` sparkles event stream file to the Perfetto protobuf format.
-Navigate to https://ui.perfetto.dev/ to open the generated file.
+Run one of described binaries to generate Perfetto protobuf format file.
+Navigate to https://ui.perfetto.dev/ and drag'n'drop generated file.
