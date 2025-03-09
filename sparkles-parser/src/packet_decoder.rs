@@ -440,7 +440,7 @@ fn parse_packet_from_data(packet_type: PacketType, data: &[u8]) -> ReadResult<Pa
             Ok(Packet::DataBytes(res))
         }
         PacketType::FailedPages => {
-            let (failed_pages, sz) = bincode::decode_from_slice(&data, bincode_config())?;
+            let (failed_pages, sz) = bincode::decode_from_slice(data, bincode_config())?;
             if sz != data.len() {
                 warn!("[PacketDecoder] Assertion failed! FailedPages packet size mismatch!");
             }

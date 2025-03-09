@@ -6,7 +6,7 @@
 
 use std::hint::black_box;
 use std::{env, thread};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use log::{info, LevelFilter};
 use simple_logger::SimpleLogger;
 use sparkles::config::SparklesConfig;
