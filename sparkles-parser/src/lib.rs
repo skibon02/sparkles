@@ -1,3 +1,4 @@
+#[cfg(feature="perfetto")]
 mod perfetto_format;
 pub mod tracing_decoder;
 pub mod parsed;
@@ -6,11 +7,10 @@ pub mod packet_decoder;
 use std::collections::BTreeMap;
 use std::ops::Deref;
 use std::rc::Rc;
-use std::{mem, thread};
+use std::thread;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
-use bytes::BytesMut;
 use log::{debug, error, info, warn};
 use sparkles_core::consts::PROTOCOL_VERSION;
 use sparkles_core::local_storage::id_mapping::EventType;
@@ -18,7 +18,6 @@ use sparkles_core::protocol::headers::SparklesMachineInfo;
 use crate::packet_decoder::{Packet, PacketDecoder, PacketReadError, ProtocolCounters};
 use crate::parsed::{ParsedEvent, ThreadInfoState};
 use crate::tracing_decoder::StreamFrameDecoder;
-use crate::perfetto_format::PerfettoTraceFile;
 
 pub static PARSER_BUF_SIZE: usize = 1_000_000;
 static SHUTDOWN_SIGNAL: AtomicBool = AtomicBool::new(false);
@@ -448,7 +447,10 @@ impl SparklesParser {
 
     /// Continuously pull events until EOF.
     /// Decode incoming events and save them to `trace.json` in Perfetto format
-    pub fn parse_and_convert_to_perfetto(&mut self, packet_decoder: PacketDecoder) -> ParseResult<BytesMut> {
+    #[cfg(feature="perfetto")]
+    pub fn parse_and_convert_to_perfetto(&mut self, packet_decoder: PacketDecoder) -> ParseResult<bytes::BytesMut> {
+        use crate::perfetto_format::PerfettoTraceFile;
+
         let mut trace_res_file = PerfettoTraceFile::new();
         self.parse_to_end(packet_decoder, |ev, thread_info| {
             let thread_id = thread_info.thread_id.unwrap_or(999);
@@ -485,7 +487,7 @@ impl SparklesParser {
         })?;
 
         if cfg!(feature="local-packet-bounds") {
-            for (global_i, local_i, thread_ord_id, start,end) in mem::take(&mut self.local_packet_ranges).into_iter() {
+            for (global_i, local_i, thread_ord_id, start,end) in std::mem::take(&mut self.local_packet_ranges).into_iter() {
                 trace_res_file.add_range_event(&format!("Local packet #{global_i}.{local_i}"), 999666 + thread_ord_id, start, end);
             }
         }

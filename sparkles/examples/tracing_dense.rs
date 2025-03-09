@@ -39,7 +39,7 @@ fn main() {
     SimpleLogger::new().init().unwrap();
     let finalize_guard = sparkles::init(
         SparklesConfig::default()
-            // .with_udp_sender(38338)
+            // .with_udp_sender(38338) // Uncomment this to enable UDP sender
     );
     
     // Only relevant if using UDP sender

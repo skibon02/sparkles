@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 
 The format is partially based on [Keep a Changelog](http://keepachangelog.com/)
 
-# Version numbering
+## Version numbering
 For `sparkles` and `sparkles-parser` version number is adjusted without strict rules or guarantees.  
 `sparkles-core` have the same version number as `sparkles`.  
 For protocol used by both crates there are some guarantees based on version number:
@@ -11,16 +11,18 @@ For protocol used by both crates there are some guarantees based on version numb
 - When major proto version is the same, but decoder's minor version is lower than encoder's, correct parsing is not guaranteed.
 - When major proto version is the same, but decoder's minor version is higher or equal than encoder's, correct parsing is guaranteed.
 
-## [0.1.0] sparkles-parser (proto-1.0) - 2025-03-09
+## Versions
+### [0.1.0] sparkles-parser (proto-1.0) - 2025-03-09
 - New protocol version: 1.0
 
-## [0.1.5] sparkles (proto-1.0)- 2025-03-09
+### [0.1.5] sparkles (proto-1.0) - 2025-03-09
 - New protocol version: 1.0
 
-## [proto-1.0]
+### [proto-1.0]
+- something
 
 
-## [0.1.4] - 2024-09-28
+### [0.1.4] - 2024-09-28
 - [sparkles] Added file saving support
 - [sparkles] **[WIP]** Added UDP sender support with configuration 
 - [sparkles] Add sender config to SparklesConfig
@@ -35,7 +37,7 @@ For protocol used by both crates there are some guarantees based on version numb
 - [sparkles-parser] Add small offset when several events recorded with the same timestamp
 
 
-## [0.1.3] - 2024-09-23
+### [0.1.3] - 2024-09-23
 - [sparkles-core] New: Add configuration structures: `SparklesConfig` and `LocalStorageConfig`
 - [sparkles-core] Fix: Add distinction between events with the same name but different categories
 - [sparkles-core] `ThreadInfo` is now a part of `LocalPacketHeader`
@@ -46,11 +48,11 @@ For protocol used by both crates there are some guarantees based on version numb
 - [sparkles] New: Two init options: `init` and `init_default`
 - [sparkles] Send 0x00 packet with timestamp frequency at the beginning of the stream
 
-## [0.1.2] - 2024-09-20
+### [0.1.2] - 2024-09-20
 
 Baseline version of the project.
 
-### Features
+Features:
 - Instant and Range events are supported.
 - Events are streamed to receiving app over TCP.
 - Events are saved to JSON file (Perfetto format).

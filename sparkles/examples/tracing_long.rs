@@ -44,7 +44,7 @@ fn perform_tracing() {
 fn main() {
     SimpleLogger::new().with_level(LevelFilter::Info).init().unwrap();
     let finalize_guard = sparkles::init(SparklesConfig::default()
-        // .with_udp_sender(38338)
+        // .with_udp_sender(38338) // Uncomment this to enable UDP sender
         .with_flush_threshold(4096)
         .with_thread_flush_threshold(8092)
     );

@@ -9,7 +9,7 @@ Files compatible with Perfetto format can be easily viewed in browser on the [Pe
 
 ## ✧ Installation
 ```bash
-cargo install sparkles-parser
+cargo install sparkles-parser --features bin-deps
 ```
 
 Two binaries are included
@@ -29,3 +29,13 @@ The result is saved with filename `trace.perf`
 ## ✧ How to use
 Run one of described binaries to generate Perfetto protobuf format file.
 Navigate to https://ui.perfetto.dev/ and drag'n'drop generated file.
+
+## Crate features
+✧ **local-packet-bounds** - Add received packet bounds to the result  
+✧ **self-tracing** - Add event receive and parse events to the result  
+✧ **perfetto** - Add saving in perfetto format method to the library
+✧ **bin-deps** - Should not be used if you are using library
+
+｡ﾟﾟ･｡･ﾟﾟ｡  
+ﾟ。SkyGrel19 ✨  
+　ﾟ･｡･

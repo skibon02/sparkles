@@ -4,14 +4,16 @@
 //! 2. Use this tool to parse latest trace file in this folder: `sparkles-parse-and-save`
 //! 3. Go to https://ui.perfetto.dev/ and drag'n'drop generated `trace.perf` file
 
-use std::io::Write;
-use std::path::PathBuf;
-use log::{error, info, LevelFilter};
-use simple_logger::SimpleLogger;
-use clap::{Args, Parser};
-use sparkles_parser::packet_decoder::PacketDecoder;
-use sparkles_parser::SparklesParser;
-#[derive(Parser)]
+#[cfg(not(feature="bin-deps"))]
+compile_error!("
+
+Sparkles parser binaries should be installed with feature bin-deps:
+   cargo install sparkles-parser --features bin-deps
+
+");
+
+#[cfg(feature="bin-deps")]
+#[derive(clap::Parser)]
 #[command(name = "Sparkles file parser")]
 #[command(about = "Parse sparkles trace file and convert it to Perfetto format for viewing in the browser.
 Run without arguments to parse the latest trace file in the `trace` folder.")]
@@ -30,17 +32,27 @@ struct Cli {
 }
 
 
-#[derive(Args)]
+#[cfg(feature="bin-deps")]
+#[derive(clap::Args)]
 #[group(required = false, multiple = false)]
 struct InputMode {
     #[arg(short, long, help="Use this to parse specific file")]
-    file: Option<PathBuf>,
+    file: Option<std::path::PathBuf>,
     #[arg(short, long, help="Use this to parse latest file in the provided directory (Default)")]
-    dir: Option<PathBuf>,
+    dir: Option<std::path::PathBuf>,
 
 }
 
+#[cfg(feature="bin-deps")]
 fn main() {
+    use simple_logger::SimpleLogger;
+    use std::io::Write;
+    use std::path::PathBuf;
+    use log::{error, info, LevelFilter};
+    use sparkles_parser::packet_decoder::PacketDecoder;
+    use sparkles_parser::SparklesParser;
+    use clap::Parser;
+
 
     sparkles_parser::version();
     let cli = Cli::parse();
@@ -122,3 +134,6 @@ fn main() {
     res_file.write_all(&data).unwrap();
     println!("\nYour `{}` is ready! Now, navigate to https://ui.perfetto.dev/ and drag'n'drop the file onto the page.", cli.output);
 }
+
+#[cfg(not(feature="bin-deps"))]
+fn main() {}

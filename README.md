@@ -116,14 +116,14 @@ TODO:
 ## Known issues and limitations
 ✧ Converting timestamp to nanosecond time only have local consistency. Long sessions (day and more) can go out of sync with system clock.  
 ✧ Currently can have only 256 unique event names per thread  
-✧ Currently up to 256 opened but not closed ranges at a time are supported  
+✧ Currently up to 256 opened but not closed ranges at a time are supported (mostly enough)  
 ✧ No std support for now  
-✧ Naive handling for bad network conditions: if at least one packet lost, the whole tracing data packet is dropped.
+✧ Naive handling for bad network conditions: if at least one packet lost, the whole tracing data packet is dropped.  
 ✧ Cannot specify UDP address to listen on  
 ✧ Proper using of sparkles-macro::range_event_start!("name") gives warning
 
 ## Crate features
-✧ **accurate-timestamps-x86** - Enable serialization for x86/x86_64 timestamps  
+✧ **accurate-timestamps-x86** - Enable serialization for x86/x86_64 timestamps. Trade off timestamp accuracy for higher overhead (slightly).  
 ✧ **self-tracing** - Add global buffer flushing events
 
 ｡ﾟﾟ･｡･ﾟﾟ｡  

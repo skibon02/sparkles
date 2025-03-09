@@ -17,7 +17,7 @@ fn main() {
     // flush them to the destination when the main thread finished
     let finalize_guard = sparkles::init(
         SparklesConfig::default()
-        // .with_udp_sender(38338)
+        // .with_udp_sender(38338) // Uncomment this to enable UDP sender
     );
     
     // If you use UDP sender, you can wait for client connection

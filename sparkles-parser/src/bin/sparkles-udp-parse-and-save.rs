@@ -4,14 +4,16 @@
 //! 2. Use this tool to subscribe to live tracing events, and save them to file when your program is finished: `sparkles-udp-parse-and-save`
 //! 3. Go to https://ui.perfetto.dev/ and drag'n'drop generated `trace.perf` file
 
-use std::io::Write;
-use clap::Parser;
-use log::{info, LevelFilter};
-use simple_logger::SimpleLogger;
-use sparkles_parser::packet_decoder::PacketDecoder;
-use sparkles_parser::{is_shutting_down, request_shutdown, SparklesParser};
+#[cfg(not(feature="bin-deps"))]
+compile_error!("
 
-#[derive(Parser)]
+Sparkles parser binaries should be installed with feature bin-deps:
+   cargo install sparkles-parser --features bin-deps
+
+");
+
+#[cfg(feature="bin-deps")]
+#[derive(clap::Parser)]
 #[command(name = "Sparkles UDP parser")]
 #[command(about = "Collect sparkles trace data from UDP socket and save it in Perfetto format for viewing in the browser.")]
 struct Cli {
@@ -28,7 +30,15 @@ struct Cli {
     silent: bool,
 }
 
+#[cfg(feature="bin-deps")]
 fn main() {
+    use std::io::Write;
+    use clap::Parser;
+    use log::{info, LevelFilter};
+    use simple_logger::SimpleLogger;
+    use sparkles_parser::packet_decoder::PacketDecoder;
+    use sparkles_parser::{is_shutting_down, request_shutdown, SparklesParser};
+
 
     sparkles_parser::version();
     let cli = Cli::parse();
@@ -62,3 +72,6 @@ fn main() {
     res_file.write_all(&data).unwrap();
     println!("\nYour `{}` is ready! Now, navigate to https://ui.perfetto.dev/ and drag'n'drop the file onto the page.", cli.output);
 }
+
+#[cfg(not(feature="bin-deps"))]
+fn main() {}
