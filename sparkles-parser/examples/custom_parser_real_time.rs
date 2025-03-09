@@ -4,7 +4,7 @@ use sparkles_parser::packet_decoder::PacketDecoder;
 use sparkles_parser::SparklesParser;
 
 fn main() {
-    SimpleLogger::new().with_level(LevelFilter::Debug).init().unwrap();
+    SimpleLogger::new().with_level(LevelFilter::Info).init().unwrap();
 
     info!("Waiting for connection to 127.0.0.1:38338...");
     let decoder = PacketDecoder::from_socket("127.0.0.1:38338");

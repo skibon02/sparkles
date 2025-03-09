@@ -2,6 +2,7 @@ use alloc::string::{String, ToString};
 use bincode::{Decode, Encode};
 use crate::local_storage::id_mapping::IdMapping;
 use crate::{Timestamp, TimestampProvider};
+use crate::consts::PROTOCOL_VERSION;
 
 /// This header describe byte buffer filled with encoded sparkles events.
 /// This header is thread-local. Each thread events packet has its own header and buffer.
@@ -27,7 +28,7 @@ pub struct ThreadInfo {
 
 #[derive(Encode, Decode, Clone, Debug)]
 pub struct SparklesMachineInfo {
-    pub ver: u32,
+    pub ver: (u8, u8),
     pub process_name: String,
     pub pid: u32,
     pub timestamp_max_value: u64
@@ -38,7 +39,7 @@ impl SparklesMachineInfo {
         Self {
             pid,
             process_name,
-            ver: crate::consts::ENCODER_VERSION,
+            ver: PROTOCOL_VERSION,
             timestamp_max_value: Timestamp::MAX_VALUE,
         }
     }
@@ -49,7 +50,7 @@ impl Default for SparklesMachineInfo {
         Self {
             process_name: "unknown".to_string(),
             pid: 0,
-            ver: crate::consts::ENCODER_VERSION,
+            ver: PROTOCOL_VERSION,
             timestamp_max_value: Timestamp::MAX_VALUE,
         }
     }

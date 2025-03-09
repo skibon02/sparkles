@@ -1,10 +1,24 @@
 # Change Log
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](http://keepachangelog.com/)
+The format is partially based on [Keep a Changelog](http://keepachangelog.com/)
 
-## [0.1.5] [sparkles-parser-0.1.0] - 2025-03-06
-- ...
+# Version numbering
+For `sparkles` and `sparkles-parser` version number is adjusted without strict rules or guarantees.  
+`sparkles-core` have the same version number as `sparkles`.  
+For protocol used by both crates there are some guarantees based on version number:
+- When major proto version is different for encoder and decoder, correct parsing is not guaranteed.
+- When major proto version is the same, but decoder's minor version is lower than encoder's, correct parsing is not guaranteed.
+- When major proto version is the same, but decoder's minor version is higher or equal than encoder's, correct parsing is guaranteed.
+
+## [0.1.0] sparkles-parser (proto-1.0) - 2025-03-09
+- New protocol version: 1.0
+
+## [0.1.5] sparkles (proto-1.0)- 2025-03-09
+- New protocol version: 1.0
+
+## [proto-1.0]
+
 
 ## [0.1.4] - 2024-09-28
 - [sparkles] Added file saving support
@@ -17,7 +31,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 - [sparkles-core] aarch64 timestamps support
 - [sparkles-core] Add `try_flush` and `is_buffer_available` to the global storage ref.
 - [sparkles-core] Add soft flushing threshold for thread local storage.
-- [encoder format] Add ticks_per_sec packet type
+- [protocol] Add ticks_per_sec packet type
 - [sparkles-parser] Add small offset when several events recorded with the same timestamp
 
 

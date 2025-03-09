@@ -6,27 +6,41 @@ license = "Apache-2.0"
 description = "Parser for sparkles tracing library"
 repository = "https://github.com/skibon02/sparkles"
 
+[[bin]]
+name="sparkles-parse-and-save"
+required-features = ["bin-deps"]
+
+[[bin]]
+name="sparkles-udp-parse-and-save"
+required-features = ["bin-deps"]
+
 [dependencies]
 log = "0.4.22"
-lazy_static = "1.5.0"
 bincode = "2.0.0-rc.3"
 sparkles-core = { version = "0.1.4", path = "../sparkles-core" }
 ringbuf = "0.4.7"
 thiserror = "2.0.11"
 chrono = "0.4.39"
-prost = "0.13.5"
 bytes = "1.10.0"
 rand = "0.9.0"
-simple_logger = "5.0.0"
-smallvec = "1.14.0"
 enumset = { version = "1.1.5", features = ["std"] }
+
+# optional
+prost = { version="0.13.5", optional = true }
 sparkles = { version = "0.1.5", path = "../sparkles", default-features = false, optional = true }
 sparkles-macro = { version = "0.1.4", optional = true }
-ctrlc = "3.4.5"
+
+# bin only
+simple_logger = { version = "5.0.0", optional = true }
+ctrlc = { version = "3.4.5", optional = true }
+clap = { version = "4.5.31", features = ["derive"], optional = true }
 
 [build-dependencies]
 prost-build = "0.13.5"
 
 [features]
+default = []
+perfetto = ["prost"]
+bin-deps = ["simple_logger", "ctrlc", "clap", "perfetto"]
 local-packet-bounds = []
 self-tracing = ["sparkles", "sparkles-macro"]

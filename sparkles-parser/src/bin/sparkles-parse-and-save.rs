@@ -4,20 +4,58 @@
 //! 2. Use this tool to parse latest trace file in this folder: `sparkles-parse-and-save`
 //! 3. Go to https://ui.perfetto.dev/ and drag'n'drop generated `trace.perf` file
 
-use std::env::args;
 use std::io::Write;
 use std::path::PathBuf;
 use log::{error, info, LevelFilter};
 use simple_logger::SimpleLogger;
+use clap::{Args, Parser};
 use sparkles_parser::packet_decoder::PacketDecoder;
 use sparkles_parser::SparklesParser;
+#[derive(Parser)]
+#[command(name = "Sparkles file parser")]
+#[command(about = "Parse sparkles trace file and convert it to Perfetto format for viewing in the browser.
+Run without arguments to parse the latest trace file in the `trace` folder.")]
+struct Cli {
+    #[command(flatten)]
+    input: InputMode,
+
+    #[arg(short, long, default_value = "trace.perf", help="Output file name")]
+    output: String,
+    
+    #[arg(short, long)]
+    version: bool,
+
+    #[arg(short, long)]
+    silent: bool,
+}
+
+
+#[derive(Args)]
+#[group(required = false, multiple = false)]
+struct InputMode {
+    #[arg(short, long, help="Use this to parse specific file")]
+    file: Option<PathBuf>,
+    #[arg(short, long, help="Use this to parse latest file in the provided directory (Default)")]
+    dir: Option<PathBuf>,
+
+}
 
 fn main() {
-    SimpleLogger::new().with_level(LevelFilter::Info).init().unwrap();
 
-    let filename = args().nth(1);
-    let found_filename = if let Some(filename) = filename {
-        info!("Using path from argument: {}", filename);
+    sparkles_parser::version();
+    let cli = Cli::parse();
+    if cli.version {
+        return;
+    }
+    if !cli.silent {
+        SimpleLogger::new().with_level(LevelFilter::Info).init().unwrap();
+    }
+    else {
+        SimpleLogger::new().with_level(LevelFilter::Warn).init().unwrap();
+    }
+
+    let found_filename = if let Some(filename) = cli.input.file {
+        info!("Using file path from argument: {:?}", filename);
         if let Ok(meta) = std::fs::metadata(&filename) {
             if !meta.is_file() {
                 error!("Provided path is not a file!");
@@ -30,21 +68,22 @@ fn main() {
         PathBuf::from(filename)
     }
     else {
-        info!("No argument provided! Using latest trace file from `trace` directory");
+        let dir = cli.input.dir.unwrap_or("trace".into());
+        info!("Searching for the latest trace file in `{:?}` directory", dir);
         
         // 1. check directory trace
-        if let Ok(meta) = std::fs::metadata("trace") {
+        if let Ok(meta) = std::fs::metadata(dir.clone()) {
             if !meta.is_dir() {
-                error!("`./trace` is not a directory");
+                error!("`./{dir:?}` is not a directory");
                 return;
             }
         } else {
-            error!("`trace` directory was not found!");
+            error!("`{dir:?}` directory was not found!");
             return;
         }
         
         // 2. list all files in trace, decode datetime from filename
-        let files = std::fs::read_dir("trace").unwrap();
+        let files = std::fs::read_dir(dir).unwrap();
         let mut trace_files = Vec::new();
         for file in files {
             let file = file.unwrap();
@@ -79,7 +118,7 @@ fn main() {
     // 3. parse the newest file
     info!("Begin parsing...");
     let data = SparklesParser::new().parse_and_convert_to_perfetto(decoder).unwrap();
-    let mut res_file = std::fs::File::create("trace.perf").unwrap();
+    let mut res_file = std::fs::File::create(cli.output.clone()).unwrap();
     res_file.write_all(&data).unwrap();
-    info!("Your `trace.perf` is ready! Now, navigate to https://ui.perfetto.dev/ and drag'n'drop the file onto the page.");
+    println!("\nYour `{}` is ready! Now, navigate to https://ui.perfetto.dev/ and drag'n'drop the file onto the page.", cli.output);
 }

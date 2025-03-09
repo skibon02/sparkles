@@ -1,5 +1,4 @@
 mod perfetto_format;
-mod consts;
 pub mod tracing_decoder;
 pub mod parsed;
 pub mod packet_decoder;
@@ -13,6 +12,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use bytes::BytesMut;
 use log::{debug, error, info, warn};
+use sparkles_core::consts::PROTOCOL_VERSION;
 use sparkles_core::local_storage::id_mapping::EventType;
 use sparkles_core::protocol::headers::SparklesMachineInfo;
 use crate::packet_decoder::{Packet, PacketDecoder, PacketReadError, ProtocolCounters};
@@ -26,6 +26,9 @@ static SHUTDOWN_SIGNAL: AtomicBool = AtomicBool::new(false);
 pub fn request_shutdown() {
     SHUTDOWN_SIGNAL.store(true, std::sync::atomic::Ordering::SeqCst);
     info!("Shutdown requested...")
+}
+pub fn is_shutting_down() -> bool {
+    SHUTDOWN_SIGNAL.load(std::sync::atomic::Ordering::SeqCst)
 }
 
 pub struct SparklesParser {
@@ -217,8 +220,12 @@ impl SparklesParser {
     pub fn parse_single_packet(&mut self, packet: Packet, f: &mut impl FnMut(&ParsedEvent, &ThreadInfoState)) {
         match packet {
             Packet::MachineInfo(info) => {
-                if info.ver != consts::ENCODER_VERSION {
-                    warn!("Encoder version mismatch! Parser: {}, Encoder: {}", consts::ENCODER_VERSION, info.ver);
+                if info.ver.0 != PROTOCOL_VERSION.0 {
+                    error!("Protocol major version mismatch! Parser: {}, Sender: {}", PROTOCOL_VERSION.0, info.ver.0);
+                }
+                else if info.ver.1 < PROTOCOL_VERSION.1 {
+                    warn!("Sender protocol version is higher than parser! Parser: {}.{}, Sender: {}.{}",
+                        info.ver.0, PROTOCOL_VERSION.1, info.ver.0, info.ver.1)
                 }
 
                 self.machine_info = Some(info);
@@ -505,4 +512,9 @@ pub enum TracingEvent {
     Instant(TracingEventId, u64),
     RangePart(TracingEventId, u64, u8),
     UnnamedRangeEnd(u64, u8)
+}
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub fn version() {
+    println!("Sparkles-parser v{VERSION}");
+    println!("  Using sparkles protocol version {}.{}", PROTOCOL_VERSION.0, PROTOCOL_VERSION.1);
 }
