@@ -980,7 +980,7 @@ dependencies = [
  "ringbuf",
  "simple_logger",
  "sparkles-core",
- "sparkles-macro 0.1.4",
+ "sparkles-macro 0.1.5",
  "thread-id",
 ]
 
@@ -997,6 +997,8 @@ dependencies = [
 [[package]]
 name = "sparkles-macro"
 version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91cbcb007a523c376315b119a719316afd210a7e4d365e0d123efacff8838ac1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1005,9 +1007,7 @@ dependencies = [
 
 [[package]]
 name = "sparkles-macro"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91cbcb007a523c376315b119a719316afd210a7e4d365e0d123efacff8838ac1"
+version = "0.1.5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1032,7 +1032,7 @@ dependencies = [
  "simple_logger",
  "sparkles",
  "sparkles-core",
- "sparkles-macro 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sparkles-macro 0.1.4",
  "thiserror",
 ]
 
