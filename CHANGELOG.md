@@ -13,7 +13,8 @@ For protocol used by both crates there are some guarantees based on version numb
 
 ## Versions
 ### [Unreleased] sparkles-parser
-- UDP: implement seq_num wraparound case, find better approach for UDP handling
+- implement seq_num wraparound case in UDP parsing, find better approach for UDP handling
+- TODO: add BarChart GUI example
 
 ### [Unreleased] sparkles
 - Allow UDP client reconnection (e.g. after address/port change)
