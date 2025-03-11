@@ -2,7 +2,7 @@ use std::{io, thread};
 use std::io::{BufRead, Read};
 use std::net::{ToSocketAddrs, UdpSocket};
 use std::sync::atomic::Ordering;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use enumset::EnumSet;
 use log::{debug, info, warn};
 use thiserror::Error;
@@ -49,6 +49,7 @@ pub enum PacketDecoder {
         partial_packet_info: Option<UdpParserState>,
         
         read_buffer: Vec<u8>,
+        last_recv_time: Option<Instant>,
     }
 }
 
@@ -111,8 +112,8 @@ pub enum PacketReadError {
     UdpPacketTooShort,
     #[error("Incorrect packet type pattern")]
     IncorrectPattern,
-    #[error("Out of order sequence number")]
-    OutOfOrderSeqNum,
+    #[error("The same seq num was received twice!")]
+    RepeatedSeqNum,
     #[error("Incomplete long packet")]
     IncompleteLongPacket,
 }
@@ -168,6 +169,7 @@ impl PacketDecoder {
             partial_packet_info: None,
             last_seq_num: 0,
             read_buffer: vec![0; 1400],
+            last_recv_time: None,
         }
     }
 
@@ -237,6 +239,7 @@ impl PacketDecoder {
                 last_seq_num,
                 counters,
                 read_buffer,
+                last_recv_time,
             } => unsafe {
                 if *is_eof {
                     return Err(PacketReadError::Eof);
@@ -245,6 +248,8 @@ impl PacketDecoder {
                 #[cfg(feature="self-tracing")]
                 let g = sparkles_macro::range_event_start!("Recv packet");
                 let new_packet_sz = socket.recv(read_buffer)?;
+                let recv_time = Instant::now();
+                let dur_since_last_packet = last_recv_time.map(|t| recv_time - t);
                 #[cfg(feature="self-tracing")]
                 drop(g);
                 #[cfg(feature="self-tracing")]
@@ -264,102 +269,95 @@ impl PacketDecoder {
                 let seq_num = u16::from_be_bytes(packet[32..34].try_into().unwrap());
                 counters.protocol_overhead += 2;
 
-                if *last_seq_num < u16::MAX - 100 {
-                    match seq_num.cmp(&(*last_seq_num)) {
-                        std::cmp::Ordering::Less => {
-                            warn!("[PacketDecoder] Udp packet sequence number out of order! Ignoring...");
-                            Err(PacketReadError::OutOfOrderSeqNum)
-                        }
-                        std::cmp::Ordering::Equal => {
-                            warn!("[PacketDecoder] Udp packet sequence number repeated! Ignoring...");
-                            Err(PacketReadError::OutOfOrderSeqNum)
-                        }
-                        std::cmp::Ordering::Greater => {
-                            if seq_num > *last_seq_num + 1 {
-                                let lost_cnt = seq_num - *last_seq_num - 1;
-                                warn!("[PacketDecoder] We lost {} packets!", lost_cnt);
-                            }
-                            *last_seq_num = seq_num;
 
-                            let flags = EnumSet::from_repr_unchecked(packet[34]);
-                            counters.protocol_overhead += 1;
-                            let (res, data_len) = if flags.contains(PacketFlags::ShortPacket) {
-                                let data = &packet[35..];
-                                let data_len = data.len();
+                if dur_since_last_packet.is_none_or(|d| d > Duration::from_secs(10)) {
+                }
+                else if seq_num == *last_seq_num {
+                    warn!("[PacketDecoder] Udp packet sequence number repeated! Ignoring...");
+                    return Err(PacketReadError::RepeatedSeqNum)
+                }
+                *last_seq_num = seq_num;
+                *last_recv_time = Some(recv_time);
 
-                                if partial_packet_info.is_some() {
-                                    warn!("[PacketDecoder] Resetting partial packet info!");
-                                    *partial_packet_info = None;
-                                }
-                                (Some(parse_packet_from_data(packet_type, data)?), data_len)
-                            }
-                            else {
-                                let chunk_num = packet[35];
-                                let data = &packet[36..];
-                                let data_len = data.len();
+                let seq_num_is_incremented = (*last_seq_num).wrapping_add(1) == seq_num;
+                let lost_packets = (*last_seq_num).wrapping_sub(seq_num).wrapping_sub(1);
+                if !seq_num_is_incremented && lost_packets < u16::MAX - 1_000 {
+                    warn!("[PacketDecoder] We lost {} packets!", seq_num.wrapping_sub(*last_seq_num) - 1);
+                }
 
+                // Handle received packet
+                let flags = EnumSet::from_repr_unchecked(packet[34]);
+                counters.protocol_overhead += 1;
+                let (res, data_len) = if flags.contains(PacketFlags::ShortPacket) {
+                    let data = &packet[35..];
+                    let data_len = data.len();
 
-                                if let Some(udp_state) = partial_packet_info {
-                                    // info!("Long packet: chunk {chunk_num}, data_size: {data_len}");
-                                    if !udp_state.push(chunk_num, data.to_vec()) {
-                                        warn!("[PacketDecoder] Duplicate or incomplete chunks for long packet! Ignoring...");
-                                        return Err(PacketReadError::IncompleteLongPacket);
-                                    }
-                                    if flags.contains(PacketFlags::PacketEnd) {
-                                        info!("It was last chunk, building packet...");
-                                        #[cfg(feature="self-tracing")]
-                                        let g = sparkles_macro::range_event_start!("Building long packet");
-                                        #[cfg(feature="self-tracing")]
-                                        let g = sparkles_macro::range_event_start!("Assemple packet");
-                                        let long_packet_data = udp_state.build();
-                                        #[cfg(feature="self-tracing")]
-                                        drop(g);
-                                        *partial_packet_info = None;
-                                        if let Some(data) = long_packet_data {
-                                            #[cfg(feature="self-tracing")]
-                                            let g = sparkles_macro::range_event_start!("Parse trace packet");
-                                            let res = parse_packet_from_data(packet_type, &data)?;
-                                            #[cfg(feature="self-tracing")]
-                                            drop(g);
-                                            (Some(res), data_len)
-                                        }
-                                        else {
-                                            warn!("Some chunks of long packet are missing! Skipping...");
-                                            return Err(PacketReadError::IncompleteLongPacket)
-                                        }
-                                    }
-                                    else {
-                                        (None, data_len)
-                                    }
-                                }
-                                else {
-                                    if !flags.contains(PacketFlags::PacketStart) {
-                                        warn!("Assertion failed! Udp packet chunk without start flag!");
-                                    }
-                                    *partial_packet_info = Some(UdpParserState::new(chunk_num, data));
-                                    (None, data_len)
-                                }
-                            };
-
-
-                            if packet_type == PacketType::DataBytes {
-                                counters.trace_buf += data_len;
-                            }
-                            else {
-                                counters.secondary_packets += data_len;
-
-                                if packet_type == PacketType::GracefulShutdown {
-                                    *is_eof = true;
-                                }
-                            }
-                            Ok(res)
-                        }
+                    if partial_packet_info.is_some() {
+                        warn!("[PacketDecoder] Resetting partial packet info!");
+                        *partial_packet_info = None;
                     }
+                    (Some(parse_packet_from_data(packet_type, data)?), data_len)
                 }
                 else {
-                    *last_seq_num = 0;
-                    unimplemented!("Seq num wrap-around!");
+                    let chunk_num = packet[35];
+                    let data = &packet[36..];
+                    let data_len = data.len();
+
+
+                    if let Some(udp_state) = partial_packet_info {
+                        // info!("Long packet: chunk {chunk_num}, data_size: {data_len}");
+                        if !udp_state.push(chunk_num, data.to_vec()) {
+                            warn!("[PacketDecoder] Duplicate or incomplete chunks for long packet! Ignoring...");
+                            return Err(PacketReadError::IncompleteLongPacket);
+                        }
+                        if flags.contains(PacketFlags::PacketEnd) {
+                            info!("It was last chunk, building packet...");
+                            #[cfg(feature="self-tracing")]
+                            let g = sparkles_macro::range_event_start!("Building long packet");
+                            #[cfg(feature="self-tracing")]
+                            let g = sparkles_macro::range_event_start!("Assemple packet");
+                            let long_packet_data = udp_state.build();
+                            #[cfg(feature="self-tracing")]
+                            drop(g);
+                            *partial_packet_info = None;
+                            if let Some(data) = long_packet_data {
+                                #[cfg(feature="self-tracing")]
+                                let g = sparkles_macro::range_event_start!("Parse trace packet");
+                                let res = parse_packet_from_data(packet_type, &data)?;
+                                #[cfg(feature="self-tracing")]
+                                drop(g);
+                                (Some(res), data_len)
+                            }
+                            else {
+                                warn!("Some chunks of long packet are missing! Skipping...");
+                                return Err(PacketReadError::IncompleteLongPacket)
+                            }
+                        }
+                        else {
+                            (None, data_len)
+                        }
+                    }
+                    else {
+                        if !flags.contains(PacketFlags::PacketStart) {
+                            warn!("Assertion failed! Udp packet chunk without start flag!");
+                        }
+                        *partial_packet_info = Some(UdpParserState::new(chunk_num, data));
+                        (None, data_len)
+                    }
+                };
+
+
+                if packet_type == PacketType::DataBytes {
+                    counters.trace_buf += data_len;
                 }
+                else {
+                    counters.secondary_packets += data_len;
+
+                    if packet_type == PacketType::GracefulShutdown {
+                        *is_eof = true;
+                    }
+                }
+                Ok(res)
             }
         }
     }

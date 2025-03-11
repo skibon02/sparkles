@@ -8,11 +8,6 @@ use sparkles_core::protocol::packets::{PacketType, RequestPacketType};
 use sparkles_core::protocol::sender::{ConfiguredSender, PacketFlags, Sender};
 use crate::on_client_connect;
 
-static SOMEONE_CONNECTED: AtomicBool = AtomicBool::new(false);
-pub fn is_someone_connected() -> bool {
-    SOMEONE_CONNECTED.swap(false, std::sync::atomic::Ordering::Relaxed)
-}
-
 pub(crate) struct UdpSender {
     socket: UdpSocket,
     dst_addr: Option<SocketAddr>,
@@ -35,15 +30,16 @@ impl UdpSender {
         let mut buf = [0u8; 32];
         match self.socket.recv_from(&mut buf) {
             Ok((32, addr)) if buf == RequestPacketType::Subscribe.pattern() => {
-                info!("[sparkles] UDP client connected: {addr:?}");
+                info!("UDP client connected: {addr:?}");
+                if let Some(addr) = self.dst_addr {
+                    warn!("Forgetting client: {addr}");
+                }
                 self.dst_addr = Some(addr);
-                SOMEONE_CONNECTED.store(true, std::sync::atomic::Ordering::Relaxed);
                 self.last_recv = Some(Instant::now());
                 self.timestamp_freq_request.store(true, std::sync::atomic::Ordering::Relaxed);
                 on_client_connect();
                 
-                self.socket.connect(addr).unwrap();
-                if let Err(e) = self.socket.send(&PacketType::ConnectionAccepted.pattern()) {
+                if let Err(e) = self.socket.send_to(&PacketType::ConnectionAccepted.pattern(), addr) {
                     warn!("[sparkles] Error sending ConnectionAccepted packet to client: {}", e);
                 }
             }
@@ -70,7 +66,7 @@ pub struct UdpSenderConfig {
 
 impl Sender for UdpSender {
     fn send_packet(&mut self, packet_type: PacketType, data: &[&[u8]]) {
-        if self.dst_addr.is_none() || self.last_recv.is_none_or(|i| i.elapsed().as_secs() > 5) {
+        if self.dst_addr.is_none() || self.last_recv.is_none_or(|i| i.elapsed().as_secs() > 2) {
             self.try_recv();
         }
         
@@ -115,7 +111,7 @@ impl Sender for UdpSender {
             // 5) Data
             packet_buf.extend_from_slice(chunk);
             
-            if let Err(e) = self.socket.send(&packet_buf) {
+            if let Err(e) = self.socket.send_to(&packet_buf, dst_addr) {
                 warn!("Error sending packet to client: {}", e);
                 return;
             }
@@ -136,7 +132,7 @@ impl Sender for UdpSender {
             packet_buf.extend_from_slice(&seq_id_bytes);
             let flags = PacketFlags::PacketStart | PacketFlags::PacketEnd | PacketFlags::ShortPacket;
             packet_buf.push(flags.as_u8());
-            if let Err(e) = self.socket.send(&packet_buf) {
+            if let Err(e) = self.socket.send_to(&packet_buf, dst_addr) {
                 warn!("Error sending packet to client: {}", e);
             }
         }

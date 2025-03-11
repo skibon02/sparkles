@@ -12,6 +12,14 @@ For protocol used by both crates there are some guarantees based on version numb
 - When major proto version is the same, but decoder's minor version is higher or equal than encoder's, correct parsing is guaranteed.
 
 ## Versions
+### [Unreleased] sparkles-parser
+- UDP: implement seq_num wraparound case, find better approach for UDP handling
+
+### [Unreleased] sparkles
+- Allow UDP client reconnection (e.g. after address/port change)
+- TODO: Support multiple clients
+- TODO: add reconnection disallow configuration
+
 ### [0.1.5] sparkles (proto-1.0) - 2025-03-09
 - New protocol version: 1.0
 - Config: Now have two options for the destination (file or directory).
