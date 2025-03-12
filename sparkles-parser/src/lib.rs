@@ -5,6 +5,7 @@ pub mod parsed;
 pub mod packet_decoder;
 
 use std::collections::BTreeMap;
+use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
 use std::ops::Deref;
 use std::rc::Rc;
 use std::thread;
@@ -419,10 +420,10 @@ impl SparklesParser {
                     self.thread_parser_state(thread_ord_id).missed_events.push((start, dur));
                 }
             }
-            Packet::GracefulShutdown => {
-            }
-            Packet::ConnectionAccepted => {
-            }
+
+            Packet::GracefulShutdown => {}
+            Packet::ConnectionAccepted => {}
+            Packet::Hello => {}
         }
     }
     pub fn print_stats(&self) {
@@ -510,6 +511,39 @@ impl SparklesParser {
     fn thread_parser_state(&mut self, thread_id: u64) -> &mut ThreadParserState {
         self.event_parsers.entry(thread_id).or_default()
     }
+}
+
+pub fn discover_local_udp_clients() -> std::io::Result<Vec<SocketAddr>> {
+    let socket = UdpSocket::bind("0.0.0.0:0")?;
+    socket.set_nonblocking(true)?;
+
+    let packet = sparkles_core::protocol::packets::RequestPacketType::Discover.pattern();
+    for port in [38338, 38348, 38358] {
+        socket.send_to(&packet, (Ipv4Addr::new(239, 38, 38, 38), port))?;
+    }
+
+    let mut buf = [0; 32];
+    let mut clients = Vec::new();
+    thread::sleep(Duration::from_millis(300));
+    loop {
+        match socket.recv_from(&mut buf) {
+            Ok((len, addr)) => {
+                if len == 32 && buf == sparkles_core::protocol::packets::PacketType::Hello.pattern() {
+                    clients.push(addr);
+                }
+            }
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::WouldBlock {
+                    break;
+                }
+                else {
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    Ok(clients)
 }
 
 pub type TracingEventId = u8;

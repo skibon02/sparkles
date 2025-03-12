@@ -1,4 +1,4 @@
-use std::net::{SocketAddr, UdpSocket};
+use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::thread;
@@ -43,6 +43,13 @@ impl UdpSender {
                     warn!("[sparkles] Error sending ConnectionAccepted packet to client: {}", e);
                 }
             }
+            Ok((32, addr)) if buf == RequestPacketType::Discover.pattern() => {
+                info!("UDP client discovery: {addr:?}");
+                
+                if let Err(e) = self.socket.send_to(&PacketType::Hello.pattern(), addr) {
+                    warn!("[sparkles] Error sending Hello packet to client: {}", e);
+                }
+            }
             Ok(_) => {
                 warn!("[sparkles] Incorrect packet received from client! Ignoring...");
             }
@@ -61,7 +68,8 @@ impl UdpSender {
 const SHORT_PACKET_SIZE: usize = 1300;
 #[derive(Debug, Default, Clone)]
 pub struct UdpSenderConfig {
-    pub local_port: Option<u16>
+    pub local_port: Option<u16>,
+    pub multicast: bool,
 }
 
 impl Sender for UdpSender {
@@ -149,9 +157,34 @@ impl Sender for UdpSender {
 impl ConfiguredSender for UdpSender {
     type Config = UdpSenderConfig;
     fn new(cfg: &Self::Config) -> Option<Self> {
-        let socket = UdpSocket::bind(("0.0.0.0", cfg.local_port.unwrap_or(38338))).ok()?;
+        let socket = if let Some(local_port) = cfg.local_port {
+            UdpSocket::bind(("0.0.0.0", local_port)).ok()?
+        }
+        else {
+            let mut res = None;
+            for port in [38338, 38348, 38358] {
+                match UdpSocket::bind(("0.0.0.0", port)) {
+                    Ok(socket) => {
+                        info!("UDP sender bound to port {}", port);
+                        res = Some(socket);
+                        break;
+                    }
+                    Err(e) => {
+                        warn!("Error binding to port {}: {}", port, e);
+                    }
+                }
+            }
+            
+            res?
+        };
         
         socket.set_nonblocking(true).ok()?;
+        
+        if cfg.multicast {
+            let _ = socket.join_multicast_v4(&Ipv4Addr::new(239, 38, 38, 38), &Ipv4Addr::UNSPECIFIED).inspect_err(|e| {
+                warn!("Error joining multicast group: {}", e);
+            });
+        }
 
         Some(Self {
             socket,

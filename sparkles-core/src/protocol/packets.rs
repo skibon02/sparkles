@@ -11,6 +11,7 @@ pub enum PacketType {
     TimestampFreq,
     GracefulShutdown,
     ConnectionAccepted,
+    Hello,
 }
 
 impl PacketType {
@@ -22,7 +23,8 @@ impl PacketType {
             PacketType::FailedPages => "FailedPages",
             PacketType::TimestampFreq => "TimestampFreq",
             PacketType::GracefulShutdown => "GracefulShutdown",
-            PacketType::ConnectionAccepted => "ConnectionAccepted"
+            PacketType::ConnectionAccepted => "ConnectionAccepted",
+            PacketType::Hello => "Hello",
         }
     }
     pub const fn pattern(&self) -> [u8; 32] {
@@ -55,11 +57,13 @@ impl PacketType {
 #[derive(Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum RequestPacketType {
+    Discover,
     Subscribe,
 }
 impl RequestPacketType {
     pub const fn get_str(&self) -> &str {
         match self {
+            RequestPacketType::Discover => "Discover",
             RequestPacketType::Subscribe => "Subscribe",
         }
     }

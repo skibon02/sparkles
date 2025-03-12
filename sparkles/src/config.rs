@@ -146,26 +146,37 @@ impl SparklesConfig {
         self
     }
 
-    /// Allow sending trace data over udp.
-    /// Default UDP port: 38338
+    /// Enable UDP sender with default port.
+    /// Default UDP ports: 38338, 38348, 38358
     ///
     /// Default: disabled
     #[must_use]
     pub fn with_default_udp_sender(mut self) -> Self {
-        self.udp_sender_config = Some(Default::default());
+        self.udp_sender_config.get_or_insert_default().local_port = None;
         self
     }
 
-    /// Allow sending trace data over udp.
-    /// Default UDP port: 38338
+    /// Enable UDP sender with custom port.
+    /// Do not use it with multicast.
     ///
     /// Default: disabled
     #[must_use]
     pub fn with_udp_sender(mut self, port: u16) -> Self {
-        let config = UdpSenderConfig {
-            local_port: Some(port)
-        };
-        self.udp_sender_config = Some(config);
+        self.udp_sender_config.get_or_insert_default().local_port = Some(port);
+        self
+    }
+    
+    
+    /// Enable UDP sender with multicast discovery.
+    /// Default UDP ports: 38338, 38348, 38358
+    /// Do not use it with custom port.
+    ///
+    /// Default: disabled
+    #[must_use]
+    pub fn with_udp_multicast(mut self) -> Self {
+        let config = self.udp_sender_config.get_or_insert_default();
+        config.local_port = None;
+        config.multicast = true;
         self
     }
 }

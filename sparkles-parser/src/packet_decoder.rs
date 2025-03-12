@@ -1,5 +1,5 @@
 use std::{io, thread};
-use std::io::{BufRead, Read};
+use std::io::{BufRead, ErrorKind, Read};
 use std::net::{ToSocketAddrs, UdpSocket};
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
@@ -18,6 +18,7 @@ pub enum Packet {
     TimestampFreq(u64, u64),
     GracefulShutdown,
     ConnectionAccepted,
+    Hello,
 }
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -247,11 +248,14 @@ impl PacketDecoder {
 
                 #[cfg(feature="self-tracing")]
                 let g = sparkles_macro::range_event_start!("Recv packet");
-                let new_packet_sz = socket.recv(read_buffer)?;
+                let new_packet_sz = socket.recv(read_buffer).inspect_err(move |e| {
+                    if e.kind() == ErrorKind::WouldBlock {
+                        #[cfg(feature="self-tracing")]
+                        sparkles_macro::range_event_end!(g, "Timeout!");
+                    }
+                })?;
                 let recv_time = Instant::now();
                 let dur_since_last_packet = last_recv_time.map(|t| recv_time - t);
-                #[cfg(feature="self-tracing")]
-                drop(g);
                 #[cfg(feature="self-tracing")]
                 let g = sparkles_macro::range_event_start!("Decode packet");
                 
@@ -451,6 +455,9 @@ fn parse_packet_from_data(packet_type: PacketType, data: &[u8]) -> ReadResult<Pa
         }
         PacketType::ConnectionAccepted => {
             Ok(Packet::ConnectionAccepted)
+        }
+        PacketType::Hello => {
+            Ok(Packet::Hello)
         }
     }
 }

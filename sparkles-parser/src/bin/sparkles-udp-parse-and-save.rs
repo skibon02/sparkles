@@ -4,6 +4,10 @@
 //! 2. Use this tool to subscribe to live tracing events, and save them to file when your program is finished: `sparkles-udp-parse-and-save`
 //! 3. Go to https://ui.perfetto.dev/ and drag'n'drop generated `trace.perf` file
 
+use std::net::SocketAddr;
+use std::str::FromStr;
+use sparkles_parser::discover_local_udp_clients;
+
 #[cfg(not(feature="bin-deps"))]
 compile_error!("
 
@@ -20,8 +24,8 @@ struct Cli {
     #[arg(short, long, default_value = "trace.perf", help = "Output file name")]
     output: String,
 
-    #[arg(default_value="127.0.0.1:38338", help = "Remote UDP address and port. Default port is 38338 if not specified")]
-    addr: String,
+    #[arg(help = "Remote UDP address and port. Default port is 38338 if not specified. If this argument is not provided, will try to discover clients on the local network.")]
+    addr: Option<String>,
 
     #[arg(short, long)]
     version: bool,
@@ -52,11 +56,38 @@ fn main() {
         SimpleLogger::new().with_level(LevelFilter::Warn).init().unwrap();
     }
 
-    let mut addr = cli.addr;
-    if !addr.contains(':') {
-        addr.push_str(":38338");
+    let addr = if let Some(mut addr) = cli.addr {
+        if !addr.contains(':') {
+            addr.push_str(":38338");
+        }
+        SocketAddr::from_str(&addr).unwrap()
     }
-    
+    else {
+        println!("Discovering clients...");
+        let clients = discover_local_udp_clients().unwrap();
+        println!("Found clients:");
+        for (i, client) in clients.iter().enumerate() {
+            println!("{}: {}", i+1, client);
+        }
+
+        if clients.is_empty() {
+            println!("No clients found.");
+            return;
+        }
+
+        if clients.len() > 1 {
+            println!("Choose client number:");
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input).unwrap();
+            let client_num = input.trim().parse::<usize>().unwrap();
+            clients[client_num-1].clone()
+        }
+        else {
+            clients[0].clone()
+        }
+    };
+
+
     ctrlc::set_handler(|| {
         request_shutdown();
     }).unwrap();
