@@ -33,7 +33,7 @@ pub struct LocalStorage<G: GlobalStorageImpl> {
     
     started_ranges: [bool; 256],
     started_ranges_cnt: usize,
-    
+
     flush_event_hash: u32,
     flush_event_str: &'static str,
     
@@ -66,10 +66,10 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
             last_range_ord_id: 0,
             started_ranges: [false; 256],
             started_ranges_cnt: 0,
-            
+
             flush_event_hash,
             flush_event_str,
-            
+
             thread_name,
         }
     }
@@ -96,7 +96,7 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
     pub fn event_range_start(&mut self, hash: u32, name: &str) -> RangeStartRepr {
         self.event_range_start_inner(hash, name, false)
     }
-    
+
     fn event_range_start_inner(&mut self, hash: u32, name: &str, prevent_flushing: bool) -> RangeStartRepr {
         // On a new range event we acquire new range_ord_id to match start and end events
         let range_ord_id = self.new_range_ord_id();
@@ -115,7 +115,7 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
     pub fn event_range_end(&mut self, range_start: RangeStartRepr, hash: u32, name: &str) {
         self.event_range_end_inner(range_start, hash, name, false);
     }
-    
+
     #[inline(always)]
     fn event_range_end_inner(&mut self, range_start: RangeStartRepr, hash: u32, name: &str, prevent_flushing: bool) {
         let range_ord_id = range_start.range_ord_id;
@@ -247,6 +247,8 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
             }
             self.local_packet_header.start_timestamp = 0;
         }
+        #[cfg(feature = "self-tracing")]
+        self.event_range_end_inner(range_event, 0, "", true);
     }
 }
 
