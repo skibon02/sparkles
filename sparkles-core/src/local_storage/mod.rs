@@ -247,8 +247,6 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
             }
             self.local_packet_header.start_timestamp = 0;
         }
-        #[cfg(feature = "self-tracing")]
-        self.event_range_end_inner(range_event, self.flush_event_hash, self.flush_event_str, true);
     }
 }
 
