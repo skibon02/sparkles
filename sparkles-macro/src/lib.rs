@@ -99,3 +99,16 @@ fn calculate_hash(s: &str) -> u32 {
     s.hash(&mut hasher);
     hasher.finish() as u32
 }
+
+#[proc_macro]
+pub fn calc_hash(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as LitStr);
+    let s = input.value();
+    let hash = calculate_hash(&s);
+
+    let expanded = quote! {
+        #hash
+    };
+
+    TokenStream::from(expanded)
+}

@@ -980,7 +980,7 @@ dependencies = [
  "ringbuf",
  "simple_logger",
  "sparkles-core",
- "sparkles-macro 0.1.5",
+ "sparkles-macro 0.1.6",
  "thread-id",
 ]
 
@@ -992,6 +992,7 @@ dependencies = [
  "cortex-m",
  "enumset",
  "sha2-const-stable",
+ "sparkles-macro 0.1.6",
 ]
 
 [[package]]
@@ -1007,7 +1008,7 @@ dependencies = [
 
 [[package]]
 name = "sparkles-macro"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "proc-macro2",
  "quote",

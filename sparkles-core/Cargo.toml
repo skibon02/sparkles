@@ -11,9 +11,11 @@ cortex-m = {version = "0.7.7", optional = true}
 bincode = { version = "2.0.0-rc.3" }
 enumset = { version = "1.1.5", features = ["std"] }
 sha2-const-stable = "0.1.0"
+sparkles-macro = {version = "0.1.6", path="../sparkles-macro"}
 
 
 [features]
-default = []
+default = ["self-tracing"]
+self-tracing = []
 accurate-timestamps-x86 = []
 cortex-m = ["dep:cortex-m"]

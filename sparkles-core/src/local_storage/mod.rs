@@ -34,6 +34,9 @@ pub struct LocalStorage<G: GlobalStorageImpl> {
     started_ranges: [bool; 256],
     started_ranges_cnt: usize,
     
+    flush_event_hash: u32,
+    flush_event_str: &'static str,
+    
     thread_name: Option<String>,
 }
 
@@ -44,6 +47,8 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
         let thread_ord_id = CUR_THREAD_ID.fetch_add(1, Ordering::Relaxed) as u64;
 
         let thread_name = thread_info.new_thread_name.clone();
+        let flush_event_str = "[sparkles] Flushing local storage";
+        let flush_event_hash = sparkles_macro::calc_hash!("[sprkles] Flushing local storage");
         LocalStorage {
             config,
             buf: Vec::new(),
@@ -61,6 +66,9 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
             last_range_ord_id: 0,
             started_ranges: [false; 256],
             started_ranges_cnt: 0,
+            
+            flush_event_hash,
+            flush_event_str,
             
             thread_name,
         }
@@ -86,10 +94,14 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
 
     #[inline(always)]
     pub fn event_range_start(&mut self, hash: u32, name: &str) -> RangeStartRepr {
+        self.event_range_start_inner(hash, name, false)
+    }
+    
+    fn event_range_start_inner(&mut self, hash: u32, name: &str, prevent_flushing: bool) -> RangeStartRepr {
         // On a new range event we acquire new range_ord_id to match start and end events
         let range_ord_id = self.new_range_ord_id();
         let start_id = self.id_store.insert_and_get_id(hash, name, EventType::RangeStart);
-        self.range_event(Some(start_id), range_ord_id);
+        self.range_event(Some(start_id), range_ord_id, prevent_flushing);
 
         RangeStartRepr {
             range_ord_id,
@@ -101,21 +113,26 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
 
     #[inline(always)]
     pub fn event_range_end(&mut self, range_start: RangeStartRepr, hash: u32, name: &str) {
+        self.event_range_end_inner(range_start, hash, name, false);
+    }
+    
+    #[inline(always)]
+    fn event_range_end_inner(&mut self, range_start: RangeStartRepr, hash: u32, name: &str, prevent_flushing: bool) {
         let range_ord_id = range_start.range_ord_id;
         self.started_ranges[range_start.range_ord_id as usize] = false;
         self.started_ranges_cnt -= 1;
         let start_id = range_start.range_start_id;
         if hash != 0 {
             let end_id = self.id_store.insert_and_get_id(hash, name, EventType::RangeEnd(start_id));
-            self.range_event(Some(end_id), range_ord_id);
+            self.range_event(Some(end_id), range_ord_id, prevent_flushing);
         }
         else {
-            self.range_event(None, range_ord_id);
+            self.range_event(None, range_ord_id, prevent_flushing);
         }
     }
 
     #[inline(always)]
-    fn range_event(&mut self, id: Option<u8>, range_ord_id: u8) {
+    fn range_event(&mut self, id: Option<u8>, range_ord_id: u8, prevent_flushing: bool) {
         //      STAGE 2: Acquire timestamp and calculate now, dif_tm
         //    (3ns on non-serializing x86 timestamp, 11ns on serializing x86 timestamp)
         let timestamp = Timestamp::now();
@@ -135,7 +152,9 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
 
 
         //      STAGE 5: flushing
-        self.auto_flush();
+        if !prevent_flushing {
+            self.auto_flush();
+        }
     }
 
 
@@ -200,6 +219,9 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
             // Nothing to flush, ignore
             return;
         }
+
+        #[cfg(feature = "self-tracing")]
+        let range_event = self.event_range_start_inner(self.flush_event_hash, self.flush_event_str, true);
         let new_update = self.global_storage_ref.take_new_update();
         if new_update {
             self.local_packet_header.thread_info.new_thread_name = self.thread_name.clone();
@@ -225,6 +247,8 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
             }
             self.local_packet_header.start_timestamp = 0;
         }
+        #[cfg(feature = "self-tracing")]
+        self.event_range_end_inner(range_event, self.flush_event_hash, self.flush_event_str, true);
     }
 }
 
