@@ -3,7 +3,7 @@ mod global_storage;
 pub mod sender;
 pub mod config;
 
-use std::sync::atomic::{AtomicBool, AtomicUsize};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use parking_lot::{Condvar, Mutex};
 use log::{info, warn};
 pub use global_storage::finalize;
@@ -157,5 +157,17 @@ pub fn wait_client_connected() {
     }
     while !*connected {
         cvar.wait(&mut connected);
+    }
+}
+
+static CUR_SESSION_ID: AtomicU32 = AtomicU32::new(0);
+pub fn cur_session_id() -> u32 {
+    let id = CUR_SESSION_ID.load(Ordering::Relaxed);
+    if id == 0 {
+        let id = rand::random();
+        CUR_SESSION_ID.store(id, Ordering::Relaxed);
+        id
+    } else {
+        id
     }
 }

@@ -5,7 +5,8 @@ pub mod parsed;
 pub mod packet_decoder;
 
 use std::collections::BTreeMap;
-use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
+use std::mem::MaybeUninit;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::ops::Deref;
 use std::rc::Rc;
 use std::thread;
@@ -13,6 +14,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use log::{debug, error, info, warn};
+use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use sparkles_core::consts::PROTOCOL_VERSION;
 use sparkles_core::local_storage::id_mapping::EventType;
 use sparkles_core::protocol::headers::SparklesMachineInfo;
@@ -513,23 +515,61 @@ impl SparklesParser {
     }
 }
 
-pub fn discover_local_udp_clients() -> std::io::Result<Vec<SocketAddr>> {
-    let socket = UdpSocket::bind("0.0.0.0:0")?;
+fn try_get_local_addrs() -> Option<Vec<Ipv4Addr>> {
+    let interfaces = if_addrs::get_if_addrs().ok()?;
+
+    Some(interfaces.iter().filter_map(|interface| {
+        let addr = interface.addr.ip();
+        let IpAddr::V4(addr) = addr else {
+            return None;
+        };
+
+        // Allow only local addresses
+        if !addr.is_loopback() &&
+            !addr.is_private() {
+            return None;
+        }
+        Some(addr)
+    }).collect::<Vec<_>>())
+}
+
+fn send_multicast_packet(socket: &Socket) {
+    let packet = sparkles_core::protocol::packets::RequestPacketType::Discover.pattern();
+
+    for port in [38338, 38348, 38358] {
+        let _ = socket.send_to(&packet, &SockAddr::from(SocketAddr::from((Ipv4Addr::new(239, 38, 38, 38), port))));
+        thread::sleep(Duration::from_millis(1));
+    }
+}
+pub fn discover_local_udp_clients() -> std::io::Result<BTreeMap<u32, Vec<SocketAddr>>> {
+    let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
     socket.set_nonblocking(true)?;
 
-    let packet = sparkles_core::protocol::packets::RequestPacketType::Discover.pattern();
-    for port in [38338, 38348, 38358] {
-        socket.send_to(&packet, (Ipv4Addr::new(239, 38, 38, 38), port))?;
+    let local_addrs = try_get_local_addrs();
+    if let Some(local_addrs) = local_addrs {
+        for addr in local_addrs {
+            let _ = socket.set_multicast_if_v4(&addr).inspect_err(|e| {
+                warn!("Error setting multicast interface to {}: {}", addr, e);
+            });
+            send_multicast_packet(&socket);
+        }
+    }
+    else {
+        send_multicast_packet(&socket);
     }
 
-    let mut buf = [0; 32];
-    let mut clients = Vec::new();
+    let mut buf_orig = [0u8; 36];
+    let mut clients: BTreeMap<u32, Vec<SocketAddr>> = BTreeMap::new();
     thread::sleep(Duration::from_millis(300));
     loop {
-        match socket.recv_from(&mut buf) {
+        let mut buf = unsafe { &mut *(&mut buf_orig as *mut [u8] as *mut [MaybeUninit<u8>]) };
+        match socket.recv_from(buf) {
             Ok((len, addr)) => {
-                if len == 32 && buf == sparkles_core::protocol::packets::PacketType::Hello.pattern() {
-                    clients.push(addr);
+                if len == 36 && buf_orig[..32] == sparkles_core::protocol::packets::PacketType::Hello.pattern() {
+                    let session_id = u32::from_be_bytes(buf_orig[32..36].try_into().unwrap());
+                    if let Some(addr) = addr.as_socket() {
+                        clients.entry(session_id).or_default().push(addr);
+                    }
                 }
             }
             Err(e) => {
@@ -542,6 +582,31 @@ pub fn discover_local_udp_clients() -> std::io::Result<Vec<SocketAddr>> {
             }
         }
     }
+    
+    clients.values_mut().for_each(|addrs| 
+        addrs.sort_by_key(|a1|{
+            if a1.is_ipv4() {
+                match a1.ip() {
+                    IpAddr::V4(a) => {
+                        match a.octets() {
+                            [127, _, _, _] => 0,
+                            [192, 168, _, _] => 10,
+                            [172, b, _, _] if (16..=31).contains(&b) => 20,
+                            [10, _, _, _] => 30,
+                            _ => 90
+                        }
+                    }
+                    _ => 100
+                }
+            }
+            else if a1.ip().is_loopback() {
+                80
+            }
+            else {
+                100
+            }
+        })
+    );
 
     Ok(clients)
 }

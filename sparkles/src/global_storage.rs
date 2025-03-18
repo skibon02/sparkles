@@ -14,7 +14,7 @@ use sparkles_core::protocol::headers::{LocalPacketHeader, SparklesMachineInfo};
 use sparkles_core::protocol::packets::{send_failed_pages, send_graceful_shutdown, send_machine_info, send_timestamp_freq, send_trace_data};
 use sparkles_core::protocol::sender::{ConfiguredSender, SenderChain};
 use crate::config::SparklesConfig;
-use crate::{flush_thread_local, on_client_connect, GLOBAL_FLUSHING_RUNNING, THREAD_LOCAL_NOTIFICATION};
+use crate::{cur_session_id, flush_thread_local, on_client_connect, GLOBAL_FLUSHING_RUNNING, THREAD_LOCAL_NOTIFICATION};
 use crate::sender::file_sender::FileSender;
 use crate::thread_local_storage::set_local_storage_config;
 
@@ -122,7 +122,7 @@ impl GlobalStorage {
 
 fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
     thread::Builder::new().name("[Sparkles] Sender thread".to_string()).spawn(move || {
-        debug!("[sparkles] Flush thread started!");
+        debug!("[sparkles] Flush thread started! Session id: {}", cur_session_id());
 
         let mut sender_chain = SenderChain::default();
         if let Some(file_sender_config) = config.file_sender_config.as_ref() {

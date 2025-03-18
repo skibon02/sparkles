@@ -64,10 +64,12 @@ fn main() {
     }
     else {
         println!("Discovering clients...");
-        let clients = discover_local_udp_clients().unwrap();
+        let clients: Vec<_> = discover_local_udp_clients().unwrap().into_values().collect();
+        
         println!("Found clients:");
-        for (i, client) in clients.iter().enumerate() {
-            println!("{}: {}", i+1, client);
+        for (i, addrs) in clients.iter().enumerate() {
+            let addrs = addrs.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
+            println!("{}: {}", i+1, addrs);
         }
 
         if clients.is_empty() {
@@ -75,7 +77,7 @@ fn main() {
             return;
         }
 
-        if clients.len() > 1 {
+        let addrs = if clients.len() > 1 {
             println!("Choose client number:");
             let mut input = String::new();
             std::io::stdin().read_line(&mut input).unwrap();
@@ -84,6 +86,30 @@ fn main() {
         }
         else {
             clients[0].clone()
+        };
+        
+        if addrs.len() == 1 {
+            addrs[0]
+        }
+        else {
+            println!("Choose address:");
+            let mut input = String::new();
+            for (i, addr) in addrs.iter().enumerate() {
+                if i == 0 {
+                    println!("{} [default]: {}", i+1, addr);
+                }
+                else {
+                    println!("{}: {}", i+1, addr);
+                }
+            }
+            std::io::stdin().read_line(&mut input).unwrap();
+            if input.trim() == "" {
+                addrs[0]
+            }
+            else {
+                let addr_num = input.trim().parse::<usize>().unwrap();
+                addrs[addr_num-1]
+            }
         }
     };
 

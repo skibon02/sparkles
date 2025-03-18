@@ -1,5 +1,4 @@
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket};
-use std::str::FromStr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::thread;
@@ -7,7 +6,7 @@ use std::time::{Duration, Instant};
 use log::{debug, info, warn};
 use sparkles_core::protocol::packets::{PacketType, RequestPacketType};
 use sparkles_core::protocol::sender::{ConfiguredSender, PacketFlags, Sender};
-use crate::on_client_connect;
+use crate::{cur_session_id, on_client_connect};
 
 pub(crate) struct UdpSender {
     socket: UdpSocket,
@@ -47,7 +46,10 @@ impl UdpSender {
             Ok((32, addr)) if buf == RequestPacketType::Discover.pattern() => {
                 info!("UDP client discovery: {addr:?}");
                 
-                if let Err(e) = self.socket.send_to(&PacketType::Hello.pattern(), addr) {
+                let mut packet = [0; 36];
+                packet[0..32].copy_from_slice(&PacketType::Hello.pattern());
+                packet[32..36].copy_from_slice(&cur_session_id().to_be_bytes());
+                if let Err(e) = self.socket.send_to(&packet, addr) {
                     warn!("[sparkles] Error sending Hello packet to client: {}", e);
                 }
             }
@@ -155,28 +157,26 @@ impl Sender for UdpSender {
     }
 }
 
-fn try_get_valid_multicast_addrs() -> Option<Vec<Ipv4Addr>> {
-    if cfg!(target_family = "unix") {
-        let interfaces = nix::ifaddrs::getifaddrs().ok()?;
-        Some(interfaces.filter_map(|interface| {
-            let addr = interface.address?.as_sockaddr_in()?.to_string();
-            let addr = *SocketAddrV4::from_str(&addr).ok()?.ip();
 
+fn try_get_local_addrs() -> Option<Vec<Ipv4Addr>> {
+    let interfaces = if_addrs::get_if_addrs().ok()?;
+    
+    Some(interfaces.iter().filter_map(|interface| {
+        let addr = interface.addr.ip();
+        let IpAddr::V4(addr) = addr else {
+            return None;
+        };
 
-            // Allow only local addresses
-            if !addr.is_loopback() &&
-                !addr.is_private() {
-                return None;
-            }
-            Some(addr)
-        }).collect::<Vec<_>>())
-    }
-    else {
-        None
-    }
+        // Allow only local addresses
+        if !addr.is_loopback() &&
+            !addr.is_private() {
+            return None;
+        }
+        Some(addr)
+    }).collect::<Vec<_>>())
 }
 fn get_valid_multicast_addrs() -> Vec<Ipv4Addr> {
-    try_get_valid_multicast_addrs().map(|a| {
+    try_get_local_addrs().map(|a| {
         if a.is_empty() {
             vec![Ipv4Addr::UNSPECIFIED]
         }
