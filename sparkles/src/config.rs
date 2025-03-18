@@ -170,6 +170,8 @@ impl SparklesConfig {
     /// Enable UDP sender with multicast discovery.
     /// Default UDP ports: 38338, 38348, 38358
     /// Do not use it with custom port.
+    /// 
+    /// Will join multicast on all detected private and loopback interfaces.
     ///
     /// Default: disabled
     #[must_use]

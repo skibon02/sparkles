@@ -1,4 +1,5 @@
-use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket};
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::thread;
@@ -154,6 +155,37 @@ impl Sender for UdpSender {
     }
 }
 
+fn try_get_valid_multicast_addrs() -> Option<Vec<Ipv4Addr>> {
+    if cfg!(target_os = "linux") {
+        let interfaces = nix::ifaddrs::getifaddrs().ok()?;
+        Some(interfaces.filter_map(|interface| {
+            let addr = interface.address?.as_sockaddr_in()?.to_string();
+            let addr = *SocketAddrV4::from_str(&addr).ok()?.ip();
+
+
+            // Allow only local addresses
+            if !addr.is_loopback() &&
+                !addr.is_private() {
+                return None;
+            }
+            Some(addr)
+        }).collect::<Vec<_>>())
+    }
+    else {
+        None
+    }
+}
+fn get_valid_multicast_addrs() -> Vec<Ipv4Addr> {
+    try_get_valid_multicast_addrs().map(|a| {
+        if a.is_empty() {
+            vec![Ipv4Addr::UNSPECIFIED]
+        }
+        else {
+            a
+        }
+    }).unwrap_or_default()
+}
+
 impl ConfiguredSender for UdpSender {
     type Config = UdpSenderConfig;
     fn new(cfg: &Self::Config) -> Option<Self> {
@@ -181,9 +213,13 @@ impl ConfiguredSender for UdpSender {
         socket.set_nonblocking(true).ok()?;
         
         if cfg.multicast {
-            let _ = socket.join_multicast_v4(&Ipv4Addr::new(239, 38, 38, 38), &Ipv4Addr::UNSPECIFIED).inspect_err(|e| {
-                warn!("Error joining multicast group: {}", e);
-            });
+            for addr in get_valid_multicast_addrs() {
+                if socket.join_multicast_v4(&Ipv4Addr::new(239, 38, 38, 38), &addr).inspect_err(|e| {
+                    warn!("Error joining multicast group on {}: {}", addr, e);
+                }).is_ok() {
+                    info!("Joined multicast group on {}", addr);
+                }
+            }
         }
 
         Some(Self {

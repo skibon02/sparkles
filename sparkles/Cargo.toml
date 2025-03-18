@@ -17,6 +17,10 @@ thread-id = { version = "5.0.0" }
 chrono = "0.4.39"
 parking_lot = "0.12.3"
 
+# linux only
+[target.'cfg(target_os = "linux")'.dependencies]
+nix = { version = "0.29.0", features = ["net"] }
+
 [dev-dependencies]
 # for examples
 simple_logger = "5.0.0"
