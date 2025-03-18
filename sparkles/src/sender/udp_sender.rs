@@ -156,7 +156,7 @@ impl Sender for UdpSender {
 }
 
 fn try_get_valid_multicast_addrs() -> Option<Vec<Ipv4Addr>> {
-    if cfg!(target_os = "linux") {
+    if cfg!(target_family = "unix") {
         let interfaces = nix::ifaddrs::getifaddrs().ok()?;
         Some(interfaces.filter_map(|interface| {
             let addr = interface.address?.as_sockaddr_in()?.to_string();
