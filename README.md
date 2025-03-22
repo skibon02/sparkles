@@ -122,6 +122,8 @@ TODO:
 ✧ Cannot specify UDP address to listen on  
 ✧ Proper using of sparkles-macro::range_event_start!("name") gives warning
 ✧ Timestamp wrap-around is not handled well (not an issue for 64-bit systems)
+✧ Congestion control is not implemented
+
 
 ## Crate features
 ✧ **accurate-timestamps-x86** - Enable serialization for x86/x86_64 timestamps. Trade off timestamp accuracy for higher overhead (slightly).  
