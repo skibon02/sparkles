@@ -5,8 +5,7 @@ pub mod parsed;
 pub mod packet_decoder;
 
 use std::collections::BTreeMap;
-use std::mem::MaybeUninit;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::ops::Deref;
 use std::rc::Rc;
 use std::thread;
@@ -14,7 +13,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use log::{debug, error, info, warn};
-use socket2::{Domain, Protocol, SockAddr, Socket, Type};
+use multicast_socket::{all_ipv4_interfaces, MulticastOptions, MulticastSocket};
 use sparkles_core::consts::PROTOCOL_VERSION;
 use sparkles_core::local_storage::id_mapping::EventType;
 use sparkles_core::protocol::headers::SparklesMachineInfo;
@@ -515,74 +514,48 @@ impl SparklesParser {
     }
 }
 
-fn try_get_local_addrs() -> Option<Vec<Ipv4Addr>> {
-    let interfaces = if_addrs::get_if_addrs().ok()?;
-
-    Some(interfaces.iter().filter_map(|interface| {
-        let addr = interface.addr.ip();
-        let IpAddr::V4(addr) = addr else {
-            return None;
-        };
-
-        // Allow only local addresses
-        if !addr.is_loopback() &&
-            !addr.is_private() {
-            return None;
-        }
-        Some(addr)
-    }).collect::<Vec<_>>())
-}
-
-fn send_multicast_packet(socket: &Socket) {
+pub fn discover_local_udp_clients() -> std::io::Result<BTreeMap<u32, Vec<SocketAddr>>> {
     let packet = sparkles_core::protocol::packets::RequestPacketType::Discover.pattern();
 
-    for port in [38338, 38348, 38358] {
-        let _ = socket.send_to(&packet, &SockAddr::from(SocketAddr::from((Ipv4Addr::new(239, 38, 38, 38), port))));
-        thread::sleep(Duration::from_millis(1));
-    }
-}
-pub fn discover_local_udp_clients() -> std::io::Result<BTreeMap<u32, Vec<SocketAddr>>> {
-    let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
-    socket.set_nonblocking(true)?;
-
-    let local_addrs = try_get_local_addrs();
-    if let Some(local_addrs) = local_addrs {
-        for addr in local_addrs {
-            let _ = socket.set_multicast_if_v4(&addr).inspect_err(|e| {
-                warn!("Error setting multicast interface to {}: {}", addr, e);
-            });
-            send_multicast_packet(&socket);
-        }
-    }
-    else {
-        send_multicast_packet(&socket);
+    let sockets = [38338, 38348, 38358].map(|port| {
+        let options = MulticastOptions {
+            read_timeout: Some(Duration::from_millis(200)),
+            ..Default::default()
+        };
+        
+        MulticastSocket::with_options(SocketAddrV4::new(Ipv4Addr::new(239, 38, 38, 38), port), all_ipv4_interfaces().unwrap(), options).unwrap()
+    });
+    for socket in &sockets {
+        let _ = socket.broadcast(&packet);
     }
 
-    let mut buf_orig = [0u8; 36];
     let mut clients: BTreeMap<u32, Vec<SocketAddr>> = BTreeMap::new();
-    thread::sleep(Duration::from_millis(300));
-    loop {
-        let mut buf = unsafe { &mut *(&mut buf_orig as *mut [u8] as *mut [MaybeUninit<u8>]) };
-        match socket.recv_from(buf) {
-            Ok((len, addr)) => {
-                if len == 36 && buf_orig[..32] == sparkles_core::protocol::packets::PacketType::Hello.pattern() {
-                    let session_id = u32::from_be_bytes(buf_orig[32..36].try_into().unwrap());
-                    if let Some(addr) = addr.as_socket() {
-                        clients.entry(session_id).or_default().push(addr);
+    thread::sleep(Duration::from_millis(100));
+    for socket in &sockets {
+        let timeout = Instant::now() + Duration::from_millis(300);
+        while Instant::now() < timeout {
+            match socket.receive() {
+                Ok(message) => {
+                    let addr = message.origin_address;
+                    let data = message.data;
+
+                    if data.len() == 36 && data[..32] == sparkles_core::protocol::packets::PacketType::Hello.pattern() {
+                        let session_id = u32::from_be_bytes(data[32..36].try_into().unwrap());
+                        clients.entry(session_id).or_default().push(addr.into());
+                    }
+                }
+                Err(e) => {
+                    if e.kind() == std::io::ErrorKind::WouldBlock {
+                        break; // No more messages
+                    } else {
+                        return Err(e);
                     }
                 }
             }
-            Err(e) => {
-                if e.kind() == std::io::ErrorKind::WouldBlock {
-                    break;
-                }
-                else {
-                    return Err(e);
-                }
-            }
         }
     }
-    
+
+    // Heuristic sorting of addresses by priority
     clients.values_mut().for_each(|addrs| 
         addrs.sort_by_key(|a1|{
             if a1.is_ipv4() {

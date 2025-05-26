@@ -14,6 +14,7 @@ For protocol used by both crates there are some guarantees based on version numb
 ## Versions
 ### [Unreleased] sparkles-parser
 - implement seq_num wraparound case in UDP parsing, find better approach for UDP handling
+- Add `multicast-socket` dependency for simpler discovery
 - TODO: add BarChart GUI example
 
 ### [Unreleased] sparkles
