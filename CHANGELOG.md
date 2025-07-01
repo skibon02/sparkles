@@ -12,7 +12,7 @@ For protocol used by both crates there are some guarantees based on version numb
 - When major proto version is the same, but decoder's minor version is higher or equal than encoder's, correct parsing is guaranteed.
 
 ## Versions
-### [0.1.5] sparkles (proto-1.0) - 2025-03-09
+### [0.1.5, 0.1.6, 0.1.7] sparkles (proto-1.0) - 2025-03-09
 - New protocol version: 1.0
 - Config: Now have two options for the destination (file or directory).
 - Config: Flush threshold is now specified in bytes (default 64K).
