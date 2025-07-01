@@ -63,7 +63,7 @@ fn main() {
 3. Run your code. As it finishes, `trace/*.sprk` is generated.
 4. Run `sparkles-parser` in the directory with `trace` folder.
 ```bash
-cargo install sparkles-parser --feature --bin-deps # Only once
+cargo install sparkles-parser --features bin-deps # Only once
 sparkles-parse-and-save
 ```
 5. Go to https://ui.perfetto.dev and drag'n'drop resulting `trace.perf` file.
