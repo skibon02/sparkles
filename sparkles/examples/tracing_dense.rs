@@ -39,8 +39,7 @@ fn main() {
     SimpleLogger::new().init().unwrap();
     let finalize_guard = sparkles::init(
         SparklesConfig::default()
-            // .with_udp_multicast() // Uncomment this to enable UDP sender with multicast discovery
-            // .with_default_udp_sender() // OR uncomment this to enable UDP sender
+            // .with_udp_multicast_default() // Uncomment to enable trace data streaming via UDP
     );
     
     // Only relevant if using UDP sender
@@ -72,5 +71,5 @@ fn main() {
     }
     let dur = start.elapsed().as_nanos() as f64 / (duration * (3_000 + 9)) as f64;
     info!("Finished! waiting for tracer send...");
-    info!("Each event took {:?} ns on average", dur);
+    info!("Each event took {dur:?} ns on average");
 }

@@ -1,15 +1,27 @@
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket};
+use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::thread;
 use std::time::{Duration, Instant};
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
+use multicast_discovery_socket::config::MulticastDiscoveryConfig;
+use multicast_discovery_socket::MulticastDiscoverySocket;
 use sparkles_core::protocol::packets::{PacketType, RequestPacketType};
 use sparkles_core::protocol::sender::{ConfiguredSender, PacketFlags, Sender};
-use crate::{cur_session_id, on_client_connect};
+use crate::on_client_connect;
+
+const DEFAULT_MULTICAST_GROUP: Ipv4Addr = Ipv4Addr::new(239, 38, 38, 38);
+
+pub fn default_config() -> MulticastDiscoveryConfig {
+    MulticastDiscoveryConfig::new(DEFAULT_MULTICAST_GROUP, "sparkles".into())
+        .with_multicast_port(38338)
+        .with_backup_ports(45_337..45_339)
+        .with_disabled_announce()
+}
 
 pub(crate) struct UdpSender {
     socket: UdpSocket,
+    discovery_socket: Option<MulticastDiscoverySocket<()>>,
     dst_addr: Option<SocketAddr>,
     last_recv: Option<Instant>,
     seq_num: u16,
@@ -30,9 +42,9 @@ impl UdpSender {
         let mut buf = [0u8; 32];
         match self.socket.recv_from(&mut buf) {
             Ok((32, addr)) if buf == RequestPacketType::Subscribe.pattern() => {
-                info!("UDP client connected: {addr:?}");
-                if let Some(addr) = self.dst_addr {
-                    warn!("Forgetting client: {addr}");
+                info!("UDP client connected: {addr}");
+                if let Some(prev_addr) = self.dst_addr {
+                    warn!("Forgetting client: {prev_addr}. Now streaming to {addr}");
                 }
                 self.dst_addr = Some(addr);
                 self.last_recv = Some(Instant::now());
@@ -40,17 +52,7 @@ impl UdpSender {
                 on_client_connect();
                 
                 if let Err(e) = self.socket.send_to(&PacketType::ConnectionAccepted.pattern(), addr) {
-                    warn!("[sparkles] Error sending ConnectionAccepted packet to client: {}", e);
-                }
-            }
-            Ok((32, addr)) if buf == RequestPacketType::Discover.pattern() => {
-                info!("UDP client discovery: {addr:?}");
-                
-                let mut packet = [0; 36];
-                packet[0..32].copy_from_slice(&PacketType::Hello.pattern());
-                packet[32..36].copy_from_slice(&cur_session_id().to_be_bytes());
-                if let Err(e) = self.socket.send_to(&packet, addr) {
-                    warn!("[sparkles] Error sending Hello packet to client: {}", e);
+                    warn!("[sparkles] Error sending ConnectionAccepted packet to client: {e:?}");
                 }
             }
             Ok(_) => {
@@ -62,7 +64,7 @@ impl UdpSender {
                     return;
                 }
                 
-                warn!("[sparkles] Error receiving packet from client: {}", e);
+                warn!("[sparkles] Error receiving packet from client: {e:?}");
             }
         }
     }
@@ -71,16 +73,12 @@ impl UdpSender {
 const SHORT_PACKET_SIZE: usize = 1300;
 #[derive(Debug, Default, Clone)]
 pub struct UdpSenderConfig {
-    pub local_port: Option<u16>,
-    pub multicast: bool,
+    pub desired_port: Option<u16>,
+    pub multicast_discovery_config: Option<MulticastDiscoveryConfig>,
 }
 
 impl Sender for UdpSender {
     fn send_packet(&mut self, packet_type: PacketType, data: &[&[u8]]) {
-        if self.dst_addr.is_none() || self.last_recv.is_none_or(|i| i.elapsed().as_secs() > 2) {
-            self.try_recv();
-        }
-        
         let Some(dst_addr) = self.dst_addr else {
             return;
         };
@@ -123,7 +121,7 @@ impl Sender for UdpSender {
             packet_buf.extend_from_slice(chunk);
             
             if let Err(e) = self.socket.send_to(&packet_buf, dst_addr) {
-                warn!("Error sending packet to client: {}", e);
+                warn!("Error sending packet to client: {e:?}");
                 return;
             }
             packet_buf.clear();
@@ -144,7 +142,7 @@ impl Sender for UdpSender {
             let flags = PacketFlags::PacketStart | PacketFlags::PacketEnd | PacketFlags::ShortPacket;
             packet_buf.push(flags.as_u8());
             if let Err(e) = self.socket.send_to(&packet_buf, dst_addr) {
-                warn!("Error sending packet to client: {}", e);
+                warn!("Error sending packet to client: {e:?}");
             }
         }
     }
@@ -155,75 +153,50 @@ impl Sender for UdpSender {
         self.timestamp_freq_request = timestamp_freq_request;
         self
     }
-}
-
-
-fn try_get_local_addrs() -> Option<Vec<Ipv4Addr>> {
-    let interfaces = if_addrs::get_if_addrs().ok()?;
-    
-    Some(interfaces.iter().filter_map(|interface| {
-        let addr = interface.addr.ip();
-        let IpAddr::V4(addr) = addr else {
-            return None;
-        };
-
-        // Allow only local addresses
-        if !addr.is_loopback() &&
-            !addr.is_private() {
-            return None;
+    fn poll(&mut self) {
+        self.try_recv();
+        if let Some(discovery_socket) = self.discovery_socket.as_mut() {
+            discovery_socket.poll(|_|{});
         }
-        Some(addr)
-    }).collect::<Vec<_>>())
-}
-fn get_valid_multicast_addrs() -> Vec<Ipv4Addr> {
-    try_get_local_addrs().map(|a| {
-        if a.is_empty() {
-            vec![Ipv4Addr::UNSPECIFIED]
-        }
-        else {
-            a
-        }
-    }).unwrap_or_default()
+    }
 }
 
 impl ConfiguredSender for UdpSender {
     type Config = UdpSenderConfig;
     fn new(cfg: &Self::Config) -> Option<Self> {
-        let socket = if let Some(local_port) = cfg.local_port {
-            UdpSocket::bind(("0.0.0.0", local_port)).ok()?
-        }
-        else {
-            let mut res = None;
-            for port in [38338, 38348, 38358] {
-                match UdpSocket::bind(("0.0.0.0", port)) {
-                    Ok(socket) => {
-                        info!("UDP sender bound to port {}", port);
-                        res = Some(socket);
-                        break;
-                    }
-                    Err(e) => {
-                        warn!("Error binding to port {}: {}", port, e);
-                    }
-                }
+        let desired_port = cfg.desired_port.unwrap_or_default();
+        let socket = match UdpSocket::bind(("0.0.0.0", desired_port)) {
+            Ok(socket) => {
+                let local_port = socket.local_addr().unwrap().port();
+                info!("Udp socket bound to port {local_port}");
+                socket
             }
-            
-            res?
+            Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+                let res = UdpSocket::bind("0.0.0.0:0")
+                    .inspect_err(|e| error!("Unable to bind UDP socket: {e:?}"))
+                    .ok()?;
+                let local_port = res.local_addr().unwrap().port();
+                warn!("Unable to bind to specific port {desired_port}, using random port {local_port}");
+                res
+
+            }
+            Err(e) => {
+                error!("Error binding UDP socket: {e:?}");
+                return None;
+            }
         };
         
         socket.set_nonblocking(true).ok()?;
-        
-        if cfg.multicast {
-            for addr in get_valid_multicast_addrs() {
-                if socket.join_multicast_v4(&Ipv4Addr::new(239, 38, 38, 38), &addr).inspect_err(|e| {
-                    warn!("Error joining multicast group on {}: {}", addr, e);
-                }).is_ok() {
-                    info!("Joined multicast group on {}", addr);
-                }
-            }
-        }
+
+        let discovery_socket = cfg.multicast_discovery_config.as_ref().map(|cfg| {
+            let mut res = MulticastDiscoverySocket::new_with_service(cfg, socket.local_addr().unwrap().port(), ()).unwrap();
+            res.set_discover_replies_en(true);
+            res
+        });
 
         Some(Self {
             socket,
+            discovery_socket,
             dst_addr: None,
             seq_num: 1,
             last_recv: None,

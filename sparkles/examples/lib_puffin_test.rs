@@ -34,6 +34,6 @@ fn main() {
     }
     let dur = start.elapsed().as_nanos() as f64 / 2.0 / (100 * N) as f64;
     info!("Finished! waiting for tracer send...");
-    info!("Each event took {:?} ns", dur);
+    info!("Each event took {dur:?} ns");
 
 }

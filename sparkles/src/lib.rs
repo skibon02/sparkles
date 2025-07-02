@@ -3,7 +3,7 @@ mod global_storage;
 pub mod sender;
 pub mod config;
 
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize};
 use parking_lot::{Condvar, Mutex};
 use log::{info, warn};
 pub use global_storage::finalize;
@@ -96,7 +96,7 @@ impl Drop for FinalizeGuard {
 ///
 /// # Attention
 /// Do not forget to save finalize guard, returned from this call!
-/// If you don't need to use it, call `forget()`.
+/// If you drop it too early, sparkles thread will be finished and no more data will be recorded!
 #[must_use]
 pub fn init(config: SparklesConfig) -> FinalizeGuard {
     // Init global storage
@@ -115,7 +115,7 @@ pub fn init(config: SparklesConfig) -> FinalizeGuard {
 ///
 /// # Attention
 /// Do not forget to save finalize guard, returned from this call!
-/// If you don't need to use it, call `forget()`.
+/// If you drop it too early, sparkles thread will be finished and no more data will be recorded!
 pub fn init_default() -> FinalizeGuard {
     // Init global storage
     global_storage::GLOBAL_STORAGE.lock().get_or_insert_with(|| GlobalStorage::new(Default::default()));
@@ -157,17 +157,5 @@ pub fn wait_client_connected() {
     }
     while !*connected {
         cvar.wait(&mut connected);
-    }
-}
-
-static CUR_SESSION_ID: AtomicU32 = AtomicU32::new(0);
-pub fn cur_session_id() -> u32 {
-    let id = CUR_SESSION_ID.load(Ordering::Relaxed);
-    if id == 0 {
-        let id = rand::random();
-        CUR_SESSION_ID.store(id, Ordering::Relaxed);
-        id
-    } else {
-        id
     }
 }

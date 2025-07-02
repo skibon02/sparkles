@@ -12,9 +12,9 @@ use ringbuf::traits::{Consumer, Observer, Producer};
 use sparkles_core::{Timestamp, TimestampProvider};
 use sparkles_core::protocol::headers::{LocalPacketHeader, SparklesMachineInfo};
 use sparkles_core::protocol::packets::{send_failed_pages, send_graceful_shutdown, send_machine_info, send_timestamp_freq, send_trace_data};
-use sparkles_core::protocol::sender::{ConfiguredSender, SenderChain};
+use sparkles_core::protocol::sender::{ConfiguredSender, Sender, SenderChain};
 use crate::config::SparklesConfig;
-use crate::{cur_session_id, flush_thread_local, on_client_connect, GLOBAL_FLUSHING_RUNNING, THREAD_LOCAL_NOTIFICATION};
+use crate::{flush_thread_local, on_client_connect, GLOBAL_FLUSHING_RUNNING, THREAD_LOCAL_NOTIFICATION};
 use crate::sender::file_sender::FileSender;
 use crate::thread_local_storage::set_local_storage_config;
 
@@ -122,7 +122,7 @@ impl GlobalStorage {
 
 fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
     thread::Builder::new().name("[Sparkles] Sender thread".to_string()).spawn(move || {
-        debug!("[sparkles] Flush thread started! Session id: {}", cur_session_id());
+        debug!("[sparkles] Flush thread started!");
 
         let mut sender_chain = SenderChain::default();
         if let Some(file_sender_config) = config.file_sender_config.as_ref() {
@@ -133,6 +133,7 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
                 warn!("[sparkles] Failed to create file sender!");
             }
         }
+        #[cfg(feature = "udp-streaming")]
         if let Some(udp_sender_config) = config.udp_sender_config.as_ref() {
             if let Some(sender) = crate::sender::udp_sender::UdpSender::new(udp_sender_config) {
                 sender_chain.with_sender(sender);
@@ -145,6 +146,8 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
         else {
             on_client_connect();
         }
+        #[cfg(not(feature = "udp-streaming"))]
+        on_client_connect();
 
         let process_name = std::env::current_exe().unwrap().file_name().unwrap().to_str().unwrap().to_string();
         let pid = std::process::id();
@@ -158,10 +161,17 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
 
         let (ticks_per_sec, cur_tm) = freq_detector.next_forced();
         send_timestamp_freq(&mut sender_chain, ticks_per_sec, cur_tm);
+
+        let mut last_sender_poll_tm: Option<Instant> = None;
         
         let tmp_mutex = Mutex::new(());
         loop {
             use crate as sparkles;
+            
+            if last_sender_poll_tm.is_none_or(|tm| tm.elapsed() > Duration::from_millis(200)) {
+                sender_chain.poll();
+                last_sender_poll_tm = Some(Instant::now());
+            }
             
             if sender_chain.take_tm_freq_requested() {
                 THREAD_LOCAL_NOTIFICATION.fetch_add(1, Ordering::Relaxed);

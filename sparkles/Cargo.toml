@@ -1,33 +1,33 @@
 [package]
 name = "sparkles"
 description = "Capture execution flow of your Rust application with CPU cycle precision!"
-version = "0.1.7"
+version = "0.1.8"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/skibon02/sparkles"
 readme = "../README.md"
 
 [dependencies]
-sparkles-core = {version = "0.1.4", path = "../sparkles-core"}
-sparkles-macro = {version = "0.1.4", path = "../sparkles-macro"}
-bincode = "2.0.0-rc.3"
-log = { version = "0.4.26", default-features = false }
-ringbuf = "0.4.7"
+sparkles-core = {version = "0.1.5", path = "../sparkles-core"}
+sparkles-macro = {version = "0.1.6", path = "../sparkles-macro"}
+bincode = "2.0.1"
+log = { version = "0.4.27", default-features = false }
+ringbuf = "0.4.8"
 thread-id = { version = "5.0.0" }
-chrono = "0.4.39"
-parking_lot = "0.12.3"
-if-addrs = "0.13.3"
-rand = "0.9.0"
+chrono = "0.4.41"
+parking_lot = "0.12.4"
+multicast-discovery-socket = { version = "0.1.1", optional = true }
 
 [dev-dependencies]
 # for examples
 simple_logger = "5.0.0"
 # for puffin tests
 puffin_http = "0.16.1"
-puffin = { version = "0.19.0" }
+puffin = { version = "0.19.1" }
 
 
 [features]
-default = ["self-tracing"]
+default = ["self-tracing", "udp-streaming"]
+udp-streaming = ["dep:multicast-discovery-socket"]
 accurate-timestamps-x86 = ["sparkles-core/accurate-timestamps-x86"]
 self-tracing = ["sparkles-core/self-tracing"]
