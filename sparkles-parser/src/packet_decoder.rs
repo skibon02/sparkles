@@ -456,9 +456,6 @@ fn parse_packet_from_data(packet_type: PacketType, data: &[u8]) -> ReadResult<Pa
         PacketType::ConnectionAccepted => {
             Ok(Packet::ConnectionAccepted)
         }
-        PacketType::Hello => {
-            Ok(Packet::Hello)
-        }
     }
 }
 

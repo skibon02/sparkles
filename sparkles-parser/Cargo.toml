@@ -7,32 +7,32 @@ description = "Parser for sparkles tracing library"
 repository = "https://github.com/skibon02/sparkles"
 
 [dependencies]
-log = "0.4.22"
-bincode = "2.0.0-rc.3"
-sparkles-core = { version = "0.1.4", path = "../sparkles-core" }
-ringbuf = "0.4.7"
-thiserror = "2.0.11"
-chrono = "0.4.39"
-rand = "0.9.0"
-enumset = { version = "1.1.5", features = ["std"] }
+log = "0.4.27"
+bincode = "2.0.1"
+sparkles-core = { version = "0.1.8", path = "../sparkles-core" }
+ringbuf = "0.4.8"
+thiserror = "2.0.12"
+chrono = "0.4.41"
+rand = "0.9.1"
+enumset = { version = "1.1.6", features = ["std"] }
 
 # optional
-prost = { version="0.13.5", optional = true }
-sparkles = { version = "0.1.5", path = "../sparkles", default-features = false, optional = true }
-sparkles-macro = { version = "0.1.4", optional = true }
-bytes = { version = "1.10.0", optional = true }
+prost = { version= "0.14.1", optional = true }
+sparkles = { version = "0.1.8", path = "../sparkles", default-features = false, optional = true }
+sparkles-macro = { version = "0.1.5", optional = true }
+bytes = { version = "1.10.1", optional = true }
 
 # bin only
 simple_logger = { version = "5.0.0", optional = true }
-ctrlc = { version = "3.4.5", optional = true }
-clap = { version = "4.5.31", features = ["derive"], optional = true }
-multicast-socket = "0.3.3"
+ctrlc = { version = "3.4.7", optional = true }
+clap = { version = "4.5.40", features = ["derive"], optional = true }
+multicast-discovery-socket = "0.1.1"
 
 [dev-dependencies]
 simple_logger = { version = "5.0.0" }
 
 [build-dependencies]
-prost-build = "0.13.5"
+prost-build = "0.14.1"
 
 [features]
 default = []

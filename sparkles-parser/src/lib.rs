@@ -3,9 +3,9 @@ mod perfetto_format;
 pub mod tracing_decoder;
 pub mod parsed;
 pub mod packet_decoder;
+pub mod discovery_wrapper;
 
 use std::collections::BTreeMap;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::ops::Deref;
 use std::rc::Rc;
 use std::thread;
@@ -13,13 +13,15 @@ use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use log::{debug, error, info, warn};
-use multicast_socket::{all_ipv4_interfaces, MulticastOptions, MulticastSocket};
 use sparkles_core::consts::PROTOCOL_VERSION;
 use sparkles_core::local_storage::id_mapping::EventType;
 use sparkles_core::protocol::headers::SparklesMachineInfo;
 use crate::packet_decoder::{Packet, PacketDecoder, PacketReadError, ProtocolCounters};
 use crate::parsed::{ParsedEvent, ThreadInfoState};
 use crate::tracing_decoder::StreamFrameDecoder;
+
+// pub exports
+pub use discovery_wrapper::DiscoveryWrapper;
 
 pub static PARSER_BUF_SIZE: usize = 1_000_000;
 static SHUTDOWN_SIGNAL: AtomicBool = AtomicBool::new(false);
@@ -512,76 +514,6 @@ impl SparklesParser {
     fn thread_parser_state(&mut self, thread_id: u64) -> &mut ThreadParserState {
         self.event_parsers.entry(thread_id).or_default()
     }
-}
-
-pub fn discover_local_udp_clients() -> std::io::Result<BTreeMap<u32, Vec<SocketAddr>>> {
-    let packet = sparkles_core::protocol::packets::RequestPacketType::Discover.pattern();
-
-    let sockets = [38338, 38348, 38358].map(|port| {
-        let options = MulticastOptions {
-            read_timeout: Some(Duration::from_millis(200)),
-            ..Default::default()
-        };
-        
-        MulticastSocket::with_options(SocketAddrV4::new(Ipv4Addr::new(239, 38, 38, 38), port), all_ipv4_interfaces().unwrap(), options).unwrap()
-    });
-    for socket in &sockets {
-        let _ = socket.broadcast(&packet);
-    }
-
-    let mut clients: BTreeMap<u32, Vec<SocketAddr>> = BTreeMap::new();
-    thread::sleep(Duration::from_millis(100));
-    for socket in &sockets {
-        let timeout = Instant::now() + Duration::from_millis(300);
-        while Instant::now() < timeout {
-            match socket.receive() {
-                Ok(message) => {
-                    let addr = message.origin_address;
-                    let data = message.data;
-
-                    if data.len() == 36 && data[..32] == sparkles_core::protocol::packets::PacketType::Hello.pattern() {
-                        let session_id = u32::from_be_bytes(data[32..36].try_into().unwrap());
-                        clients.entry(session_id).or_default().push(addr.into());
-                    }
-                }
-                Err(e) => {
-                    if e.kind() == std::io::ErrorKind::WouldBlock {
-                        break; // No more messages
-                    } else {
-                        return Err(e);
-                    }
-                }
-            }
-        }
-    }
-
-    // Heuristic sorting of addresses by priority
-    clients.values_mut().for_each(|addrs| 
-        addrs.sort_by_key(|a1|{
-            if a1.is_ipv4() {
-                match a1.ip() {
-                    IpAddr::V4(a) => {
-                        match a.octets() {
-                            [127, _, _, _] => 0,
-                            [192, 168, _, _] => 10,
-                            [172, b, _, _] if (16..=31).contains(&b) => 20,
-                            [10, _, _, _] => 30,
-                            _ => 90
-                        }
-                    }
-                    _ => 100
-                }
-            }
-            else if a1.ip().is_loopback() {
-                80
-            }
-            else {
-                100
-            }
-        })
-    );
-
-    Ok(clients)
 }
 
 pub type TracingEventId = u8;

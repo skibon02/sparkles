@@ -10,7 +10,7 @@ fn main() {
     let decoder = PacketDecoder::from_socket("127.0.0.1:38338");
     info!("Connected! Waiting for data...");
     SparklesParser::new().parse_to_end(decoder, |ev, thr| {
-        info!("Got event {:?}", ev);
+        info!("Got event {ev:?}");
     }).unwrap();
     info!("Parsing done, client disconnected!");
 }

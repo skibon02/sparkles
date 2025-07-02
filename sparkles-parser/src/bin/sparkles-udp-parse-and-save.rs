@@ -6,7 +6,9 @@
 
 use std::net::SocketAddr;
 use std::str::FromStr;
-use sparkles_parser::discover_local_udp_clients;
+use std::thread;
+use std::time::Duration;
+use sparkles_parser::DiscoveryWrapper;
 
 #[cfg(not(feature="bin-deps"))]
 compile_error!("
@@ -49,33 +51,38 @@ fn main() {
     if cli.version {
         return;
     }
+    let logger = SimpleLogger::new()
+        .with_module_level("multicast_discovery_socket", LevelFilter::Warn);
     if !cli.silent {
-        SimpleLogger::new().with_level(LevelFilter::Info).init().unwrap();
+        logger.with_level(LevelFilter::Info).init().unwrap();
     }
     else {
-        SimpleLogger::new().with_level(LevelFilter::Warn).init().unwrap();
+        logger.with_level(LevelFilter::Warn).init().unwrap();
     }
+    
+    let mut discovery_wrapper = DiscoveryWrapper::new();
 
-    let addr = if let Some(mut addr) = cli.addr {
-        if !addr.contains(':') {
-            addr.push_str(":38338");
-        }
+    let addr = if let Some(addr) = cli.addr {
         SocketAddr::from_str(&addr).unwrap()
     }
     else {
-        println!("Discovering clients...");
-        let clients: Vec<_> = discover_local_udp_clients().unwrap().into_values().collect();
-        
-        println!("Found clients:");
-        for (i, addrs) in clients.iter().enumerate() {
-            let addrs = addrs.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
-            println!("{}: {}", i+1, addrs);
-        }
+        println!("Discovering clients in local networks...");
+        let clients = loop {
+            let clients: Vec<_> = discovery_wrapper.discover().unwrap().into_values().collect();
 
-        if clients.is_empty() {
-            println!("No clients found.");
-            return;
-        }
+            if !clients.is_empty() {
+                println!("Found clients:");
+                for (i, addrs) in clients.iter().enumerate() {
+                    let addrs = addrs.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
+                    println!("{}: {}", i+1, addrs);
+                }
+                break clients;
+            }
+            else {
+                println!("No clients found...");
+                thread::sleep(Duration::from_secs(1));
+            }
+        };
 
         let addrs = if clients.len() > 1 {
             println!("Choose client number:");
@@ -118,7 +125,7 @@ fn main() {
         request_shutdown();
     }).unwrap();
     
-    info!("Waiting for connection to {}...", addr);
+    info!("Waiting for connection to {addr}...");
     let decoder = PacketDecoder::from_socket(addr);
     if is_shutting_down() {
         return;
