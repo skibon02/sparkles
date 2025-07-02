@@ -1,15 +1,15 @@
 [package]
 name = "sparkles-core"
 description = "Core crate for sparkles"
-version = "0.1.5"
+version = "0.1.8"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/skibon02/sparkles"
 
 [dependencies]
 cortex-m = {version = "0.7.7", optional = true}
-bincode = { version = "2.0.0-rc.3" }
-enumset = { version = "1.1.5", features = ["std"] }
+bincode = { version = "2.0.1" }
+enumset = { version = "1.1.6" }
 sha2-const-stable = "0.1.0"
 sparkles-macro = {version = "0.1.6", path="../sparkles-macro"}
 

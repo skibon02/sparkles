@@ -11,7 +11,6 @@ pub enum PacketType {
     TimestampFreq,
     GracefulShutdown,
     ConnectionAccepted,
-    Hello,
 }
 
 impl PacketType {
@@ -24,7 +23,6 @@ impl PacketType {
             PacketType::TimestampFreq => "TimestampFreq",
             PacketType::GracefulShutdown => "GracefulShutdown",
             PacketType::ConnectionAccepted => "ConnectionAccepted",
-            PacketType::Hello => "Hello",
         }
     }
     pub const fn pattern(&self) -> [u8; 32] {
@@ -48,6 +46,9 @@ impl PacketType {
         else if pattern == Self::GracefulShutdown.pattern() {
             Some(Self::GracefulShutdown)
         }
+        else if pattern == Self::ConnectionAccepted.pattern() {
+            Some(Self::ConnectionAccepted)
+        }
         else {
             None
         }
@@ -57,13 +58,11 @@ impl PacketType {
 #[derive(Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum RequestPacketType {
-    Discover,
     Subscribe,
 }
 impl RequestPacketType {
     pub const fn get_str(&self) -> &str {
         match self {
-            RequestPacketType::Discover => "Discover",
             RequestPacketType::Subscribe => "Subscribe",
         }
     }

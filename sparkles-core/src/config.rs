@@ -22,7 +22,6 @@ impl LocalStorageConfig {
 }
 
 impl Default for LocalStorageConfig {
-    #[must_use]
     fn default() -> Self {
         Self::default()
     }

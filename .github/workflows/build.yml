@@ -17,4 +17,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build binaries in "${{ matrix.BUILD_TARGET }}" mode
-        run: cargo build --profile ${{ matrix.BUILD_TARGET }}
+        run: cargo build --profile ${{ matrix.BUILD_TARGET }} --features bin-deps

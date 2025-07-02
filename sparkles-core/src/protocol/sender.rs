@@ -15,6 +15,8 @@ pub trait Sender {
     fn with_timestamp_freq_request(self, timestamp_freq_request: Arc<AtomicBool>) -> Self
     where
         Self: Sized;
+    
+    fn poll(&mut self) {}
 }
 
 pub trait ConfiguredSender: Sender + Sized {
@@ -59,6 +61,11 @@ impl Sender for SenderChain {
     {
         self.timestamp_freq_request = timestamp_freq_request;
         self
+    }
+    fn poll(&mut self) {
+        for sender in self.senders.iter_mut() {
+            sender.poll();
+        }
     }
 }
 
