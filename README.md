@@ -123,7 +123,7 @@ TODO:
 ✧ Cannot specify UDP address to listen on  
 ✧ Proper using of sparkles-macro::range_event_start!("name") gives warning
 ✧ Timestamp wrap-around is not handled well (not an issue for 64-bit systems)
-✧ Congestion control is not implemented
+✧ Congestion control is not implemented for UDP streaming
 
 
 ## Crate features

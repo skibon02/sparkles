@@ -6,21 +6,24 @@ The format is partially based on [Keep a Changelog](http://keepachangelog.com/)
 ## Version numbering
 For `sparkles` and `sparkles-parser` version number is adjusted without strict rules or guarantees.  
 `sparkles-core` have the same version number as `sparkles`.  
-For protocol used by both crates there are some guarantees based on version number:
+For protocol used by both crates there are some guarantees based on version number (Not applied to discovery protocol):
 - When major proto version is different for encoder and decoder, correct parsing is not guaranteed.
 - When major proto version is the same, but decoder's minor version is lower than encoder's, correct parsing is not guaranteed.
 - When major proto version is the same, but decoder's minor version is higher or equal than encoder's, correct parsing is guaranteed.
 
 ## Versions
-### [Unreleased] sparkles-parser
-- implement seq_num wraparound case in UDP parsing, find better approach for UDP handling
-- Add `multicast-socket` dependency for simpler discovery
-- TODO: add BarChart GUI example
-
-### [Unreleased] sparkles
+### [Unreleased 0.1.8] sparkles (proto-1.0)
+- Integrate `multicast-discovery-socket` for easy local network discovery
+- Monitor network interfaces for dynamic joining multicast group
 - Allow UDP client reconnection (e.g. after address/port change)
-- TODO: Support multiple clients
-- TODO: add reconnection disallow configuration
+- More stable recv handling in UDP sender
+
+### [Unreleased 0.1.1] sparkles-parser (proto-1.0)
+- Integrate `multicast-discovery-socket` for easy local network discovery
+- implement seq_num wraparound case in UDP parsing, find better approach for UDP handling
+
+### [Unreleased 0.1.6] sparkles-macro
+- Add `calc_hash!` macro to calculate hash of the event name at compile time
 
 ### [0.1.5, 0.1.6, 0.1.7] sparkles (proto-1.0) - 2025-03-09
 - New protocol version: 1.0
