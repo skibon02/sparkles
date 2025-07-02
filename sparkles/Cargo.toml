@@ -8,7 +8,7 @@ repository = "https://github.com/skibon02/sparkles"
 readme = "../README.md"
 
 [dependencies]
-sparkles-core = {version = "0.1.5", path = "../sparkles-core"}
+sparkles-core = {version = "0.1.8", path = "../sparkles-core"}
 sparkles-macro = {version = "0.1.6", path = "../sparkles-macro"}
 bincode = "2.0.1"
 log = { version = "0.4.27", default-features = false }
