@@ -18,18 +18,17 @@ Ready:
 
 TODO:  
 ⚙️ Add support for `Send` ranges (start and end in separate threads)
-⚙️ Congestion control for UDP streaming  
-⚙️ Track changes in structs encoded/decoded by `bincode`  
 ⚙️ Include git revision into build  
-⚙️ Option to run without an additional bg thread  
+⚙️ Viewer app  
+⚙️ Multi-app sync  
+⚙️ Global ranges  
+⚙️ Async support (tokio task support)  
+⚙️ Track changes in structs encoded/decoded by `bincode`  
+⚙️ Option to run without additional bg thread  
 ⚙️ Defmt support  
 ⚙️ Additional attached binary data  
 ⚙️ Option to limit total consumed TLS buffer allocation  
 ⚙️ Module info support: full module path, line of code  
-⚙️ Async support  
 ⚙️ NO_STD implementation  
 ⚙️ tags / hierarchy of events  
-⚙️ Viewer app  
-⚙️ Multi-app sync  
-⚙️ Global ranges  
 ⚙️ Measurement overhead self-test

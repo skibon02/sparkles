@@ -72,63 +72,35 @@ sparkles-parse-and-save
 
 
 ## ✧ Requirements
-🌟 STD support  
-🌟 x86/x86_64/aarch64 architecture.  
-**OR**  
-🌟 Functioning `Instant::now()`
+🌟 STD support (general accuracy)  
+🌟 `x86`/`x86_64`/`aarch64` architecture. (CPU cycle precision)
 
 ## ✧ Benches
-Single event overhead on average x86 machine (Intel i5-12400) is 9ns.
+Single event overhead on average x86 machine (Intel i5-12400) is ~9ns.
 
 
 ## ✧ Implementation status
-Ready:  
-🌟 Timestamp provider  
-🌟 Event name hashing  
-🌟 ~~Perfetto json format compatibility~~ (replaced with protobuf)  
-🌟 Ranges (scopes) support  
-🌟 Configuration support  
-🌟 Perfetto protobuf format support  
-🌟 Abstraction over events sending type (UDP/File)  
-🌟 Automatic timestamp frequency detection  
-🌟 aarch64 support  
-🌟 More explicit and recoverable packets with known pattern  
-🌟 Resistance to data loss during transmission  
-🌟 UDP real-time reader and parser library API  
-🌟 Better timestamp speed interpolation in parser  
-🌟 Sparkles-parser: read and parse in separate threads  
+Currently, you cannot attach additional data to your events (they are differentiated only by string name).
+Supporting additional attached data is important feature, but it will take some time to find smooth and performant way to implement it.
 
-TODO:  
-⚙️ Track changes in structs encoded/decoded by `bincode`  
-⚙️ Include git revision into build  
-⚙️ Option to run without additional bg thread  
-⚙️ Defmt support  
-⚙️ Additional attached binary data  
-⚙️ Option to limit total consumed TLS buffer allocation  
-⚙️ Module info support: full module path, line of code  
-⚙️ Async support  
-⚙️ NO_STD implementation  
-⚙️ tags / hierarchy of events  
-⚙️ Viewer app  
-⚙️ Multi-app sync  
-⚙️ Global ranges  
-⚙️ Measurement overhead self-test
+Primary focus now - is a dedicated app for real-time event simultaneous streaming from multiple applications. It will also allow to remove dependency from protobuf protocol libraries.
 
-## Known issues and limitations
+## ✧ Known issues and limitations
 ✧ Converting timestamp to nanosecond time only have local consistency. Long sessions (day and more) can go out of sync with system clock.  
 ✧ Currently can have only 256 unique event names per thread  
 ✧ Currently up to 256 opened but not closed ranges at a time are supported (mostly enough)  
 ✧ No std support for now  
-✧ Naive handling for bad network conditions: if at least one packet lost, the whole tracing data packet is dropped.  
 ✧ Cannot specify UDP address to listen on  
-✧ Proper using of sparkles-macro::range_event_start!("name") gives warning
-✧ Timestamp wrap-around is not handled well (not an issue for 64-bit systems)
+✧ Proper usage of sparkles-macro::range_event_start!("name") emits warning  
+✧ Timestamp wrap-around is not handled well (not an issue for 64-bit systems)  
+✧ Naive handling for bad network conditions: if at least one packet lost, the whole tracing data packet is dropped.  
 ✧ Congestion control is not implemented for UDP streaming
 
 
-## Crate features
+## ✧ Crate features
 ✧ **accurate-timestamps-x86** - Enable serialization for x86/x86_64 timestamps. Trade off timestamp accuracy for higher overhead (slightly).  
-✧ **self-tracing** - Add global buffer flushing events
+✧ **self-tracing** - Add global buffer flushing events  
+✧ **udp-streaming** - Real-time event streaming via UDP
 
 ｡ﾟﾟ･｡･ﾟﾟ｡  
 ﾟ。SkyGrel19 ✨  
