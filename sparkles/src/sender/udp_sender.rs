@@ -42,9 +42,9 @@ impl UdpSender {
         let mut buf = [0u8; 32];
         match self.socket.recv_from(&mut buf) {
             Ok((32, addr)) if buf == RequestPacketType::Subscribe.pattern() => {
-                info!("UDP client connected: {addr}");
+                info!("[sparkles] UDP client connected: {addr}");
                 if let Some(prev_addr) = self.dst_addr {
-                    warn!("Forgetting client: {prev_addr}. Now streaming to {addr}");
+                    warn!("[sparkles] Forgetting client: {prev_addr}. Now streaming to {addr}");
                 }
                 self.dst_addr = Some(addr);
                 self.last_recv = Some(Instant::now());
@@ -168,7 +168,7 @@ impl ConfiguredSender for UdpSender {
         let socket = match UdpSocket::bind(("0.0.0.0", desired_port)) {
             Ok(socket) => {
                 let local_port = socket.local_addr().unwrap().port();
-                info!("Udp socket bound to port {local_port}");
+                info!("[sparkles] Udp socket bound to port {local_port}");
                 socket
             }
             Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
