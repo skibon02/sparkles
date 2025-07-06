@@ -372,9 +372,9 @@ impl SparklesParser {
                                                 if ev_id != *start_id {
                                                     error!("Assertion failed: RangePart event has wrong RangeEnd id!");
                                                 }
-                                                let parsed = ParsedEvent::NamedRange {
+                                                let parsed = ParsedEvent::Range {
                                                     name_id: *start_id,
-                                                    end_name_id: id,
+                                                    end_name_id: Some(id),
                                                     start: start_tm,
                                                     end: timestamp
                                                 };
@@ -413,6 +413,7 @@ impl SparklesParser {
                                         }
                                         let parsed = ParsedEvent::Range {
                                             name_id: start_info.0,
+                                            end_name_id: None,
                                             start: start_info.1,
                                             end: timestamp
                                         };
@@ -503,24 +504,20 @@ impl SparklesParser {
                     }
                     ParsedEvent::Range {
                         name_id,
-                        start,
-                        end
-                    } => {
-                        let name = &event_names.get(name_id).unwrap().0;
-                        trace_res_file.add_range_event(name, thread_id,
-                                                       *start, *end);
-                    }
-                    ParsedEvent::NamedRange {
-                        name_id,
                         end_name_id,
                         start,
                         end
                     } => {
-
                         let name = &event_names.get(name_id).unwrap().0;
-                        let end_name = &event_names.get(end_name_id).unwrap().0;
-                        trace_res_file.add_range_event(&format!("{name} -> {end_name}"), thread_id,
-                                                       *start, *end);
+                        if let Some(end_name_id) = end_name_id {
+                            let end_name = &event_names.get(end_name_id).unwrap().0;
+                            trace_res_file.add_range_event(&format!("{name} -> {end_name}"), thread_id,
+                                                           *start, *end);
+                        }
+                        else {
+                            trace_res_file.add_range_event(name, thread_id,
+                                                           *start, *end);
+                        }
                     }
                 }
             }

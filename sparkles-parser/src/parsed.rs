@@ -9,14 +9,9 @@ pub enum ParsedEvent {
     Range {
         start: u64,
         end: u64,
-        name_id: TracingEventId
-    },
-    NamedRange {
         name_id: TracingEventId,
-        end_name_id: TracingEventId,
-        start: u64,
-        end: u64,
-    }
+        end_name_id: Option<TracingEventId>,
+    },
 }
 
 impl ParsedEvent {
@@ -24,7 +19,6 @@ impl ParsedEvent {
         match self {
             ParsedEvent::Instant { name_id, .. } => name_id,
             ParsedEvent::Range { name_id, .. } => name_id,
-            ParsedEvent::NamedRange { name_id, .. } => name_id,
         }
     }
 
@@ -32,10 +26,8 @@ impl ParsedEvent {
         match self {
             ParsedEvent::Instant { tm, .. } => *tm,
             ParsedEvent::Range { start, .. } => *start,
-            ParsedEvent::NamedRange { start, .. } => *start,
         }
     }
-
 }
 
 pub struct ThreadInfoState {
