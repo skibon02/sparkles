@@ -1,53 +1,41 @@
-use std::fmt::Display;
-use std::ops::Deref;
-use std::rc::Rc;
 use crate::TracingEventId;
 
 #[derive(Clone, Debug)]
 pub enum ParsedEvent {
     Instant {
         tm: u64,
-        name: EventName
+        name_id: TracingEventId
     },
     Range {
         start: u64,
         end: u64,
-        name: EventName
+        name_id: TracingEventId
     },
     NamedRange {
-        name: EventName,
-        end_name: EventName,
+        name_id: TracingEventId,
+        end_name_id: TracingEventId,
         start: u64,
         end: u64,
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct EventName {
-    id: TracingEventId,
-    name: Rc<str>,
-}
-
-impl EventName {
-    pub fn new(id: TracingEventId, name: &Rc<str>) -> Self {
-        Self {
-            id,
-            name: name.clone()
+impl ParsedEvent {
+    pub fn name_id(&self) -> &TracingEventId {
+        match self {
+            ParsedEvent::Instant { name_id, .. } => name_id,
+            ParsedEvent::Range { name_id, .. } => name_id,
+            ParsedEvent::NamedRange { name_id, .. } => name_id,
         }
     }
-}
 
-impl Deref for EventName {
-    type Target = Rc<str>;
-    fn deref(&self) -> &Self::Target {
-        &self.name
+    pub fn timestamp(&self) -> u64 {
+        match self {
+            ParsedEvent::Instant { tm, .. } => *tm,
+            ParsedEvent::Range { start, .. } => *start,
+            ParsedEvent::NamedRange { start, .. } => *start,
+        }
     }
-}
 
-impl Display for EventName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name)
-    }
 }
 
 pub struct ThreadInfoState {

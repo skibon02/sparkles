@@ -33,7 +33,7 @@ cargo add sparkles-macro
 use std::time::Duration;
 use sparkles_macro::{instant_event, range_event_start};
 
-// Refer to sparkles/examples/how_to_use.rs
+// Refer to sparkles/examples/how-to-use
 fn main() {
     let finalize_guard = sparkles::init_default();
     let g = range_event_start!("main()");

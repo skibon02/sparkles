@@ -1074,6 +1074,7 @@ dependencies = [
  "clap",
  "ctrlc",
  "enumset",
+ "indexmap",
  "log",
  "multicast-discovery-socket",
  "prost",
