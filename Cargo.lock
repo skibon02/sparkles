@@ -1031,6 +1031,7 @@ version = "0.1.8"
 dependencies = [
  "bincode 2.0.1",
  "chrono",
+ "clap",
  "log",
  "multicast-discovery-socket",
  "parking_lot",

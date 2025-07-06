@@ -11,6 +11,12 @@ For protocol used by both crates there are some guarantees based on version numb
 - When major proto version is the same, but decoder's minor version is lower than encoder's, correct parsing is not guaranteed.
 - When major proto version is the same, but decoder's minor version is higher or equal than encoder's, correct parsing is guaranteed.
 
+### [Unreleased] sparkles
+- Enabling `with_udp_multicast_default` will no longer reset desired udp port, specified with `with_udp_sender`
+
+### [Unreleased] sparkles-parser
+- `SparklesParser` now will send arrays of parsed events to the callback instead of single event.
+
 ## Versions
 ### [0.1.8] sparkles (proto-1.0)
 - Integrate `multicast-discovery-socket` for easy local network discovery

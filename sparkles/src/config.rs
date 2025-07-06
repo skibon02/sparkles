@@ -186,7 +186,6 @@ impl SparklesConfig {
     #[cfg(feature = "udp-streaming")]
     pub fn with_udp_multicast_default(mut self) -> Self {
         let config = self.udp_sender_config.get_or_insert_default();
-        config.desired_port = None;
         let multicast_cfg = crate::sender::udp_sender::default_config();
         config.multicast_discovery_config = Some(multicast_cfg);
         self

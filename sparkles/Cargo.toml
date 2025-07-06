@@ -21,6 +21,7 @@ multicast-discovery-socket = { version = "0.1.1", optional = true }
 [dev-dependencies]
 # for examples
 simple_logger = "5.0.0"
+clap = { version = "4.5.40", features = ["derive"] }
 # for puffin tests
 puffin_http = "0.16.1"
 puffin = { version = "0.19.1" }

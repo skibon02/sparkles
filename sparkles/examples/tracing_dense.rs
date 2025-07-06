@@ -4,13 +4,17 @@
 //! 2. Parse result file: `sparkles-parse-and-save`
 //! 3. Go to https://ui.perfetto.dev/ and drag'n'drop generated `trace.perf` file
 
+#[path = "../examples_common.rs"]
+pub mod common;
+
 use std::hint::black_box;
 use std::{env, thread};
 use std::time::Instant;
+use clap::Parser;
 use log::info;
 use simple_logger::SimpleLogger;
-use sparkles::config::SparklesConfig;
 use sparkles_macro::{instant_event, range_event_start};
+use crate::common::Args;
 
 fn calc_sqrt(val: f64) -> f64 {
     val.sqrt()
@@ -37,10 +41,11 @@ fn perform_tracing() {
 
 fn main() {
     SimpleLogger::new().init().unwrap();
-    let finalize_guard = sparkles::init(
-        SparklesConfig::default()
-            // .with_udp_multicast_default() // Uncomment to enable trace data streaming via UDP
-    );
+
+    let args = Args::parse();
+    info!("Running with args: {args:?}");
+    let cfg = args.sparkles_cfg();
+    let finalize_guard = sparkles::init(cfg);
     
     // Only relevant if using UDP sender
     sparkles::wait_client_connected();

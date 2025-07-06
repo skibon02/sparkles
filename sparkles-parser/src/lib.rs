@@ -17,7 +17,7 @@ use sparkles_core::consts::PROTOCOL_VERSION;
 use sparkles_core::local_storage::id_mapping::EventType;
 use sparkles_core::protocol::headers::SparklesMachineInfo;
 use crate::packet_decoder::{Packet, PacketDecoder, PacketReadError, ProtocolCounters};
-use crate::parsed::{ParsedEvent, ThreadInfoState};
+use crate::parsed::{EventName, ParsedEvent, ThreadInfoState};
 use crate::tracing_decoder::StreamFrameDecoder;
 
 // pub exports
@@ -160,7 +160,7 @@ impl SparklesParser {
         }
     }
 
-    pub fn parse_to_end(&mut self, mut packet_decoder: PacketDecoder, mut f: impl FnMut(&ParsedEvent, &ThreadInfoState)) -> ParseResult<()> {
+    pub fn parse_to_end(&mut self, mut packet_decoder: PacketDecoder, mut f: impl FnMut(&[ParsedEvent], &ThreadInfoState)) -> ParseResult<()> {
         let (packets_tx, packets_rx) = mpsc::sync_channel(100);
         let (counters_tx, counters_rx) = mpsc::sync_channel(1);
 
@@ -181,6 +181,8 @@ impl SparklesParser {
                             break;
                         }
                         packets_tx.send(packet).unwrap();
+                        #[cfg(feature="self-tracing")]
+                        sparkles_macro::range_event_end!(g, "Got packet!");
                     }
                     Ok(None) => {
 
@@ -188,7 +190,7 @@ impl SparklesParser {
                     Err(e) => {
                         #[cfg(feature="self-tracing")]
                         sparkles_macro::range_event_end!(g, "Error while reading");
-                        warn!("Error while reading packet: {:?}", e);
+                        warn!("Error while reading packet: {e:?}");
                         
                         thread::sleep(Duration::from_millis(500));
 
@@ -220,7 +222,7 @@ impl SparklesParser {
         Ok(())
     }
 
-    pub fn parse_single_packet(&mut self, packet: Packet, f: &mut impl FnMut(&ParsedEvent, &ThreadInfoState)) {
+    pub fn parse_single_packet(&mut self, packet: Packet, f: &mut impl FnMut(&[ParsedEvent], &ThreadInfoState)) {
         match packet {
             Packet::MachineInfo(info) => {
                 if info.ver.0 != PROTOCOL_VERSION.0 {
@@ -235,7 +237,7 @@ impl SparklesParser {
             }
             Packet::TimestampFreq(ticks_per_sec, cur_tm) => {
                 let ticks_per_ns = ticks_per_sec as f64 / 1_000_000_000.0;
-                info!("Got timestamp frequency: {:?} t/ns", ticks_per_ns);
+                info!("Got timestamp frequency: {ticks_per_ns:?} t/ns");
 
                 self.interpolation_points.add_interpolation_point(ticks_per_ns, cur_tm);
             }
@@ -282,7 +284,7 @@ impl SparklesParser {
                     let g = sparkles_macro::range_event_start!("Decode raw events");
                     let new_events = parser_state.state_machine.decode_many(&data);
                     let new_events_len = new_events.len();
-                    debug!("Received {} events", new_events_len);
+                    debug!("Received {new_events_len} events");
                     #[cfg(feature="self-tracing")]
                     drop(g);
 
@@ -290,6 +292,8 @@ impl SparklesParser {
                     let g = sparkles_macro::range_event_start!("Parse new events");
                     let mut cur_tm = header.start_timestamp;
                     let mut first = true;
+
+                    let mut res = Vec::with_capacity(new_events_len / 2);
                     for evt in new_events {
                         let mut dif_tm_zero = false;
                         if first {
@@ -327,14 +331,14 @@ impl SparklesParser {
                                     ev_name.clone()
                                 }
                                 else {
-                                    error!("Did not find event name for id: {}", id);
-                                    Rc::from(format!("Unknown Instant {}", id))
+                                    error!("Did not find event name for id: {id}");
+                                    Rc::from(format!("Unknown Instant {id}"))
                                 };
                                 let parsed = ParsedEvent::Instant {
-                                    name: ev_name.clone(),
+                                    name: EventName::new(id, &ev_name),
                                     tm: timestamp
                                 };
-                                f(&parsed, &parser_state.thread_info_state());
+                                res.push(parsed);
                             }
                             TracingEvent::RangePart(id, _, ord_id) => {
                                 if let Some((ev_name, ev_type)) = parser_state.id_store.get(&id) {
@@ -351,19 +355,19 @@ impl SparklesParser {
                                                     error!("Assertion failed: RangePart event has wrong RangeEnd id!");
                                                 }
                                                 let parsed = ParsedEvent::NamedRange {
-                                                    name: start_name.clone(),
-                                                    end_name: ev_name.clone(),
+                                                    name: EventName::new(*start_id, start_name),
+                                                    end_name: EventName::new(id, ev_name),
                                                     start: start_tm,
                                                     end: timestamp
                                                 };
-                                                f(&parsed, &parser_state.thread_info_state());
+                                                res.push(parsed);
                                             }
                                             else {
-                                                warn!("Did not find start event for RangePart id: {}", id);
+                                                warn!("Did not find start event for RangePart id: {id}");
                                             }
                                         }
                                         else {
-                                            warn!("Did not find start event for RangePart id: {}", id);
+                                            warn!("Did not find start event for RangePart id: {id}");
                                         }
                                     }
                                     else {
@@ -372,14 +376,14 @@ impl SparklesParser {
                                     }
                                 }
                                 else {
-                                    error!("Did not find event name for id: {}", id);
-                                    let ev_name: Rc<str> = Rc::from(format!("Unknown RangePart {}", id));
+                                    error!("Did not find event name for id: {id}");
+                                    let ev_name: Rc<str> = Rc::from(format!("Unknown RangePart {id}"));
 
                                     let parsed = ParsedEvent::Instant {
-                                        name: ev_name,
+                                        name: EventName::new(id, &ev_name),
                                         tm: timestamp
                                     };
-                                    f(&parsed, &parser_state.thread_info_state());
+                                    res.push(parsed);
                                 };
 
                             }
@@ -390,22 +394,24 @@ impl SparklesParser {
                                             error!("Assertion failed: UnnamedRangeEnd event has non-RangeStart type!");
                                         }
                                         let parsed = ParsedEvent::Range {
-                                            name: start_name.clone(),
+                                            name: EventName::new(start_info.0, start_name),
                                             start: start_info.1,
                                             end: timestamp
                                         };
-                                        f(&parsed, &parser_state.thread_info_state());
+                                        res.push(parsed);
                                     }
                                     else {
-                                        warn!("Did not find start event for UnnamedRangeEnd id: {}. Skipping...", ord_id);
+                                        warn!("Did not find start event for UnnamedRangeEnd id: {ord_id}. Skipping...");
                                     }
                                 }
                                 else {
-                                    warn!("Did not find start event for UnnamedRangeEnd id: {}. Skipping...", ord_id);
+                                    warn!("Did not find start event for UnnamedRangeEnd id: {ord_id}. Skipping...");
                                 }
                             }
                         }
                     }
+
+                    f(&res, &parser_state.thread_info_state());
 
                     parser_state.stats.new_events(new_events_len, header.start_timestamp, header.end_timestamp);
 
@@ -415,7 +421,7 @@ impl SparklesParser {
 
             Packet::FailedPages(failed_pages) => {
                 for header in failed_pages {
-                    info!("Got failed pages header: {:?}", header);
+                    info!("Got failed pages header: {header:?}");
 
                     let start = header.start_timestamp;
                     let dur = header.end_timestamp - header.start_timestamp;
@@ -441,8 +447,8 @@ impl SparklesParser {
             let events_per_sec = stats.total_events as f64 / ((stats.max_timestamp - stats.min_timestamp) as f64 / ticks_per_ns) * 1_000_000_000.0;
             let events_per_sec_covered = stats.total_events as f64 / (stats.covered_dur as f64 / ticks_per_ns) * 1_000_000_000.0;
             info!("Total events: {}", stats.total_events);
-            info!("Events per second (global): {} eps", events_per_sec);
-            info!("Events per second (covered): {} eps", events_per_sec_covered);
+            info!("Events per second (global): {events_per_sec} eps");
+            info!("Events per second (covered): {events_per_sec_covered} eps");
             info!("Average event duration: {} ns", stats.covered_dur as f64 / ticks_per_ns / stats.total_events as f64);
             
             info!("\n");
@@ -462,36 +468,38 @@ impl SparklesParser {
         use crate::perfetto_format::PerfettoTraceFile;
 
         let mut trace_res_file = PerfettoTraceFile::new();
-        self.parse_to_end(packet_decoder, |ev, thread_info| {
+        self.parse_to_end(packet_decoder, |evs, thread_info| {
             let thread_id = thread_info.thread_id.unwrap_or(999);
             trace_res_file.set_thread_name(thread_id, thread_info.thread_name.as_deref());
             #[cfg(feature="local-packet-bounds")]
             trace_res_file.set_thread_name(999666 + thread_info.thread_ord_id, Some("[not thread] local packets"));
-            
-            match ev {
-                ParsedEvent::Instant {
-                    name,
-                    tm
-                } => {
-                    trace_res_file.add_point_event(name, thread_id, *tm);
-                }
-                ParsedEvent::Range {
-                    name,
-                    start,
-                    end
-                } => {
-                    trace_res_file.add_range_event(name, thread_id,
-                                                   *start, *end);
-                }
-                ParsedEvent::NamedRange {
-                    name,
-                    end_name,
-                    start,
-                    end
-                } => {
 
-                    trace_res_file.add_range_event(&format!("{} -> {}", name, end_name), thread_id, 
-                                                   *start, *end);
+            for ev in evs {
+                match ev {
+                    ParsedEvent::Instant {
+                        name,
+                        tm
+                    } => {
+                        trace_res_file.add_point_event(name, thread_id, *tm);
+                    }
+                    ParsedEvent::Range {
+                        name,
+                        start,
+                        end
+                    } => {
+                        trace_res_file.add_range_event(name, thread_id,
+                                                       *start, *end);
+                    }
+                    ParsedEvent::NamedRange {
+                        name,
+                        end_name,
+                        start,
+                        end
+                    } => {
+
+                        trace_res_file.add_range_event(&format!("{name} -> {end_name}"), thread_id,
+                                                       *start, *end);
+                    }
                 }
             }
         })?;
