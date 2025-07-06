@@ -15,6 +15,6 @@ fn main() {
             let name = &event_names.get(ev.name_id()).unwrap().0;
             info!("Got event {ev:?}");
         }
-    }).unwrap();
+    }, |_, _| {}).unwrap();
     info!("Parsing done, client disconnected!");
 }

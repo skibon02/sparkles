@@ -161,7 +161,11 @@ impl SparklesParser {
         }
     }
 
-    pub fn parse_to_end(&mut self, mut packet_decoder: PacketDecoder, mut f: impl FnMut(&[ParsedEvent], &ThreadInfoState, &IndexMap<TracingEventId, (Rc<str>, EventType)>)) -> ParseResult<()> {
+    pub fn parse_to_end(&mut self,
+                        mut packet_decoder: PacketDecoder,
+                        mut f: impl FnMut(&[ParsedEvent], &ThreadInfoState, &IndexMap<TracingEventId, (Rc<str>, EventType)>),
+                        mut on_event_names_changed: impl FnMut(&ThreadInfoState, &IndexMap<TracingEventId, (Rc<str>, EventType)>)
+    ) -> ParseResult<()> {
         let (packets_tx, packets_rx) = mpsc::sync_channel(100);
         let (counters_tx, counters_rx) = mpsc::sync_channel(1);
 
@@ -210,7 +214,7 @@ impl SparklesParser {
         }).unwrap();
 
         while let Ok(packet) = packets_rx.recv() {
-            self.parse_single_packet(packet, &mut f);
+            self.parse_single_packet(packet, &mut f, &mut on_event_names_changed);
         }
         self.counters = counters_rx.recv().unwrap();
 
@@ -223,7 +227,11 @@ impl SparklesParser {
         Ok(())
     }
 
-    pub fn parse_single_packet(&mut self, packet: Packet, f: &mut impl FnMut(&[ParsedEvent], &ThreadInfoState, &IndexMap<TracingEventId, (Rc<str>, EventType)>)) {
+    pub fn parse_single_packet(&mut self,
+                               packet: Packet,
+                               on_new_events: &mut impl FnMut(&[ParsedEvent], &ThreadInfoState, &IndexMap<TracingEventId, (Rc<str>, EventType)>),
+                               on_event_names_changed: &mut impl FnMut(&ThreadInfoState, &IndexMap<TracingEventId, (Rc<str>, EventType)>)
+    ) {
         match packet {
             Packet::MachineInfo(info) => {
                 if info.ver.0 != PROTOCOL_VERSION.0 {
@@ -264,18 +272,27 @@ impl SparklesParser {
                     parser_state.last_thread_ord_id = thread_id;
 
                     // Merge id store
+                    let mut something_changed = false;
                     for (id, (name, r#type)) in header.id_store.tags.iter().enumerate() {
                         let id = id as u8;
                         if let Some((old_name, old_type)) = parser_state.id_store.get(&id) {
                             if old_name.as_ref() != name.deref() || old_type != r#type {
+                                something_changed = true;
                                 error!("ID store mismatch for thread {:?}#{:?}! ID: {}, Old: {:?}, New: {:?}", parser_state.thread_name, parser_state.thread_id,
                                                 id, (old_name, old_type), (name, r#type));
                             }
+                        }
+                        else {
+                            something_changed = true;
                         }
                         parser_state.id_store.insert(id, (Rc::from(name.deref()), *r#type));
                     }
                     #[cfg(feature="self-tracing")]
                     drop(g);
+
+                    if something_changed {
+                        on_event_names_changed(&parser_state.thread_info_state(), &parser_state.id_store);
+                    }
 
                     if self.interpolation_points.is_empty() {
                         continue;
@@ -412,7 +429,7 @@ impl SparklesParser {
                         }
                     }
 
-                    f(&res, &parser_state.thread_info_state(), &parser_state.id_store);
+                    on_new_events(&res, &parser_state.thread_info_state(), &parser_state.id_store);
 
                     parser_state.stats.new_events(new_events_len, header.start_timestamp, header.end_timestamp);
 
@@ -507,7 +524,7 @@ impl SparklesParser {
                     }
                 }
             }
-        })?;
+        }, |_, _| {})?;
 
         if cfg!(feature="local-packet-bounds") {
             for (global_i, local_i, thread_ord_id, start,end) in std::mem::take(&mut self.local_packet_ranges).into_iter() {
