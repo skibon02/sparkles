@@ -8,20 +8,31 @@
 //! 5. If feature `cortex-m` is active, `CortexMTimestamp` is used.
 //! 6. If none of above is true, compile error is emitted.
 
-#[cfg(all(any(target_arch="x86", target_arch="x86_64"), use_native_timestamp_impl))]
-pub mod x86;
-#[cfg(all(any(target_arch="x86", target_arch="x86_64"), use_native_timestamp_impl))]
-pub use x86::X86Timestamp as Timestamp;
+#[cfg(use_native_timestamp_impl)]
+mod native_impl {
+    #[cfg(any(target_arch="x86", target_arch="x86_64"))]
+    pub mod x86;
+    #[cfg(any(target_arch="x86", target_arch="x86_64"))]
+    pub use x86::X86Timestamp as Timestamp;
 
-#[cfg(all(target_arch="aarch64", use_native_timestamp_impl))]
-pub mod aarch64;
-#[cfg(all(target_arch="aarch64", use_native_timestamp_impl))]
-pub use aarch64::AArch64Timestamp as Timestamp;
+    #[cfg(target_arch="aarch64")]
+    pub mod aarch64;
+    #[cfg(target_arch="aarch64")]
+    pub use aarch64::AArch64Timestamp as Timestamp;
 
-#[cfg(all(target_arch="riscv32", use_native_timestamp_impl))]
-pub mod riscv32;
-#[cfg(all(target_arch="riscv32", use_native_timestamp_impl))]
-pub use riscv32::RiscV32Timestamp as Timestamp;
+    #[cfg(all(target_arch="riscv32", target_os="none"))]
+    pub mod riscv32;
+    #[cfg(all(target_arch="riscv32", target_os="none"))]
+    pub use riscv32::RiscV32Timestamp as Timestamp;
+
+    #[cfg(all(target_arch="riscv32", target_os="espidf"))]
+    pub mod espidf;
+    #[cfg(all(target_arch="riscv32", target_os="espidf"))]
+    pub use espidf::EspIdfTimestamp as Timestamp;
+}
+#[cfg(use_native_timestamp_impl)]
+pub use native_impl::Timestamp;
+
 
 #[cfg(use_fallback_timestamp_impl)]
 pub mod std;
@@ -30,19 +41,18 @@ pub use std::StdTimestamp as Timestamp;
 
 #[cfg(feature="cortex-m")]
 pub mod cortex_m;
-
 #[cfg(feature="cortex-m")]
 pub use cortex_m::CortexMTimestamp as Timestamp;
 
-#[cfg(all(target_os="none", not(use_native_timestamp_impl)))]
-compile_error!("Unsupported platform! Either std or cortex-m are currently supported");
+#[cfg(all(not(use_fallback_timestamp_impl), not(use_native_timestamp_impl), not(feature="cortex-m")))]
+compile_error!("Unsupported platform! Either std or cortex-m is currently required");
 
 /// TimestampProvider is a source for relatively stable timestamp, which wraps around after reaching maximum value.
 ///
 /// Maximum value is defined as unsigned integer composed of TIMESTAMP_VALID_BITS binary ones.
 pub trait TimestampProvider {
     /// Numeric timestamp type, can be either u32 or u64.
-    type TimestampType: Copy + Sized + From<u64>;
+    type TimestampType: Copy + Sized;
 
     /// Returns current timestamp from provider.
     fn now() -> Self::TimestampType;

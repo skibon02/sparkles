@@ -5,7 +5,7 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 use crate::config::LocalStorageConfig;
 use crate::local_storage::id_mapping::{EventType, IdMappingState};
 use crate::protocol::headers::{LocalPacketHeader, ThreadInfo};
-use crate::Timestamp;
+use crate::{Timestamp, TimestampType};
 
 use crate::timestamp::TimestampProvider;
 
@@ -21,7 +21,7 @@ pub trait GlobalStorageImpl {
 pub struct LocalStorage<G: GlobalStorageImpl> {
     config: LocalStorageConfig,
     
-    prev_tm: u64,
+    prev_tm: TimestampType,
 
     buf: Vec<u8>,
     id_store: IdMappingState,
@@ -187,14 +187,14 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
     }
 
     #[inline(always)]
-    fn update_local_info(&mut self, timestamp: u64) -> u64 {
+    fn update_local_info(&mut self, timestamp: TimestampType) -> u64 {
         let mut dif_tm = timestamp.wrapping_sub(self.prev_tm);
         self.prev_tm = timestamp;
         if self.local_packet_header.start_timestamp == 0 {
-            self.local_packet_header.start_timestamp = timestamp;
+            self.local_packet_header.start_timestamp = timestamp as u64;
             dif_tm = 0;
         }
-        dif_tm
+        dif_tm as u64
     }
 
     pub fn set_cur_thread_name(&mut self, name: String) {
@@ -228,7 +228,7 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
         }
 
         // Fill header
-        self.local_packet_header.end_timestamp = self.prev_tm;
+        self.local_packet_header.end_timestamp = self.prev_tm as u64;
         self.local_packet_header.id_store = self.id_store.clone().into();
 
         let success = if blocking {

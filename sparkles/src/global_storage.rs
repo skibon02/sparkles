@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use log::{debug, error, trace, warn};
 use parking_lot::{Condvar, Mutex};
 use ringbuf::traits::{Consumer, Observer, Producer};
-use sparkles_core::{Timestamp, TimestampProvider};
+use sparkles_core::{Timestamp, TimestampProvider, TimestampType};
 use sparkles_core::protocol::headers::{LocalPacketHeader, SparklesMachineInfo};
 use sparkles_core::protocol::packets::{send_failed_pages, send_graceful_shutdown, send_machine_info, send_timestamp_freq, send_trace_data};
 use sparkles_core::protocol::sender::{ConfiguredSender, Sender, SenderChain};
@@ -276,7 +276,7 @@ pub fn finalize() {
 }
 
 struct TimestampFreqDetector {
-    prev_tm: u64,
+    prev_tm: TimestampType,
     prev_instant: Instant,
 
     capture_interval: Duration,
@@ -313,6 +313,6 @@ impl TimestampFreqDetector {
         self.prev_tm = now_tm;
         self.prev_instant = now;
 
-        (ticks_per_sec as u64, now_tm)
+        (ticks_per_sec as u64, now_tm as u64)
     }
 }

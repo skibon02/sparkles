@@ -8,3 +8,5 @@ pub mod local_storage;
 pub mod config;
 pub mod consts;
 pub mod protocol;
+
+pub type TimestampType = <Timestamp as TimestampProvider>::TimestampType;
