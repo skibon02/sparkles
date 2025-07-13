@@ -13,9 +13,12 @@ enumset = { version = "1.1.6" }
 sha2-const-stable = "0.1.0"
 sparkles-macro = {version = "0.1.6", path="../sparkles-macro"}
 
+[build-dependencies]
+cfg-expr = "0.20.1"
 
 [features]
 default = ["self-tracing"]
 self-tracing = []
 accurate-timestamps-x86 = []
 cortex-m = ["dep:cortex-m"]
+force-fallback-impl = []

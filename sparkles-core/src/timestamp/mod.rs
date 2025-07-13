@@ -1,25 +1,31 @@
 //! Timestamps adaptively choose implementation depending on architecture, std support and `cortex-m` feature
 //!
 //! Priority order:
-//! 1. If your CPU architecture is x86 or x86_64, `X86Timestamp` is used
-//! 1. If your CPU architecture is aarch64, `Aarch64Timestamp` is used
-//! 2. Otherwise, if you're in std environment, `std::time::Instant` is selected as timestamp provider.
-//! 3. If feature `cortex-m` is active, `CortexMTimestamp` is used.
-//! 4. If none of above is true, compile error is emitted.
+//! 1. If feature `force-fallback-impl` is enabled and std is available, `std::time::Instant` is used
+//! 2. If your CPU architecture is x86 or x86_64, `X86Timestamp` is used
+//! 3. If your CPU architecture is aarch64, `Aarch64Timestamp` is used
+//! 4. Otherwise, if you're in std environment, `std::time::Instant` is selected as timestamp provider.
+//! 5. If feature `cortex-m` is active, `CortexMTimestamp` is used.
+//! 6. If none of above is true, compile error is emitted.
 
-#[cfg(any(target_arch="x86", target_arch="x86_64"))]
+#[cfg(all(any(target_arch="x86", target_arch="x86_64"), use_native_timestamp_impl))]
 pub mod x86;
-#[cfg(any(target_arch="x86", target_arch="x86_64"))]
+#[cfg(all(any(target_arch="x86", target_arch="x86_64"), use_native_timestamp_impl))]
 pub use x86::X86Timestamp as Timestamp;
 
-#[cfg(target_arch="aarch64")]
+#[cfg(all(target_arch="aarch64", use_native_timestamp_impl))]
 pub mod aarch64;
-#[cfg(target_arch="aarch64")]
+#[cfg(all(target_arch="aarch64", use_native_timestamp_impl))]
 pub use aarch64::AArch64Timestamp as Timestamp;
 
-#[cfg(all(not(target_os="none"), not(any(target_arch="x86", target_arch="x86_64", target_arch="aarch64"))))]
+#[cfg(all(target_arch="riscv32", use_native_timestamp_impl))]
+pub mod riscv32;
+#[cfg(all(target_arch="riscv32", use_native_timestamp_impl))]
+pub use riscv32::RiscV32Timestamp as Timestamp;
+
+#[cfg(use_fallback_timestamp_impl)]
 pub mod std;
-#[cfg(all(not(target_os="none"), not(any(target_arch="x86", target_arch="x86_64", target_arch="aarch64"))))]
+#[cfg(use_fallback_timestamp_impl)]
 pub use std::StdTimestamp as Timestamp;
 
 #[cfg(feature="cortex-m")]
@@ -28,7 +34,7 @@ pub mod cortex_m;
 #[cfg(feature="cortex-m")]
 pub use cortex_m::CortexMTimestamp as Timestamp;
 
-#[cfg(not(any(target_arch="x86", target_arch="x86_64", target_arch="aarch64", feature="cortex-m", not(target_os="none"))))]
+#[cfg(all(target_os="none", not(use_native_timestamp_impl)))]
 compile_error!("Unsupported platform! Either std or cortex-m are currently supported");
 
 /// TimestampProvider is a source for relatively stable timestamp, which wraps around after reaching maximum value.
