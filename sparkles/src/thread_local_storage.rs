@@ -56,6 +56,9 @@ impl GlobalStorageImpl for GlobalStorageRef {
 fn new_local_storage() -> LocalStorage<GlobalStorageRef> {
     let thread_info = thread::current();
     let thread_name = thread_info.name().unwrap_or("Unnamed thread").to_string();
+    #[cfg(feature="unstable-thread-id")]
+    let thread_id = thread_info.id().as_u64().into();
+    #[cfg(not(feature="unstable-thread-id"))]
     let thread_id = thread_id::get() as u64;
     let thread_info = ThreadInfo {
         new_thread_name: Some(thread_name.clone()),

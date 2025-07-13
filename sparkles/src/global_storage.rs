@@ -3,6 +3,7 @@
 
 use std::io::Read;
 use std::{mem, thread};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{JoinHandle};
 use std::time::{Duration, Instant};
@@ -121,7 +122,10 @@ impl GlobalStorage {
 }
 
 fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
-    thread::Builder::new().name("[Sparkles] Sender thread".to_string()).spawn(move || {
+    thread::Builder::new()
+        .name("[Sparkles] Sender thread".to_string())
+        .stack_size(16_000)
+        .spawn(move || {
         debug!("[sparkles] Flush thread started!");
 
         let mut sender_chain = SenderChain::default();
@@ -149,7 +153,8 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
         #[cfg(not(feature = "udp-streaming"))]
         on_client_connect();
 
-        let process_name = std::env::current_exe().unwrap().file_name().unwrap().to_str().unwrap().to_string();
+        let process_name = std::env::current_exe().unwrap_or(PathBuf::from("main"))
+            .file_name().unwrap().to_str().unwrap().to_string();
         let pid = std::process::id();
 
         let mut freq_detector = TimestampFreqDetector::start(Duration::from_millis(100));
@@ -163,19 +168,19 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
         send_timestamp_freq(&mut sender_chain, ticks_per_sec, cur_tm);
 
         let mut last_sender_poll_tm: Option<Instant> = None;
-        
+
         let tmp_mutex = Mutex::new(());
         loop {
             use crate as sparkles;
-            
+
             if last_sender_poll_tm.is_none_or(|tm| tm.elapsed() > Duration::from_millis(200)) {
                 sender_chain.poll();
                 last_sender_poll_tm = Some(Instant::now());
             }
-            
+
             if sender_chain.take_tm_freq_requested() {
                 THREAD_LOCAL_NOTIFICATION.fetch_add(1, Ordering::Relaxed);
-                
+
                 let (ticks_per_sec, cur_tm) = freq_detector.next_forced();
                 send_timestamp_freq(&mut sender_chain, ticks_per_sec, cur_tm);
                 send_machine_info(&mut sender_chain, info_header.clone());
@@ -200,7 +205,7 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
 
                 if let Some(global_storage) = GLOBAL_STORAGE.lock().as_mut() {
                     let failed_pages = global_storage.take_failed_pages();
-                    
+
                     GLOBAL_FLUSHING_RUNNING.store(true, Ordering::Relaxed);
                     (global_storage.try_take_buf(is_finalizing), failed_pages)
                 }
@@ -228,7 +233,7 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
                 send_graceful_shutdown(&mut sender_chain);
                 break;
             }
-            
+
             if !FINALIZE_STARTED.load(Ordering::Relaxed) {
                 let mut mutex = tmp_mutex.lock();
                 #[cfg(feature="self-tracing")]

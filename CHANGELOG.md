@@ -12,7 +12,15 @@ For protocol used by both crates there are some guarantees based on version numb
 - When major proto version is the same, but decoder's minor version is higher or equal than encoder's, correct parsing is guaranteed.
 
 ### [Unreleased] sparkles
-- Enabling `with_udp_multicast_default` will no longer reset desired udp port, specified with `with_udp_sender`
+- Specify stack size for the sender thread
+- Add `unstable-thread-id` feature for platforms without `thread-id` implementation (requires nightly)
+- Fix panic on systems without process_name
+- Examples: Enable UDP multicast by default
+
+### [Unreleased] sparkles-core
+- Add RISC-V 32-bit architecture timestamp support
+- Improve target detection
+- Add `force-fallback-impl` feature to use `Instant`-based implementation instead of arch-specific
 
 ### [Unreleased] sparkles-parser
 - `SparklesParser` now will send arrays of parsed events to the callback instead of single event.

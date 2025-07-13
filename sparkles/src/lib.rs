@@ -1,3 +1,5 @@
+#![ cfg_attr( feature = "unstable-thread-id", feature(thread_id_value) ) ]
+
 mod thread_local_storage;
 mod global_storage;
 pub mod sender;

@@ -16,7 +16,7 @@ ringbuf = "0.4.8"
 thread-id = { version = "5.0.0" }
 chrono = "0.4.41"
 parking_lot = "0.12.4"
-multicast-discovery-socket = { version = "0.1.1", optional = true }
+multicast-discovery-socket = { version = "0.1.2", optional = true }
 
 [dev-dependencies]
 # for examples
@@ -32,3 +32,5 @@ default = ["self-tracing", "udp-streaming"]
 udp-streaming = ["dep:multicast-discovery-socket"]
 accurate-timestamps-x86 = ["sparkles-core/accurate-timestamps-x86"]
 self-tracing = ["sparkles-core/self-tracing"]
+unstable-thread-id = []
+force-fallback-impl = ["sparkles-core/force-fallback-impl"]
