@@ -8,7 +8,7 @@ on:
 
 jobs:
   # Test sparkles library for all supported platforms and feature combinations
-  test-sparkles:
+  cross-platform-build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -49,11 +49,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Install Rust toolchain
+      - name: Install Rust toolchain (non-RISC-V)
+        if: matrix.target != 'riscv32imac-esp-espidf'
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
           targets: ${{ matrix.target }}
+          components: rust-src
+      
+      - name: Install Rust toolchain (RISC-V)
+        if: matrix.target == 'riscv32imac-esp-espidf'
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
           components: rust-src
       
       - name: Install cross-compilation tools
