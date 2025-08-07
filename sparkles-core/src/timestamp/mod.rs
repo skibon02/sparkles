@@ -23,6 +23,11 @@ pub mod riscv32;
 #[cfg(all(target_arch="riscv32", use_native_timestamp_impl))]
 pub use riscv32::RiscV32Timestamp as Timestamp;
 
+#[cfg(all(target_arch="xtensa", target_os="espidf", use_native_timestamp_impl))]
+pub mod xtensa_espidf;
+#[cfg(all(target_arch="xtensa", target_os="espidf", use_native_timestamp_impl))]
+pub use xtensa_espidf::XtensaEsp32Timestamp as Timestamp;
+
 #[cfg(use_fallback_timestamp_impl)]
 pub mod std;
 #[cfg(use_fallback_timestamp_impl)]

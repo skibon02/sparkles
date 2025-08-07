@@ -1,4 +1,6 @@
 #![no_std]
+#![cfg_attr(all(target_arch = "xtensa", target_os = "espidf"), feature(asm_experimental_arch))]
+
 extern crate alloc;
 
 pub mod timestamp;

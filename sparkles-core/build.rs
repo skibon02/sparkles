@@ -22,7 +22,8 @@ fn main() -> std::io::Result<()> {
     
     if force_fallback && target.os.is_some() {
         println!("cargo:rustc-cfg=use_fallback_timestamp_impl");
-    } else if [Arch::x86, Arch::x86_64, Arch::aarch64, Arch::riscv32].contains(&target.arch) {
+    } else if [Arch::x86, Arch::x86_64, Arch::aarch64, Arch::riscv32].contains(&target.arch) 
+        || (target.arch == Arch::xtensa && target.os.as_ref().map(|os| os.as_str()) == Some("espidf")) {
         println!("cargo:rustc-cfg=use_native_timestamp_impl");
     } else if target.os.is_some() {
         println!("cargo:rustc-cfg=use_fallback_timestamp_impl");
