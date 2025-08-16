@@ -18,7 +18,7 @@ enumset = { version = "1.1.6" }
 
 # optional
 prost = { version= "0.14.1", optional = true }
-sparkles = { version = "0.1.8", path = "../sparkles", default-features = false, optional = true }
+sparkles = { version = "0.1.9", path = "../sparkles", default-features = false, optional = true }
 sparkles-macro = { version = "0.1.6", path = "../sparkles-macro", optional = true }
 bytes = { version = "1.10.1", optional = true }
 

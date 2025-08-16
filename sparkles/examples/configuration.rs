@@ -9,7 +9,7 @@ use log::LevelFilter;
 use simple_logger::SimpleLogger;
 use sparkles::config::SparklesConfig;
 use sparkles::sender::file_sender::FileSenderConfig;
-use sparkles_macro::{instant_event, range_event_start};
+use sparkles::{instant_event, range_event_start};
 
 fn main() {
     SimpleLogger::default().with_level(LevelFilter::Debug).init().unwrap();

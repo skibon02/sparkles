@@ -16,6 +16,7 @@ For protocol used by both crates there are some guarantees based on version numb
 - Fix panic on systems without process_name
 - Config: rename `flush_threshold` to `sending_threshold`
 - Config: add `auto_send_ms` for configuring maximum interval for sending trace data packets, improving responsiveness in real-time parsing scenarios.
+- Re-export `sparkles-macro` crate from `sparkles`
 Examples:
 - Enable UDP multicast by default
 - Add `cross-thread-ranges` example

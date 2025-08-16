@@ -5,6 +5,8 @@ mod global_storage;
 pub mod sender;
 pub mod config;
 
+pub use sparkles_macro::*;
+
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 use parking_lot::{Condvar, Mutex};
 use log::{info, warn};

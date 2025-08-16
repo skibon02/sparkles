@@ -25,13 +25,12 @@ Up to 🫸100_000_000🫷 events per second can be captured in a local environme
 1. Add sparkles as a dependency to your project
 ```bash
 cargo add sparkles 
-cargo add sparkles-macro
 ```
 2. Add some instant/range events to your code
 
 ```rust
 use std::time::Duration;
-use sparkles_macro::{instant_event, range_event_start};
+use sparkles::{instant_event, range_event_start};
 
 // Refer to sparkles/examples/how-to-use
 fn main() {
