@@ -19,21 +19,21 @@ use crate::global_storage::GlobalStorage;
 static GLOBAL_FLUSHING_RUNNING: AtomicBool = AtomicBool::new(false);
 static THREAD_LOCAL_NOTIFICATION: AtomicUsize = AtomicUsize::new(0);
 
-/// Use `sparkles-macro::instant_event!("name")` instead
+/// Use `sparkles::instant_event!("event name")` instead
 pub fn instant_event(hash: u32, string: &'static str) {
     thread_local_storage::with_thread_local_tracer(|tracer| {
         tracer.event_instant(hash, string);
     });
 }
 
-/// The value is created using macro `sparkles-macro::range_event_start!("name")`
+/// The value is created using macro `sparkles::range_event_start!("event name")`
 pub struct RangeStartGuard {
     repr: RangeStartRepr,
     ended: bool,
 }
 
 impl RangeStartGuard {
-    /// Use `sparkles-macro::range_event_end!(guard, "name")` instead
+    /// Use `sparkles::range_event_end!(guard, "range end name (optional)")` instead
     pub fn end(mut self, hash: u32, string: &'static str) {
         thread_local_storage::with_thread_local_tracer(|tracer| {
             tracer.event_range_end(self.repr, hash, string);
@@ -52,7 +52,7 @@ impl Drop for RangeStartGuard {
     }
 }
 
-/// Use `sparkles-macro::range_event_start!("name")` instead
+/// Use `sparkles::range_event_start!("range event name")` instead
 #[must_use]
 pub fn range_event_start(hash: u32, string: &'static str) -> RangeStartGuard {
     thread_local_storage::with_thread_local_tracer(|tracer| {
