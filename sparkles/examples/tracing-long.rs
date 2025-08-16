@@ -53,7 +53,7 @@ fn main() {
     let cfg = args.sparkles_cfg();
     let finalize_guard = sparkles::init(cfg
         .with_flush_threshold(32000)
-        .with_thread_flush_attempt_threshold(16000)
+        .with_flush_attempt_threshold(16000)
     );
     
     // Only relevant if using UDP sender

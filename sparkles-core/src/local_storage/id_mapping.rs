@@ -50,7 +50,7 @@ impl U32U8Map {
     }
 
     fn hash(&self, key: u32) -> usize {
-        (core::num::Wrapping(key).0 as usize).wrapping_mul(2654435761) % 256
+        (key.wrapping_mul(2654435761) >> 24) as usize
     }
 
     fn insert(&mut self, key: u32, value: u8) -> Result<(), &'static str> {
@@ -131,8 +131,12 @@ impl IdMappingState {
                 v
             },
             None => {
+                if self.last_id == 255 {
+                    return 255;
+                }
                 let last_id = self.last_id;
                 self.last_id += 1;
+                // Unwrap is safe here, as we check for last_id == 255 above
                 self.id_map.insert(hash, last_id).unwrap();
                 self.tags_store.tags.push((tag.to_string(), event_type));
                 last_id

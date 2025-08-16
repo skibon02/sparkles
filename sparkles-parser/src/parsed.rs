@@ -11,6 +11,7 @@ pub enum ParsedEvent {
         end: u64,
         name_id: TracingEventId,
         end_name_id: Option<TracingEventId>,
+        start_thread_ord_id: Option<u64>,
     },
 }
 

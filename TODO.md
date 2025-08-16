@@ -1,3 +1,6 @@
+## ✧ Known issues
+- Perfetto format export: incorrect start/end pairing for overlapping ranges with the same name (cross-thread-ranges example) - maybe not solvable by protobuf format
+
 ## ✧ Implementation status
 Ready:  
 🌟 Timestamp provider  
@@ -15,11 +18,13 @@ Ready:
 🌟 Better timestamp speed interpolation in parser  
 🌟 Sparkles-parser: read and parse in separate threads  
 🌟 Multicast discovery support
+🌟 Add support for `Send` ranges (start and end in separate threads)
+🌟 Viewer app (sparkles-gui)
 
 TODO:  
-⚙️ Add support for `Send` ranges (start and end in separate threads)
+⚙️ External event sources support (GPU events specifically)
+⚙️ Ensure stability if a lot of threads are spawned over time (additional memory allocation for per-thread data)
 ⚙️ Include git revision into build  
-⚙️ Viewer app  
 ⚙️ Multi-app sync  
 ⚙️ Global ranges  
 ⚙️ Async support (tokio task support)  

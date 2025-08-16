@@ -1037,7 +1037,7 @@ dependencies = [
 
 [[package]]
 name = "sparkles"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "bincode 2.0.1",
  "chrono",
@@ -1049,6 +1049,7 @@ dependencies = [
  "puffin_http",
  "ringbuf",
  "simple_logger",
+ "smallvec",
  "sparkles-core",
  "sparkles-macro",
  "thread-id",
@@ -1056,7 +1057,7 @@ dependencies = [
 
 [[package]]
 name = "sparkles-core"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "bincode 2.0.1",
  "cfg-expr",
@@ -1077,7 +1078,7 @@ dependencies = [
 
 [[package]]
 name = "sparkles-parser"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bincode 2.0.1",
  "bytes",

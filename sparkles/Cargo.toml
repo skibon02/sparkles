@@ -1,7 +1,7 @@
 [package]
 name = "sparkles"
 description = "Capture execution flow of your Rust application with CPU cycle precision!"
-version = "0.1.8"
+version = "0.1.9"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/skibon02/sparkles"
@@ -17,6 +17,7 @@ thread-id = { version = "5.0.0" }
 chrono = "0.4.41"
 parking_lot = "0.12.4"
 multicast-discovery-socket = { version = "0.1.2", optional = true }
+smallvec = "1.15.1"
 
 [dev-dependencies]
 # for examples

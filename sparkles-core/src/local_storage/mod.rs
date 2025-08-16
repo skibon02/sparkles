@@ -1,6 +1,5 @@
 use alloc::string::String;
 use alloc::vec::Vec;
-use core::marker::PhantomData;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use crate::config::LocalStorageConfig;
 use crate::local_storage::id_mapping::{EventType, IdMappingState};
@@ -16,6 +15,8 @@ pub trait GlobalStorageImpl {
     fn try_flush(&self, header: &LocalPacketHeader, data: &[u8]) -> bool;
     fn is_buf_available(&self) -> bool;
     fn take_new_update(&mut self) -> bool;
+    fn exchange_closed_ranges(&mut self, thread_id: u64, closed_ranges: Vec<(u64, u8)>, incoming_closed_ranges: impl FnMut(&[u8]));
+    fn ticks_per_ms(&self) -> u32;
 }
 
 pub struct LocalStorage<G: GlobalStorageImpl> {
@@ -33,10 +34,13 @@ pub struct LocalStorage<G: GlobalStorageImpl> {
     
     started_ranges: [bool; 256],
     started_ranges_cnt: usize,
+    foreign_thread_ended: Vec<(u64, u8)>, // (thread_id, range_ord_id)
+
+    prev_flush_tm: u64,
 
     flush_event_hash: u32,
     flush_event_str: &'static str,
-    
+
     thread_name: Option<String>,
 }
 
@@ -48,11 +52,13 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
 
         let thread_name = thread_info.new_thread_name.clone();
         let flush_event_str = "[sparkles] Flushing local storage";
-        let flush_event_hash = sparkles_macro::calc_hash!("[sprkles] Flushing local storage");
+        let flush_event_hash = sparkles_macro::calc_hash!("[sparkles] Flushing local storage");
+
+        let now_tm = Timestamp::now();
         LocalStorage {
             config,
             buf: Vec::new(),
-            prev_tm: 0,
+            prev_tm: now_tm,
 
             id_store: Default::default(),
             local_packet_header: LocalPacketHeader {
@@ -66,6 +72,9 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
             last_range_ord_id: 0,
             started_ranges: [false; 256],
             started_ranges_cnt: 0,
+            foreign_thread_ended: Vec::new(),
+
+            prev_flush_tm: now_tm,
 
             flush_event_hash,
             flush_event_str,
@@ -76,12 +85,13 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
 
     fn new_range_ord_id(&mut self) -> u8 {
         let range_ord_id = self.last_range_ord_id;
-        if self.started_ranges_cnt == 256 {
-            self.last_range_ord_id = self.last_range_ord_id.wrapping_add(1);
+        self.last_range_ord_id = self.last_range_ord_id.wrapping_add(1);
+        if self.started_ranges_cnt >= 256 {
+            self.started_ranges_cnt += 1;
             range_ord_id
         }
         else {
-            self.last_range_ord_id = self.last_range_ord_id.wrapping_add(1);
+            // Guaranteed to find a free range_ord_id slot
             while self.started_ranges[self.last_range_ord_id as usize] {
                 self.last_range_ord_id = self.last_range_ord_id.wrapping_add(1);
             }
@@ -101,13 +111,13 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
         // On a new range event we acquire new range_ord_id to match start and end events
         let range_ord_id = self.new_range_ord_id();
         let start_id = self.id_store.insert_and_get_id(hash, name, EventType::RangeStart);
-        self.range_event(Some(start_id), range_ord_id, prevent_flushing);
+        self.range_event(Some(start_id), range_ord_id, prevent_flushing, None);
 
         RangeStartRepr {
             range_ord_id,
             range_start_id: start_id,
 
-            _not_send: PhantomData
+            start_thread_id: self.local_packet_header.thread_ord_id,
         }
     }
 
@@ -119,20 +129,29 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
     #[inline(always)]
     fn event_range_end_inner(&mut self, range_start: RangeStartRepr, hash: u32, name: &str, prevent_flushing: bool) {
         let range_ord_id = range_start.range_ord_id;
-        self.started_ranges[range_start.range_ord_id as usize] = false;
-        self.started_ranges_cnt -= 1;
-        let start_id = range_start.range_start_id;
-        if hash != 0 {
-            let end_id = self.id_store.insert_and_get_id(hash, name, EventType::RangeEnd(start_id));
-            self.range_event(Some(end_id), range_ord_id, prevent_flushing);
+        let foreign_thread_id = if range_start.start_thread_id != self.local_packet_header.thread_ord_id {
+            // Foreign range end event. We should notify the global storage about it.
+            self.foreign_thread_ended.push((range_start.start_thread_id, range_ord_id));
+            Some(range_start.start_thread_id)
         }
         else {
-            self.range_event(None, range_ord_id, prevent_flushing);
+            self.started_ranges[range_start.range_ord_id as usize] = false;
+            self.started_ranges_cnt -= 1;
+            None
+        };
+        let start_id = range_start.range_start_id;
+        let event_id = if hash != 0 {
+            let end_id = self.id_store.insert_and_get_id(hash, name, EventType::RangeEnd(start_id));
+            Some(end_id)
         }
+        else {
+            None
+        };
+        self.range_event(event_id, range_ord_id, prevent_flushing, foreign_thread_id);
     }
 
     #[inline(always)]
-    fn range_event(&mut self, id: Option<u8>, range_ord_id: u8, prevent_flushing: bool) {
+    fn range_event(&mut self, id: Option<u8>, range_ord_id: u8, prevent_flushing: bool, foreign_thread_id: Option<u64>) {
         //      STAGE 2: Acquire timestamp and calculate now, dif_tm
         //    (3ns on non-serializing x86 timestamp, 11ns on serializing x86 timestamp)
         let timestamp = Timestamp::now();
@@ -143,12 +162,21 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
         //      STAGE 4: PUSH VALUES
         let dif_tm_bytes: [u8; 8] = dif_tm.to_le_bytes();
         let dif_tm_bytes_len = ((Timestamp::TIMESTAMP_VALID_BITS as u32 + 7 - dif_tm.leading_zeros()) >> 3) as u8;
-        let buf = match id {
-            Some(id) => [id, dif_tm_bytes_len | 0x80, range_ord_id],
-            None => [0, dif_tm_bytes_len | 0xC0, range_ord_id]
+        let mut buf = match id {
+            Some(id) => [id, dif_tm_bytes_len | 0x80, range_ord_id], // Range flag
+            None => [0, dif_tm_bytes_len | 0xC0, range_ord_id] // Range + UnnamedEnd flags
         };
+        if foreign_thread_id.is_some() {
+            buf[1] |= 0x20; // Set foreign thread flag
+        }
         self.buf.extend_from_slice(&buf);
         self.buf.extend_from_slice(&dif_tm_bytes[..dif_tm_bytes_len as usize]);
+        if let Some(foreign_thread_id) = foreign_thread_id {
+            let foreign_thread_id_bytes: [u8; 8] = foreign_thread_id.to_le_bytes();
+            let foreign_thread_id_bytes_len = ((64 + 7 - foreign_thread_id.leading_zeros()) >> 3) as u8;
+            self.buf.push(foreign_thread_id_bytes_len);
+            self.buf.extend_from_slice(&foreign_thread_id_bytes[..foreign_thread_id_bytes_len as usize]);
+        }
 
 
         //      STAGE 5: flushing
@@ -205,10 +233,14 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
     /// Check buffer length, and flush if the buffer is full
     #[inline(always)]
     pub fn auto_flush(&mut self) {
+        let ticks_per_ms = self.global_storage_ref.ticks_per_ms();
         if self.buf.len() >= self.config.flush_threshold {
             self.flush(true);
         }
         else if self.buf.len() >= self.config.flush_attempt_threshold && self.global_storage_ref.is_buf_available() {
+            self.flush(false);
+        }
+        else if ticks_per_ms != 0 && Timestamp::now() - self.prev_flush_tm > self.config.auto_flush_ms as u64 * ticks_per_ms as u64 && self.global_storage_ref.is_buf_available() {
             self.flush(false);
         }
     }
@@ -220,12 +252,26 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
             return;
         }
 
+        self.prev_flush_tm = Timestamp::now();
+
         #[cfg(feature = "self-tracing")]
         let range_event = self.event_range_start_inner(self.flush_event_hash, self.flush_event_str, true);
         let new_update = self.global_storage_ref.take_new_update();
         if new_update {
             self.local_packet_header.thread_info.new_thread_name = self.thread_name.clone();
         }
+
+        // Exchange closed ranges
+        self.global_storage_ref.exchange_closed_ranges(
+            self.local_packet_header.thread_ord_id,
+            core::mem::take(&mut self.foreign_thread_ended),
+            |closed_ranges| {
+                for &rng in closed_ranges {
+                    self.started_ranges[rng as usize] = false;
+                    self.started_ranges_cnt -= 1;
+                }
+            }
+        );
 
         // Fill header
         self.local_packet_header.end_timestamp = self.prev_tm;
@@ -263,5 +309,5 @@ pub struct RangeStartRepr {
     range_start_id: u8, // required to create potentially new end event
     range_ord_id: u8, // required to match with start event during parsing
 
-    _not_send: PhantomData<*const ()>
+    start_thread_id: u64,
 }

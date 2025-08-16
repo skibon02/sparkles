@@ -3,13 +3,15 @@
 
 use std::io::Read;
 use std::{mem, thread};
+use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::thread::{JoinHandle};
 use std::time::{Duration, Instant};
 use log::{debug, error, trace, warn};
 use parking_lot::{Condvar, Mutex};
 use ringbuf::traits::{Consumer, Observer, Producer};
+use smallvec::SmallVec;
 use sparkles_core::{Timestamp, TimestampProvider};
 use sparkles_core::protocol::headers::{LocalPacketHeader, SparklesMachineInfo};
 use sparkles_core::protocol::packets::{send_failed_pages, send_graceful_shutdown, send_machine_info, send_timestamp_freq, send_trace_data};
@@ -20,6 +22,7 @@ use crate::sender::file_sender::FileSender;
 use crate::thread_local_storage::set_local_storage_config;
 
 pub static GLOBAL_STORAGE: Mutex<Option<GlobalStorage>> = Mutex::new(None);
+pub static TICKS_PER_MS: AtomicU32 = AtomicU32::new(0);
 static FINALIZE_STARTED: AtomicBool = AtomicBool::new(false);
 static SENDER_THREAD_ITERATION: Condvar = Condvar::new();
 
@@ -27,6 +30,9 @@ pub struct GlobalStorage {
     config: SparklesConfig,
     inner: ringbuf::LocalRb<ringbuf::storage::Heap<u8>>,
     sending_thread: Option<JoinHandle<()>>,
+
+    // TODO: may grow as threads are spawned and finished
+    range_end_requests: HashMap<u64, SmallVec<[u8; 8]>>,
 
     skipped_msr_pages_headers: Vec<LocalPacketHeader>,
 }
@@ -44,6 +50,8 @@ impl GlobalStorage {
             config,
             inner: ringbuf::LocalRb::new(global_capacity),
             sending_thread: Some(jh),
+
+            range_end_requests: HashMap::new(),
 
             skipped_msr_pages_headers: Vec::new(),
         }
@@ -91,14 +99,13 @@ impl GlobalStorage {
         let threshold = if take_everything {
             0
         } else {
-            self.config.flush_threshold
+            self.config.sending_threshold
         };
         if self.inner.occupied_len() > threshold {
             use crate as sparkles;
             #[cfg(feature="self-tracing")]
             let g = sparkles_macro::range_event_start!("[internal] Taking stored events");
             
-            debug!("[sparkles] Flushing..");
             let slices = self.inner.as_slices();
             let slices = (slices.0.to_vec(), slices.1.to_vec());
             self.inner.clear();
@@ -114,9 +121,17 @@ impl GlobalStorage {
     }
     
     pub fn check_notify(&self) {
-        let thr = self.config.flush_threshold;
+        let thr = self.config.sending_threshold;
         if self.inner.occupied_len() > thr {
             SENDER_THREAD_ITERATION.notify_one();
+        }
+    }
+    pub fn exchange_closed_ranges(&mut self, thread_id: u64, closed_ranges: Vec<(u64, u8)>, mut incoming_closed_ranges: impl FnMut(&[u8])) {
+        for (thread_id, range_id) in closed_ranges {
+            self.range_end_requests.entry(thread_id).or_default().push(range_id);
+        }
+        if let Some(ends) = self.range_end_requests.get_mut(&thread_id) {
+            incoming_closed_ranges(&mem::take(ends));
         }
     }
 }
@@ -167,6 +182,7 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
         send_timestamp_freq(&mut sender_chain, ticks_per_sec, cur_tm);
 
         let mut last_sender_poll_tm: Option<Instant> = None;
+        let mut last_send_data_tm: Option<Instant> = None;
 
         let tmp_mutex = Mutex::new(());
         loop {
@@ -185,6 +201,7 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
                 send_machine_info(&mut sender_chain, info_header.clone());
             }
             else if let Some((ticks_per_sec, cur_tm)) = freq_detector.next() {
+                TICKS_PER_MS.store((ticks_per_sec / 1_000) as u32, Ordering::Relaxed);
                 send_timestamp_freq(&mut sender_chain, ticks_per_sec, cur_tm);
             }
 
@@ -193,6 +210,12 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
             if is_finalizing {
                 debug!("[sparkles] Finalize detected!");
             }
+
+            let forced_flush = if let Some(last_send_data_tm) = last_send_data_tm {
+                last_send_data_tm.elapsed() > Duration::from_millis(config.auto_send_ms as u64)
+            } else {
+                true
+            };
 
             // this thing should be fast
             let (slices, failed_pages) = {
@@ -206,7 +229,7 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
                     let failed_pages = global_storage.take_failed_pages();
 
                     GLOBAL_FLUSHING_RUNNING.store(true, Ordering::Relaxed);
-                    (global_storage.try_take_buf(is_finalizing), failed_pages)
+                    (global_storage.try_take_buf(is_finalizing || forced_flush), failed_pages)
                 }
                 else {
                     (None, Vec::new())
@@ -219,6 +242,7 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
                 #[cfg(feature="self-tracing")]
                 let grd = crate::range_event_start(crate::calculate_hash("[internal] Send data bytes"), "[internal] Send data bytes");
                 send_trace_data(&mut sender_chain, &slice1, &slice2);
+                last_send_data_tm = Some(Instant::now());
             }
 
             // handle failed pages

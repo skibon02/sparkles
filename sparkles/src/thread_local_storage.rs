@@ -6,7 +6,7 @@ use sparkles_core::config::LocalStorageConfig;
 use sparkles_core::local_storage::{GlobalStorageImpl, LocalStorage};
 use sparkles_core::protocol::headers::{LocalPacketHeader, ThreadInfo};
 use crate::{GLOBAL_FLUSHING_RUNNING, THREAD_LOCAL_NOTIFICATION};
-use crate::global_storage::{GlobalStorage, GLOBAL_STORAGE};
+use crate::global_storage::{GlobalStorage, GLOBAL_STORAGE, TICKS_PER_MS};
 
 #[derive(Default)]
 pub struct GlobalStorageRef {
@@ -50,6 +50,16 @@ impl GlobalStorageImpl for GlobalStorageRef {
         else {
             false
         }
+    }
+
+    fn exchange_closed_ranges(&mut self, thread_id: u64, closed_ranges: Vec<(u64, u8)>, incoming_closed_ranges: impl FnMut(&[u8])) {
+        let mut global_storage_ref = GLOBAL_STORAGE.lock();
+        let global_storage_ref = global_storage_ref.get_or_insert_with(|| GlobalStorage::new(Default::default()));
+        global_storage_ref.exchange_closed_ranges(thread_id, closed_ranges, incoming_closed_ranges);
+    }
+
+    fn ticks_per_ms(&self) -> u32 {
+        TICKS_PER_MS.load(Ordering::Relaxed)
     }
 }
 

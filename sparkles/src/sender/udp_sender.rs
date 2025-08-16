@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::thread;
 use std::time::{Duration, Instant};
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use multicast_discovery_socket::config::MulticastDiscoveryConfig;
 use multicast_discovery_socket::MulticastDiscoverySocket;
 use sparkles_core::protocol::packets::{PacketType, RequestPacketType};
@@ -89,7 +89,7 @@ impl Sender for UdpSender {
         let full_data = data.iter().fold(Vec::new(), |mut acc, x| { acc.extend_from_slice(x); acc });
 
         let mut size = 0;
-        debug!("UDP packet chunks: {}", full_len.div_ceil(1300));
+        trace!("UDP packet chunks: {}", full_len.div_ceil(1300));
         for (chunk_num, chunk) in full_data.chunks(SHORT_PACKET_SIZE).enumerate() {
             // 1) Packet type pattern
             packet_buf.extend_from_slice(&packet_type.pattern());
