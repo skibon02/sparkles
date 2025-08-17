@@ -8,6 +8,7 @@
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use bincode::{Decode, Encode};
+use crate::StaticNameRepr;
 
 #[derive(Copy, Clone, Encode, Decode, Debug, PartialEq)]
 pub enum EventType {
@@ -123,9 +124,9 @@ impl IdMappingState {
 
     /// Lookup ID for the provided hash, or insert tag and acquire a new ID
     #[inline(always)]
-    pub fn insert_and_get_id(&mut self, hash: u32, tag: &str, event_type: EventType) -> u8 {
+    pub fn insert_and_get_id(&mut self, name: StaticNameRepr, event_type: EventType) -> u8 {
         let offs = event_type.get_offs();
-        let hash = hash + offs;
+        let hash = name.hash() + offs;
         match self.id_map.get(hash) {
             Some(v) => {
                 v
@@ -138,7 +139,7 @@ impl IdMappingState {
                 self.last_id += 1;
                 // Unwrap is safe here, as we check for last_id == 255 above
                 self.id_map.insert(hash, last_id).unwrap();
-                self.tags_store.tags.push((tag.to_string(), event_type));
+                self.tags_store.tags.push((name.string.to_string(), event_type));
                 last_id
             }
         }

@@ -1,10 +1,11 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicUsize, Ordering};
+use sparkles_macro::static_name;
 use crate::config::LocalStorageConfig;
 use crate::local_storage::id_mapping::{EventType, IdMappingState};
 use crate::protocol::headers::{LocalPacketHeader, ThreadInfo};
-use crate::Timestamp;
+use crate::{StaticNameRepr, Timestamp};
 
 use crate::timestamp::TimestampProvider;
 
@@ -38,8 +39,7 @@ pub struct LocalStorage<G: GlobalStorageImpl> {
 
     prev_flush_tm: u64,
 
-    flush_event_hash: u32,
-    flush_event_str: &'static str,
+    flush_event_name: StaticNameRepr,
 
     thread_name: Option<String>,
 }
@@ -51,8 +51,15 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
         let thread_ord_id = CUR_THREAD_ID.fetch_add(1, Ordering::Relaxed) as u64;
 
         let thread_name = thread_info.new_thread_name.clone();
-        let flush_event_str = "[sparkles] Flushing local storage";
-        let flush_event_hash = sparkles_macro::calc_hash!("[sparkles] Flushing local storage");
+
+        use crate::StaticNameRepr;
+        // Hack to compile sparkles-macro when sparkles is included in dependencies
+        pub mod sparkles {
+            pub mod core {
+                pub(crate) use crate::StaticNameRepr;
+            }
+        }
+        let flush_event_name = static_name!("[sparkles] Flushing local storage");
 
         let now_tm = Timestamp::now();
         LocalStorage {
@@ -76,8 +83,7 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
 
             prev_flush_tm: now_tm,
 
-            flush_event_hash,
-            flush_event_str,
+            flush_event_name,
 
             thread_name,
         }
@@ -103,14 +109,14 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
     }
 
     #[inline(always)]
-    pub fn event_range_start(&mut self, hash: u32, name: &str) -> RangeStartRepr {
-        self.event_range_start_inner(hash, name, false)
+    pub fn event_range_start(&mut self, name: StaticNameRepr) -> RangeStartRepr {
+        self.event_range_start_inner(name, false)
     }
 
-    fn event_range_start_inner(&mut self, hash: u32, name: &str, prevent_flushing: bool) -> RangeStartRepr {
+    fn event_range_start_inner(&mut self, name: StaticNameRepr, prevent_flushing: bool) -> RangeStartRepr {
         // On a new range event we acquire new range_ord_id to match start and end events
         let range_ord_id = self.new_range_ord_id();
-        let start_id = self.id_store.insert_and_get_id(hash, name, EventType::RangeStart);
+        let start_id = self.id_store.insert_and_get_id(name, EventType::RangeStart);
         self.range_event(Some(start_id), range_ord_id, prevent_flushing, None);
 
         RangeStartRepr {
@@ -122,12 +128,12 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
     }
 
     #[inline(always)]
-    pub fn event_range_end(&mut self, range_start: RangeStartRepr, hash: u32, name: &str) {
-        self.event_range_end_inner(range_start, hash, name, false);
+    pub fn event_range_end(&mut self, range_start: RangeStartRepr, name: StaticNameRepr) {
+        self.event_range_end_inner(range_start, name, false);
     }
 
     #[inline(always)]
-    fn event_range_end_inner(&mut self, range_start: RangeStartRepr, hash: u32, name: &str, prevent_flushing: bool) {
+    fn event_range_end_inner(&mut self, range_start: RangeStartRepr, name: StaticNameRepr, prevent_flushing: bool) {
         let range_ord_id = range_start.range_ord_id;
         let foreign_thread_id = if range_start.start_thread_id != self.local_packet_header.thread_ord_id {
             // Foreign range end event. We should notify the global storage about it.
@@ -140,8 +146,8 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
             None
         };
         let start_id = range_start.range_start_id;
-        let event_id = if hash != 0 {
-            let end_id = self.id_store.insert_and_get_id(hash, name, EventType::RangeEnd(start_id));
+        let event_id = if name.hash() != 0 {
+            let end_id = self.id_store.insert_and_get_id(name, EventType::RangeEnd(start_id));
             Some(end_id)
         }
         else {
@@ -187,9 +193,9 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
 
 
     #[inline(always)]
-    pub fn event_instant(&mut self, hash: u32, string: &str) {
+    pub fn event_instant(&mut self, name: StaticNameRepr) {
         //      STAGE 1: insert string and get ID.
-        let id = self.id_store.insert_and_get_id(hash, string, EventType::Instant);
+        let id = self.id_store.insert_and_get_id(name, EventType::Instant);
         self.event(id);
     }
 
@@ -255,7 +261,7 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
         self.prev_flush_tm = Timestamp::now();
 
         #[cfg(feature = "self-tracing")]
-        let range_event = self.event_range_start_inner(self.flush_event_hash, self.flush_event_str, true);
+        let range_event = self.event_range_start_inner(self.flush_event_name, true);
         let new_update = self.global_storage_ref.take_new_update();
         if new_update {
             self.local_packet_header.thread_info.new_thread_name = self.thread_name.clone();
@@ -294,7 +300,7 @@ impl<G: GlobalStorageImpl> LocalStorage<G> {
             self.local_packet_header.start_timestamp = 0;
         }
         #[cfg(feature = "self-tracing")]
-        self.event_range_end_inner(range_event, 0, "", true);
+        self.event_range_end_inner(range_event, StaticNameRepr::empty(), true);
     }
 }
 

@@ -12,6 +12,7 @@ For protocol used by both crates there are some guarantees based on version numb
 - When major proto version is the same, but decoder's minor version is higher or equal than encoder's, correct parsing is guaranteed.
 
 ### [Unreleased] sparkles
+- Breaking: Switch to using `StaticNameRepr` for event names.
 - Add `unstable-thread-id` feature for platforms without `thread-id` implementation (requires nightly)
 - Fix panic on systems without process_name
 - Config: rename `flush_threshold` to `sending_threshold`
@@ -22,6 +23,7 @@ Examples:
 - Add `cross-thread-ranges` example
 
 ### [Unreleased] sparkles-core
+- Breaking: Introduce `StaticNameRepr` and use it for storing str-hash pairs for event names. Modify API to use `StaticNameRepr` instead of 2 arguments.
 - Add RISC-V 32-bit architecture timestamp support
 - Refactor target detection
 - Add `force-fallback-impl` feature to use `Instant`-based implementation instead of arch-specific
@@ -29,6 +31,10 @@ Examples:
 - Config: add `auto_flush_ms` for configuring maximum interval for flush trigger.
 - Range guard is now Send: You can start and end range event in different threads.
 - Put more stability in `IdMappingState::insert_and_get_id`: return 255 in case of overflow instead of returning wrong ids.
+
+### [Unreleased] sparkles-macro
+- Breaking: Rename `calc_hash` to `static_name`
+- Breaking: Modify macros tor return/use `StaticNameRepr`.
 
 ### [Unreleased] sparkles-parser
 - `SparklesParser` now will send arrays of parsed events to the callback instead of single event.

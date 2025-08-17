@@ -1037,7 +1037,7 @@ dependencies = [
 
 [[package]]
 name = "sparkles"
-version = "0.1.9"
+version = "0.2.0"
 dependencies = [
  "bincode 2.0.1",
  "chrono",
@@ -1057,7 +1057,7 @@ dependencies = [
 
 [[package]]
 name = "sparkles-core"
-version = "0.1.9"
+version = "0.2.0"
 dependencies = [
  "bincode 2.0.1",
  "cfg-expr",
@@ -1069,7 +1069,7 @@ dependencies = [
 
 [[package]]
 name = "sparkles-macro"
-version = "0.1.6"
+version = "0.2.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1078,7 +1078,7 @@ dependencies = [
 
 [[package]]
 name = "sparkles-parser"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "bincode 2.0.1",
  "bytes",

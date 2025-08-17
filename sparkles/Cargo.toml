@@ -1,15 +1,15 @@
 [package]
 name = "sparkles"
 description = "Capture execution flow of your Rust application with CPU cycle precision!"
-version = "0.1.9"
+version = "0.2.0"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/skibon02/sparkles"
 readme = "../README.md"
 
 [dependencies]
-sparkles-core = {version = "0.1.9", path = "../sparkles-core"}
-sparkles-macro = {version = "0.1.6", path = "../sparkles-macro"}
+sparkles-core = {version = "0.2.0", path = "../sparkles-core"}
+sparkles-macro = {version = "0.2.0", path = "../sparkles-macro", features = ["included-from-sparkles"]}
 bincode = "2.0.1"
 log = { version = "0.4.27", default-features = false }
 ringbuf = "0.4.8"

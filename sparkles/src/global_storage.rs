@@ -16,6 +16,7 @@ use sparkles_core::{Timestamp, TimestampProvider};
 use sparkles_core::protocol::headers::{LocalPacketHeader, SparklesMachineInfo};
 use sparkles_core::protocol::packets::{send_failed_pages, send_graceful_shutdown, send_machine_info, send_timestamp_freq, send_trace_data};
 use sparkles_core::protocol::sender::{ConfiguredSender, Sender, SenderChain};
+use sparkles_macro::static_name;
 use crate::config::SparklesConfig;
 use crate::{flush_thread_local, on_client_connect, GLOBAL_FLUSHING_RUNNING, THREAD_LOCAL_NOTIFICATION};
 use crate::sender::file_sender::FileSender;
@@ -240,7 +241,7 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
             // handle buffers
             if let Some((slice1, slice2)) = slices {
                 #[cfg(feature="self-tracing")]
-                let grd = crate::range_event_start(crate::calculate_hash("[internal] Send data bytes"), "[internal] Send data bytes");
+                let grd = crate::range_event_start(static_name!("[internal] Send data bytes"));
                 send_trace_data(&mut sender_chain, &slice1, &slice2);
                 last_send_data_tm = Some(Instant::now());
             }

@@ -6,6 +6,9 @@ pub mod sender;
 pub mod config;
 
 pub use sparkles_macro::*;
+pub mod core {
+    pub use sparkles_core::*;
+}
 
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 use parking_lot::{Condvar, Mutex};
@@ -13,16 +16,24 @@ use log::{info, warn};
 pub use global_storage::finalize;
 
 use sparkles_core::local_storage::RangeStartRepr;
+use sparkles_core::StaticNameRepr;
 use crate::config::SparklesConfig;
 use crate::global_storage::GlobalStorage;
 
 static GLOBAL_FLUSHING_RUNNING: AtomicBool = AtomicBool::new(false);
 static THREAD_LOCAL_NOTIFICATION: AtomicUsize = AtomicUsize::new(0);
 
-/// Use `sparkles::instant_event!("event name")` instead
-pub fn instant_event(hash: u32, string: &'static str) {
+/// Capture timestamp of the current point in time and create an event with the given name.
+///
+/// Correct usage:
+/// 1) `sparkles::instant_event!("event name")`
+/// 2) `sparkles::instant_event(sparkles::static_name!("event
+/// name))`
+///
+/// Both variants are equivalent
+pub fn instant_event(name: StaticNameRepr) {
     thread_local_storage::with_thread_local_tracer(|tracer| {
-        tracer.event_instant(hash, string);
+        tracer.event_instant(name);
     });
 }
 
@@ -33,10 +44,17 @@ pub struct RangeStartGuard {
 }
 
 impl RangeStartGuard {
-    /// Use `sparkles::range_event_end!(guard, "range end name (optional)")` instead
-    pub fn end(mut self, hash: u32, string: &'static str) {
+    /// If you want to end the range event, simply drop it: `drop(g);`
+    ///
+    /// However, if you want to end the range with a custom name (for example representing operation end reason), you can use this method.
+    /// Correct usage:
+    /// 1) `sparkles::range_event_end!(guard, "range end name")`
+    /// 2) `guard.end(sparkles::static_name!("range end name"))`
+    ///
+    /// Both variants are equivalent
+    pub fn end(mut self, name: StaticNameRepr) {
         thread_local_storage::with_thread_local_tracer(|tracer| {
-            tracer.event_range_end(self.repr, hash, string);
+            tracer.event_range_end(self.repr, name);
         });
         self.ended = true;
     }
@@ -46,18 +64,22 @@ impl Drop for RangeStartGuard {
     fn drop(&mut self) {
         if !self.ended {
             thread_local_storage::with_thread_local_tracer(|tracer| {
-                tracer.event_range_end(self.repr, 0, "");
+                tracer.event_range_end(self.repr, StaticNameRepr::empty());
             });
         }
     }
 }
 
-/// Use `sparkles::range_event_start!("range event name")` instead
+/// Begin a range event with the given name at current point in time.
+///
+/// Correct usage:
+/// 1) `sparkles::range_event_start!("range start name")`
+/// 2) `sparkles::range_event_start(sparkles::static_name!("range start name"))`
 #[must_use]
-pub fn range_event_start(hash: u32, string: &'static str) -> RangeStartGuard {
+pub fn range_event_start(name: StaticNameRepr) -> RangeStartGuard {
     thread_local_storage::with_thread_local_tracer(|tracer| {
         RangeStartGuard {
-            repr: tracer.event_range_start(hash, string),
+            repr: tracer.event_range_start(name),
             ended: false,
         }
     })
