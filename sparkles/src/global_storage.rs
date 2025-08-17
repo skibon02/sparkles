@@ -19,6 +19,7 @@ use sparkles_core::protocol::sender::{ConfiguredSender, Sender, SenderChain};
 use sparkles_macro::static_name;
 use crate::config::SparklesConfig;
 use crate::{flush_thread_local, on_client_connect, GLOBAL_FLUSHING_RUNNING, THREAD_LOCAL_NOTIFICATION};
+use crate::monotonic::get_monotonic_nanos;
 use crate::sender::file_sender::FileSender;
 use crate::thread_local_storage::set_local_storage_config;
 
@@ -301,24 +302,24 @@ pub fn finalize() {
 
 struct TimestampFreqDetector {
     prev_tm: u64,
-    prev_instant: Instant,
+    prev_monotonic: u64,
 
-    capture_interval: Duration,
+    capture_interval_ns: u64,
 }
 
 impl TimestampFreqDetector {
     pub fn start(interval: Duration) -> Self {
-        let now = Instant::now();
+        let now = get_monotonic_nanos();
         let now_tm = Timestamp::now();
         Self {
-            prev_instant: now,
+            prev_monotonic: now,
             prev_tm: now_tm,
 
-            capture_interval: interval,
+            capture_interval_ns: interval.as_nanos() as u64,
         }
     }
     pub fn next(&mut self) -> Option<(u64, u64)> {
-        if self.prev_instant.elapsed() > self.capture_interval {
+        if get_monotonic_nanos() - self.prev_monotonic > self.capture_interval_ns {
             Some(self.next_forced())
         }
         else {
@@ -327,15 +328,15 @@ impl TimestampFreqDetector {
     }
 
     pub fn next_forced(&mut self) -> (u64, u64) {
-        let now = Instant::now();
+        let now = get_monotonic_nanos();
         let now_tm = Timestamp::now();
 
         let elapsed_tm = now_tm.wrapping_sub(self.prev_tm) as f64;
-        let elapsed_ns = (now - self.prev_instant).as_nanos() as f64;
-        let ticks_per_sec = elapsed_tm / elapsed_ns * 1_000_000_000.0;
+        let elapsed_ns = (now - self.prev_monotonic) as f64;
+        let ticks_per_sec = elapsed_tm / elapsed_ns.max(1.0) * 1_000_000_000.0;
 
         self.prev_tm = now_tm;
-        self.prev_instant = now;
+        self.prev_monotonic = now;
 
         (ticks_per_sec as u64, now_tm)
     }

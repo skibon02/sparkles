@@ -18,6 +18,8 @@ For protocol used by both crates there are some guarantees based on version numb
 - Config: rename `flush_threshold` to `sending_threshold`
 - Config: add `auto_send_ms` for configuring maximum interval for sending trace data packets, improving responsiveness in real-time parsing scenarios.
 - Re-export `sparkles-macro` crate from `sparkles`
+- Add platform-specific implementation for monotonic stable clock source. Give access to `monotonic_source()` and `get_monotonic()`.
+- Switch to using `get_monotonic()` in timestamp freq detection.
 Examples:
 - Enable UDP multicast by default
 - Add `cross-thread-ranges` example
