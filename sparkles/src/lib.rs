@@ -151,16 +151,6 @@ pub fn init_default() -> FinalizeGuard {
     FinalizeGuard
 }
 
-pub(crate) fn calculate_hash(s: &str) -> u32 {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher = DefaultHasher::new();
-    s.hash(&mut hasher);
-    hasher.finish() as u32
-}
-
-
 static SOMEONE_CONNECTED: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
 pub(crate) fn on_client_connect() {
     let (lock, cvar) = &SOMEONE_CONNECTED;

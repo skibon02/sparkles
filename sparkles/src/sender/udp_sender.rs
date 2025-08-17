@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::thread;
 use std::time::{Duration, Instant};
-use log::{debug, error, info, trace, warn};
+use log::{error, info, trace, warn};
 use multicast_discovery_socket::config::MulticastDiscoveryConfig;
 use multicast_discovery_socket::MulticastDiscoverySocket;
 use sparkles_core::protocol::packets::{PacketType, RequestPacketType};

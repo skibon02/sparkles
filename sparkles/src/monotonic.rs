@@ -92,9 +92,9 @@ pub fn get_monotonic_nanos() -> u64 {
             get_monotonic()
         }
         MonotonicSource::PerformanceCounter => {
-            let counter = get_monotonic();
             #[cfg(target_os = "windows")]
             {
+                let counter = get_monotonic();
                 let frequency = get_perf_frequency_windows();
 
                 counter * 1_000_000_000 / frequency

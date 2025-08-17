@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{LitStr, parse_macro_input, Expr};
 use syn::parse::{Parse, ParseStream};
-use syn::token::{Comma, Token};
+use syn::token::Comma;
 
 #[cfg(feature = "included-from-sparkles")]
 fn repr_name() -> impl quote::ToTokens {
