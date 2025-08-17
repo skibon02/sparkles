@@ -4,6 +4,7 @@ mod thread_local_storage;
 mod global_storage;
 pub mod sender;
 pub mod config;
+pub mod external_events;
 
 pub use sparkles_macro::*;
 pub mod core {
