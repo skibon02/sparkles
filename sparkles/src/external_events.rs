@@ -1,6 +1,9 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use log::warn;
+use parking_lot::Mutex;
+use sparkles_core::protocol::packets::{ExternalEventNames, ExternalEvents};
 use sparkles_core::StaticNameRepr;
 
 static LAST_EXT_ORD_ID: AtomicU32 = AtomicU32::new(0);
@@ -9,9 +12,10 @@ static LAST_EXT_ORD_ID: AtomicU32 = AtomicU32::new(0);
 /// External events is an abstraction for any source of events bound to potentially different time domain.
 /// This time domain is synchronized with the main system time domain (used by std::time::Instant).
 pub struct ExternalEventsSource {
-    name: String,
+    name: Arc<str>,
     ext_ord_id: u32,
     event_names: HashMap<u32, (&'static str, u16)>,
+    prev_events_len: usize,
 }
 
 impl ExternalEventsSource {
@@ -19,9 +23,10 @@ impl ExternalEventsSource {
     pub fn new(name: String) -> Self {
         let ext_ord_id = LAST_EXT_ORD_ID.fetch_add(1, Ordering::Relaxed);
         ExternalEventsSource {
-            name,
+            name: name.into(),
             ext_ord_id,
             event_names: HashMap::new(),
+            prev_events_len: 0,
         }
     }
 
@@ -36,7 +41,12 @@ impl ExternalEventsSource {
     /// You can periodically call this function to add new synchronization points as time progresses.
     /// This will compensate any drift between two timestamp sources by the parser.
     pub fn push_sync_point(&mut self, local_timestamp: u64, external_timestamp: u64) {
+        if local_timestamp == 0 || external_timestamp == 0 {
+            warn!("Timestamps must be non-zero in ExternalEventsSource '{}'. Ignoring sync point.", self.name);
+            return;
+        }
 
+        EXTERNAL_EVENTS_SYNC_POINTS.lock().push((local_timestamp, external_timestamp));
     }
 
 
@@ -58,18 +68,51 @@ impl ExternalEventsSource {
         }
     }
 
-    pub fn push_events(&mut self, timestamps: &[u64], event_names: &[u16]) {
+    pub fn push_events(&mut self, timestamps: &[u64], event_names: &[(u16, u8)]) {
         if timestamps.len() != event_names.len() {
-            warn!("Timestamps and event names arrays have different lengths in ExternalEventsSource '{}'.", self.name);
+            warn!("timestamps.len() must be equal to event_names.len() in ExternalEventsSource '{}'. Ignoring events.", self.name);
             return;
         }
 
-        let mut buf = Vec::with_capacity(timestamps.len() * 6);
-        for (timestamp, event_name) in timestamps.iter().zip(event_names.iter()) {
-            let tm = timestamp.to_be_bytes();
-            let ev_id = event_name.to_be_bytes();
-            buf.extend_from_slice(&tm);
-            buf.extend_from_slice(&ev_id);
+        if self.event_names.len() != self.prev_events_len {
+            self.prev_events_len = self.event_names.len();
+
+            let mut event_names = vec![String::new(); self.event_names.len()];
+            for (name, ord_id) in self.event_names.values() {
+                event_names[*ord_id as usize] = name.to_string();
+            }
+
+            // Send event names
+            let event_names = ExternalEventNames {
+                ext_ord_id: self.ext_ord_id,
+                channel_name: self.name.clone(),
+                event_names,
+            };
+            EXTERNAL_EVENTS_NAMES.lock().push(event_names);
         }
+
+        let min_tm = timestamps.iter().min().unwrap_or(&0);
+        let max_tm = timestamps.iter().max().unwrap_or(&0);
+        let bytes_per_tm = ((max_tm - min_tm).next_power_of_two().trailing_zeros() as usize).div_ceil(8);
+
+        let mut buf = Vec::with_capacity(timestamps.len() * (3 + bytes_per_tm));
+        for (timestamp, (ev_name, ev_pairing_id)) in timestamps.iter().zip(event_names.iter()) {
+            let tm = (*timestamp - min_tm).to_be_bytes();
+            let ev_id = ev_name.to_be_bytes();
+            buf.extend_from_slice(&tm[..bytes_per_tm]);
+            buf.extend_from_slice(&ev_id);
+            buf.push(*ev_pairing_id);
+        }
+
+        let header = ExternalEvents {
+            ext_ord_id: self.ext_ord_id,
+            start_timestamp: *min_tm,
+            bytes_per_timestamp: bytes_per_tm as u8,
+        };
+        EXTERNAL_EVENTS_PACKETS.lock().push((header, buf));
     }
 }
+
+pub(crate) static EXTERNAL_EVENTS_PACKETS: Mutex<Vec<(ExternalEvents, Vec<u8>)>> = Mutex::new(Vec::new());
+pub(crate) static EXTERNAL_EVENTS_SYNC_POINTS: Mutex<Vec<(u64, u64)>> = Mutex::new(Vec::new());
+pub(crate) static EXTERNAL_EVENTS_NAMES: Mutex<Vec<ExternalEventNames>> = Mutex::new(Vec::new());

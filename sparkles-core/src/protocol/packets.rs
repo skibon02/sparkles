@@ -1,3 +1,7 @@
+use alloc::string::String;
+use alloc::sync::Arc;
+use alloc::vec::Vec;
+use bincode::{Decode, Encode};
 use sha2_const_stable::Sha256;
 use crate::protocol::headers::{LocalPacketHeader, SparklesMachineInfo};
 use crate::protocol::sender::Sender;
@@ -11,6 +15,9 @@ pub enum PacketType {
     TimestampFreq,
     GracefulShutdown,
     ConnectionAccepted,
+    ExternalEvents,
+    ExternalEventsNames,
+    ExternalSyncPoints
 }
 
 impl PacketType {
@@ -23,6 +30,9 @@ impl PacketType {
             PacketType::TimestampFreq => "TimestampFreq",
             PacketType::GracefulShutdown => "GracefulShutdown",
             PacketType::ConnectionAccepted => "ConnectionAccepted",
+            PacketType::ExternalEvents => "ExternalEvents",
+            PacketType::ExternalEventsNames => "ExternalEventsNames",
+            PacketType::ExternalSyncPoints => "ExternalSyncPoints",
         }
     }
     pub const fn pattern(&self) -> [u8; 32] {
@@ -48,6 +58,15 @@ impl PacketType {
         }
         else if pattern == Self::ConnectionAccepted.pattern() {
             Some(Self::ConnectionAccepted)
+        }
+        else if pattern == Self::ExternalEvents.pattern() {
+            Some(Self::ExternalEvents)
+        }
+        else if pattern == Self::ExternalEventsNames.pattern() {
+            Some(Self::ExternalEventsNames)
+        }
+        else if pattern == Self::ExternalSyncPoints.pattern() {
+            Some(Self::ExternalSyncPoints)
         }
         else {
             None
@@ -90,4 +109,36 @@ pub fn send_timestamp_freq(sender: &mut impl Sender, ticks_per_sec: u64, cur_tm:
 }
 pub fn send_graceful_shutdown(sender: &mut impl Sender) {
     sender.send_packet(PacketType::GracefulShutdown, &[]);
+}
+
+#[derive(Encode, Decode, Clone, Debug)]
+pub struct ExternalEvents {
+    pub ext_ord_id: u32,
+    pub start_timestamp: u64,
+    pub bytes_per_timestamp: u8,
+}
+
+
+pub fn send_external_events(sender: &mut impl Sender, header: ExternalEvents, data: &[u8]) {
+    let encoded_header = bincode::encode_to_vec(&header, bincode::config::standard()).unwrap();
+    sender.send_packet(PacketType::ExternalEvents, &[&encoded_header, data]);
+}
+
+#[derive(Encode, Decode, Clone, Debug)]
+pub struct ExternalEventNames {
+    pub ext_ord_id: u32,
+    pub channel_name: Arc<str>,
+    pub event_names: Vec<String>,
+}
+
+pub fn send_external_event_names(sender: &mut impl Sender, header: ExternalEventNames) {
+    let encoded_header = bincode::encode_to_vec(&header, bincode::config::standard()).unwrap();
+    sender.send_packet(PacketType::ExternalEventsNames, &[&encoded_header]);
+}
+
+pub fn send_external_sync_point(sender: &mut impl Sender, local_timestamp: u64,
+external_timestamp: u64) {
+    let local_bytes = local_timestamp.to_be_bytes();
+    let external_bytes = external_timestamp.to_be_bytes();
+    sender.send_packet(PacketType::ExternalSyncPoints, &[&local_bytes, &external_bytes]);
 }

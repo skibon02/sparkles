@@ -14,11 +14,12 @@ use ringbuf::traits::{Consumer, Observer, Producer};
 use smallvec::SmallVec;
 use sparkles_core::{Timestamp, TimestampProvider};
 use sparkles_core::protocol::headers::{LocalPacketHeader, SparklesMachineInfo};
-use sparkles_core::protocol::packets::{send_failed_pages, send_graceful_shutdown, send_machine_info, send_timestamp_freq, send_trace_data};
+use sparkles_core::protocol::packets::{send_external_event_names, send_external_events, send_external_sync_point, send_failed_pages, send_graceful_shutdown, send_machine_info, send_timestamp_freq, send_trace_data};
 use sparkles_core::protocol::sender::{ConfiguredSender, Sender, SenderChain};
 use sparkles_macro::static_name;
 use crate::config::SparklesConfig;
 use crate::{flush_thread_local, on_client_connect, GLOBAL_FLUSHING_RUNNING, THREAD_LOCAL_NOTIFICATION};
+use crate::external_events::{EXTERNAL_EVENTS_NAMES, EXTERNAL_EVENTS_PACKETS, EXTERNAL_EVENTS_SYNC_POINTS};
 use crate::monotonic::get_monotonic_nanos;
 use crate::sender::file_sender::FileSender;
 use crate::thread_local_storage::set_local_storage_config;
@@ -190,11 +191,13 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
         loop {
             use crate as sparkles;
 
+            // senders polling
             if last_sender_poll_tm.is_none_or(|tm| tm.elapsed() > Duration::from_millis(200)) {
                 sender_chain.poll();
                 last_sender_poll_tm = Some(Instant::now());
             }
 
+            // Timestamp freq and machine info packets
             if sender_chain.take_tm_freq_requested() {
                 THREAD_LOCAL_NOTIFICATION.fetch_add(1, Ordering::Relaxed);
 
@@ -251,6 +254,25 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
             if !failed_pages.is_empty() {
                 trace!("Sending {} failed pages", failed_pages.len());
                 send_failed_pages(&mut sender_chain, &failed_pages)
+            }
+
+            // External events
+            if let Some(points) = mem::take(&mut *EXTERNAL_EVENTS_SYNC_POINTS.lock()) {
+                for (local, external) in points {
+                    send_external_sync_point(&mut sender_chain, local, external);
+                }
+            }
+
+            if let Some(data) = mem::take(&mut *EXTERNAL_EVENTS_PACKETS.lock()) {
+                for (header, data) in data {
+                    send_external_events(&mut sender_chain, header, data);
+                }
+            }
+
+            if let Some(names) = mem::take(&mut *EXTERNAL_EVENTS_NAMES.lock()) {
+                for names_packet in names {
+                    send_external_event_names(&mut sender_chain, names_packet);
+                }
             }
 
             if is_finalizing {
