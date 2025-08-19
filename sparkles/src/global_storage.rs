@@ -14,7 +14,7 @@ use ringbuf::traits::{Consumer, Observer, Producer};
 use smallvec::SmallVec;
 use sparkles_core::{Timestamp, TimestampProvider};
 use sparkles_core::protocol::headers::{LocalPacketHeader, SparklesMachineInfo};
-use sparkles_core::protocol::packets::{send_external_event_names, send_external_events, send_external_sync_point, send_failed_pages, send_graceful_shutdown, send_machine_info, send_timestamp_freq, send_trace_data};
+use sparkles_core::protocol::packets::{send_external_event_names, send_external_events, send_external_sync_point, send_failed_pages, send_graceful_shutdown, send_machine_info, send_sync_point, send_trace_data};
 use sparkles_core::protocol::sender::{ConfiguredSender, Sender, SenderChain};
 use sparkles_macro::static_name;
 use crate::config::SparklesConfig;
@@ -174,15 +174,15 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
             .file_name().unwrap().to_str().unwrap().to_string();
         let pid = std::process::id();
 
-        let mut freq_detector = TimestampFreqDetector::start(Duration::from_millis(100));
+        let mut freq_detector = CalibratedTimestampsCapture::start(Duration::from_millis(100));
 
         let info_header = SparklesMachineInfo::new(process_name, pid);
         send_machine_info(&mut sender_chain, info_header.clone());
 
         thread::sleep(Duration::from_millis(1));
 
-        let (ticks_per_sec, cur_tm) = freq_detector.next_forced();
-        send_timestamp_freq(&mut sender_chain, ticks_per_sec, cur_tm);
+        let (monotonic_tm, cur_tm) = freq_detector.next_forced();
+        send_sync_point(&mut sender_chain, monotonic_tm, cur_tm);
 
         let mut last_sender_poll_tm: Option<Instant> = None;
         let mut last_send_data_tm: Option<Instant> = None;
@@ -201,13 +201,14 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
             if sender_chain.take_tm_freq_requested() {
                 THREAD_LOCAL_NOTIFICATION.fetch_add(1, Ordering::Relaxed);
 
-                let (ticks_per_sec, cur_tm) = freq_detector.next_forced();
-                send_timestamp_freq(&mut sender_chain, ticks_per_sec, cur_tm);
+                let (monotonic_tm, cur_tm) = freq_detector.next_forced();
+                send_sync_point(&mut sender_chain, monotonic_tm, cur_tm);
                 send_machine_info(&mut sender_chain, info_header.clone());
             }
-            else if let Some((ticks_per_sec, cur_tm)) = freq_detector.next() {
+            else if let Some((monotonic_tm, cur_tm)) = freq_detector.next() {
+                let ticks_per_sec = freq_detector.ticks_per_sec;
                 TICKS_PER_MS.store((ticks_per_sec / 1_000) as u32, Ordering::Relaxed);
-                send_timestamp_freq(&mut sender_chain, ticks_per_sec, cur_tm);
+                send_sync_point(&mut sender_chain, monotonic_tm, cur_tm);
             }
 
             // Read value before flushing
@@ -257,22 +258,17 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
             }
 
             // External events
-            if let Some(points) = mem::take(&mut *EXTERNAL_EVENTS_SYNC_POINTS.lock()) {
-                for (local, external) in points {
-                    send_external_sync_point(&mut sender_chain, local, external);
-                }
+            let points = mem::take(&mut *EXTERNAL_EVENTS_SYNC_POINTS.lock());
+            for (local, external) in points {
+                send_external_sync_point(&mut sender_chain, local, external);
             }
-
-            if let Some(data) = mem::take(&mut *EXTERNAL_EVENTS_PACKETS.lock()) {
-                for (header, data) in data {
-                    send_external_events(&mut sender_chain, header, data);
-                }
+            let ext_evt_packet = mem::take(&mut *EXTERNAL_EVENTS_PACKETS.lock());
+            for (header, data) in ext_evt_packet {
+                send_external_events(&mut sender_chain, header, &data);
             }
-
-            if let Some(names) = mem::take(&mut *EXTERNAL_EVENTS_NAMES.lock()) {
-                for names_packet in names {
-                    send_external_event_names(&mut sender_chain, names_packet);
-                }
+            let names = mem::take(&mut *EXTERNAL_EVENTS_NAMES.lock());
+            for names_packet in names {
+                send_external_event_names(&mut sender_chain, names_packet);
             }
 
             if is_finalizing {
@@ -322,14 +318,15 @@ pub fn finalize() {
 
 }
 
-struct TimestampFreqDetector {
+struct CalibratedTimestampsCapture {
     prev_tm: u64,
     prev_monotonic: u64,
 
     capture_interval_ns: u64,
+    ticks_per_sec: u64,
 }
 
-impl TimestampFreqDetector {
+impl CalibratedTimestampsCapture {
     pub fn start(interval: Duration) -> Self {
         let now = get_monotonic_nanos();
         let now_tm = Timestamp::now();
@@ -338,6 +335,7 @@ impl TimestampFreqDetector {
             prev_tm: now_tm,
 
             capture_interval_ns: interval.as_nanos() as u64,
+            ticks_per_sec: 1_000_000,
         }
     }
     pub fn next(&mut self) -> Option<(u64, u64)> {
@@ -355,11 +353,14 @@ impl TimestampFreqDetector {
 
         let elapsed_tm = now_tm.wrapping_sub(self.prev_tm) as f64;
         let elapsed_ns = (now - self.prev_monotonic) as f64;
-        let ticks_per_sec = elapsed_tm / elapsed_ns.max(1.0) * 1_000_000_000.0;
+        self.ticks_per_sec = (elapsed_tm / elapsed_ns.max(1.0) * 1_000_000_000.0) as u64;
 
         self.prev_tm = now_tm;
         self.prev_monotonic = now;
 
-        (ticks_per_sec as u64, now_tm)
+        (now, now_tm)
+    }
+    pub fn cur_freq(&self) -> u64 {
+        self.ticks_per_sec
     }
 }

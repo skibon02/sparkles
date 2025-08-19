@@ -45,19 +45,37 @@ pub struct SparklesParser {
     counters: ProtocolCounters
 }
 
-struct InterpolationPoints(BTreeMap<u64, (f64, u64)>); // key: cpu tm, value: (ticks_per_ns, timestamp nanos)
+struct InterpolationPoints(BTreeMap<u64, (f64, u64)>); // key: cpu timestamp, value: ns per ticks, monotonic timestamp
 
 impl InterpolationPoints {
     pub fn new() -> Self {
         Self(BTreeMap::new())
     }
     
-    fn add_interpolation_point(&mut self, ticks_per_ns: f64, cur_tm: u64) {
-        let ns = self.project_tm(cur_tm);
-        self.0.insert(cur_tm, (ticks_per_ns, ns));
+    fn add_interpolation_point(&mut self, monotonic_tm: u64, cur_tm: u64) {
+        let prev_tm = self.0.range_mut(..=cur_tm).next_back();
+        if let Some((prev_tm, (prev_ns_per_tick, prev_monotonic_tm))) = prev_tm {
+            let ns_per_tick = (monotonic_tm - *prev_monotonic_tm) as f64 / (cur_tm - *prev_tm) as f64;
+            if *prev_ns_per_tick == 1.0 {
+                *prev_ns_per_tick = ns_per_tick; // Update the first point
+            }
+            self.0.insert(cur_tm, (ns_per_tick, monotonic_tm));
+        }
+        else {
+            // First point
+            self.0.insert(cur_tm, (1.0, monotonic_tm));
+        }
     }
-    fn get_avg_ticks_per_ns(&self) -> f64 {
-        self.0.values().map(|v| v.0).sum::<f64>() / self.0.len() as f64
+    fn get_avg_ticks_per_ns(&self) -> Option<f64> {
+        let (&first_tm, (_, first_monotonic)) = self.0.iter().next()?;
+        let (&last_tm, (_, last_monotonic)) = self.0.iter().next_back()?;
+
+        let dur_ns = (*last_monotonic - *first_monotonic) as f64;
+        let dur_ticks = (last_tm - first_tm) as f64;
+        if dur_ns == 0.0 {
+            return None;
+        }
+        Some(dur_ticks / dur_ns)
     }
     
     fn is_empty(&self) -> bool {
@@ -74,7 +92,7 @@ impl InterpolationPoints {
 
             let slope = *left_slope;
 
-            (left_ns + ((tm - *left_tm) as f64) / slope) as u64
+            (left_ns + ((tm - *left_tm) as f64) * slope) as u64
         }
         else if let Some((right_tm, (right_slope, right_ns))) = closest_right {
             // interpolate using right slope
@@ -82,7 +100,7 @@ impl InterpolationPoints {
 
             let slope = *right_slope;
 
-            (right_ns - ((*right_tm - tm) as f64) / slope) as u64
+            (right_ns - ((*right_tm - tm) as f64) * slope) as u64
         }
         else {
             tm
@@ -254,11 +272,8 @@ impl SparklesParser {
 
                 self.machine_info = Some(info);
             }
-            Packet::TimestampFreq(ticks_per_sec, cur_tm) => {
-                let ticks_per_ns = ticks_per_sec as f64 / 1_000_000_000.0;
-                info!("Got timestamp frequency: {ticks_per_ns:?} t/ns");
-
-                self.interpolation_points.add_interpolation_point(ticks_per_ns, cur_tm);
+            Packet::SyncPoint(monotonic_tm, cur_tm) => {
+                self.interpolation_points.add_interpolation_point(monotonic_tm, cur_tm);
             }
             Packet::DataBytes(packets) => {
                 if self.interpolation_points.is_empty() {
@@ -507,7 +522,7 @@ impl SparklesParser {
         }
     }
     pub fn print_stats(&self) {
-        let ticks_per_ns = self.interpolation_points.get_avg_ticks_per_ns();
+        let ticks_per_ns = self.interpolation_points.get_avg_ticks_per_ns().unwrap_or(0.0);
         info!("Printing stats...");
         
         let mut total_events = 0;
