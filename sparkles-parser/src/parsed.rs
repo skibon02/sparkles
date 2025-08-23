@@ -15,6 +15,36 @@ pub enum ParsedEvent {
     },
 }
 
+#[derive(Clone, Debug)]
+pub enum ParsedExternalEvent {
+    Instant {
+        tm: u64,
+        name_id: TracingEventId,
+    },
+    Range {
+        start: u64,
+        end: u64,
+        name_id: TracingEventId,
+        end_name_id: Option<TracingEventId>,
+    },
+}
+
+impl ParsedExternalEvent {
+    pub fn name_id(&self) -> &TracingEventId {
+        match self {
+            ParsedExternalEvent::Instant { name_id, .. } => name_id,
+            ParsedExternalEvent::Range { name_id, .. } => name_id,
+        }
+    }
+
+    pub fn timestamp(&self) -> u64 {
+        match self {
+            ParsedExternalEvent::Instant { tm, .. } => *tm,
+            ParsedExternalEvent::Range { start, .. } => *start,
+        }
+    }
+}
+
 impl ParsedEvent {
     pub fn name_id(&self) -> &TracingEventId {
         match self {

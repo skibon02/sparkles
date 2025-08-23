@@ -136,9 +136,10 @@ pub fn send_external_event_names(sender: &mut impl Sender, header: ExternalEvent
     sender.send_packet(PacketType::ExternalEventNames, &[&encoded_header]);
 }
 
-pub fn send_external_sync_point(sender: &mut impl Sender, local_timestamp: u64,
+pub fn send_external_sync_point(sender: &mut impl Sender, ext_ord_id: u32, local_timestamp: u64,
 external_timestamp: u64) {
+    let ext_ord_id_bytes = ext_ord_id.to_be_bytes();
     let local_bytes = local_timestamp.to_be_bytes();
     let external_bytes = external_timestamp.to_be_bytes();
-    sender.send_packet(PacketType::ExternalSyncPoint, &[&local_bytes, &external_bytes]);
+    sender.send_packet(PacketType::ExternalSyncPoint, &[&ext_ord_id_bytes, &local_bytes, &external_bytes]);
 }

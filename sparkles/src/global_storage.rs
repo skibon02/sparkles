@@ -259,8 +259,8 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
 
             // External events
             let points = mem::take(&mut *EXTERNAL_EVENTS_SYNC_POINTS.lock());
-            for (local, external) in points {
-                send_external_sync_point(&mut sender_chain, local, external);
+            for (ext_ord_id, local, external) in points {
+                send_external_sync_point(&mut sender_chain, ext_ord_id, local, external);
             }
             let ext_evt_packet = mem::take(&mut *EXTERNAL_EVENTS_PACKETS.lock());
             for (header, data) in ext_evt_packet {

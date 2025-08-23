@@ -3,7 +3,8 @@ use ringbuf::consumer::Consumer;
 use ringbuf::producer::Producer;
 use ringbuf::storage::Heap;
 use ringbuf::traits::Observer;
-use crate::{TracingEvent, TracingEventId, PARSER_BUF_SIZE};
+use crate::{TracingEventId, PARSER_BUF_SIZE};
+use crate::parser::thread_parser::TracingEvent;
 
 pub struct StreamFrameDecoder {
     state: ParsingState,

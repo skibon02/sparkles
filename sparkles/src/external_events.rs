@@ -46,7 +46,7 @@ impl ExternalEventsSource {
             return;
         }
 
-        EXTERNAL_EVENTS_SYNC_POINTS.lock().push((local_timestamp, external_timestamp));
+        EXTERNAL_EVENTS_SYNC_POINTS.lock().push((self.ext_ord_id, local_timestamp, external_timestamp));
     }
 
 
@@ -114,5 +114,5 @@ impl ExternalEventsSource {
 }
 
 pub(crate) static EXTERNAL_EVENTS_PACKETS: Mutex<Vec<(ExternalEvents, Vec<u8>)>> = Mutex::new(Vec::new());
-pub(crate) static EXTERNAL_EVENTS_SYNC_POINTS: Mutex<Vec<(u64, u64)>> = Mutex::new(Vec::new());
+pub(crate) static EXTERNAL_EVENTS_SYNC_POINTS: Mutex<Vec<(u32, u64, u64)>> = Mutex::new(Vec::new());
 pub(crate) static EXTERNAL_EVENTS_NAMES: Mutex<Vec<ExternalEventNames>> = Mutex::new(Vec::new());

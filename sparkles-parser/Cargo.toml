@@ -28,6 +28,7 @@ ctrlc = { version = "3.4.7", optional = true }
 clap = { version = "4.5.40", features = ["derive"], optional = true }
 multicast-discovery-socket = "0.1.2"
 indexmap = "2.10.0"
+auto_enums = "0.8.7"
 
 [dev-dependencies]
 simple_logger = { version = "5.0.0" }
