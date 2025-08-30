@@ -99,10 +99,6 @@ impl ThreadParserState {
             res.push(ThreadParserEvent::EventNamesChanged(self.id_store.clone()));
         }
 
-        if interpolation_points.is_empty() {
-            return res;
-        }
-
         #[cfg(feature="self-tracing")]
         let g = sparkles_macro::range_event_start!("Decode raw events");
         let new_events = self.state_machine.decode_many(&events_bytes);
@@ -117,6 +113,7 @@ impl ThreadParserState {
         let mut first = true;
 
         let mut parsed_events = Vec::with_capacity(new_events_len / 2);
+        let mut unhandled_events = vec![];
         for evt in new_events {
             let mut dif_tm_zero = false;
             if first {
@@ -144,8 +141,12 @@ impl ThreadParserState {
                 warn!("Parsing issue: Timestamp is outside local packet! diff: {}",  cur_tm - header.end_timestamp);
             }
 
+            let Some(tm) = interpolation_points.project_tm(cur_tm) else {
+                unhandled_events.push(evt);
+                continue;
+            };
+            let timestamp = tm + self.zero_diff_cnt * 10;
             // Create ParsedEvent
-            let timestamp = interpolation_points.project_tm(cur_tm) + self.zero_diff_cnt * 10;
             match evt {
                 TracingEvent::Instant(id, _) => {
                     let ev_name = if let Some((ev_name, ev_type)) = self.id_store.get(&id) {

@@ -201,7 +201,7 @@ impl SparklesParser {
                     let g = sparkles_macro::range_event_start!("Parse header");
                     let thread_id = header.thread_ord_id;
                     let parser_state = self.event_parsers.entry(thread_id).or_default();
-                    self.local_packet_ranges.push((global_i, local_i, thread_id, self.interpolation_points.project_tm(header.start_timestamp), self.interpolation_points.project_tm(header.end_timestamp)));
+                    self.local_packet_ranges.push((global_i, local_i, thread_id, header.start_timestamp, header.end_timestamp));
                     let events = parser_state.got_events(header, data, &self.interpolation_points);
                     for event in events {
                         on_new_event(SparklesParserEvent::ThreadParserEvent(event, parser_state.thread_info_state()) );
@@ -397,8 +397,12 @@ impl SparklesParser {
         }
 
         if cfg!(feature="local-packet-bounds") {
-            for (global_i, local_i, thread_ord_id, start,end) in std::mem::take(&mut self.local_packet_ranges).into_iter() {
-                trace_res_file.add_range_event(&format!("Local packet #{global_i}.{local_i}"), 999666 + thread_ord_id, start, end);
+            for (global_i, local_i, thread_ord_id, start_cpu,end_cpu) in std::mem::take(&mut self.local_packet_ranges).into_iter() {
+                let start_tm = self.interpolation_points.project_tm(start_cpu);
+                let end_tm = self.interpolation_points.project_tm(end_cpu);
+                if let (Some(start), Some(end)) = (start_tm, end_tm) {
+                    trace_res_file.add_range_event(&format!("Local packet #{global_i}.{local_i}"), 999666 + thread_ord_id, start, end);
+                }
             }
         }
 
