@@ -41,6 +41,9 @@ Examples:
 ### [Unreleased] sparkles-parser
 - `SparklesParser` now will send arrays of parsed events to the callback instead of single event.
 - Implement parsing for new cross-thread events type.
+- Modify parser callback signature to receive single combined argument
+- Implement parsing for external events
+- Use simplified interpolation points for time domain synchronization
 
 ## Versions
 ### [0.1.8] sparkles (proto-1.0)

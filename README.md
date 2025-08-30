@@ -7,21 +7,22 @@ Performance-focused library for capturing execution flow of your application.
 ![img_1.png](https://github.com/skibon02/sparkles/blob/main/img_1.png?raw=true)
 
 **What?**  
-Simply add the instant_event! macro to your code with a string literal and you'll be able to view this event later on a timeline with CPU cycle precision.  
+Simply add the instant_event! macro to your code with a string literal, and you'll be able to view this event later on a timeline with CPU cycle precision.  
 **How?**  
-Fast. Blazingly fast. 🚀 Recording a single event incurs an overhead as low as 10ns and consumes only 3 bytes in the trace buffer (in dense tracing conditions).
+Fast. Blazingly fast. 🚀 Recording a single event incurs an overhead as low as 12ns and consumes only 3 bytes in the trace buffer (in dense tracing conditions).
 
 ˚ ༘ ⋆｡˚ ✧ ˚ ༘ ⋆｡˚ ༘ ⋆｡˚ ✧ ˚ ༘ ⋆｡˚˚ ༘ ⋆｡˚ ✧ ˚ ༘ ⋆｡˚ ༘ ⋆｡˚ ✧ ˚ ༘ ⋆｡˚༘ ⋆｡˚ ✧ ˚ ༘  
 Up to 🫸100_000_000🫷 events per second can be captured in a local environment with no data loss.  
 ༘ ⋆｡˚ ༘ ⋆｡˚ ✧ ˚ ༘ ⋆｡˚༘ ⋆｡˚ ✧ ˚ ༘ ⋆｡˚༘ ⋆｡˚ ✧ ˚ ༘ ⋆｡˚༘ ⋆｡˚ ✧ ˚ ༘ ⋆｡˚༘ ⋆｡˚ ✧ ˚
 
-## ✧ Main parts
+## ✧ Subprojects
 - **sparkles**: Ready-to-use library for capturing events and saving them to file in lightweight encoded format.
-- **sparkles-core**: Common functionality for std and no_std (todo) version of sparkles and protocol packets.
-- **sparkles-macro**: instant_event! and range_event_start! macro to encode event name into integer value.
-- **sparkles-parser**: Provides easy to use way of converting recorded trace data to Perfetto format as well as library for realtime parsing.
+- **sparkles-gui**: dedicated GUI application for real-time connecting to multiple clients and viewing their events. 
+- **sparkles-core**: Common functionality for `sparkles` and `sparkles-parser` crates.
+- **sparkles-macro**: Macros for encoding event names into compact representation.
+- **sparkles-parser**: General parsing library for creating custom parsers. `bin` part of this crate provides simple script to convert `trace/*.sprk` files into `trace.perf` file (Perfetto format).
 
-## ✧ How to use
+## ✧ How to use (Perfetto format)
 1. Add sparkles as a dependency to your project
 ```bash
 cargo add sparkles 
@@ -69,13 +70,16 @@ sparkles-parse-and-save
 6. Observe the result:
 ![img.png](https://github.com/skibon02/sparkles/blob/main/img.png?raw=true)
 
+## ✧ How to use (Sparkles GUI)
+TODO
 
 ## ✧ Requirements
+🌟 `x86`/`x86_64`/`aarch64` architecture. (CPU cycle precision)  
+OR  
 🌟 STD support (general accuracy)  
-🌟 `x86`/`x86_64`/`aarch64` architecture. (CPU cycle precision)
 
 ## ✧ Benches
-Single event overhead on average x86 machine (Intel i5-12400) is ~9ns.
+Single event overhead on average x86 machine (Intel i5-12400) is ~9-12ns.
 
 
 ## ✧ Implementation status
@@ -85,10 +89,8 @@ Supporting additional attached data is important feature, but it will take some 
 Primary focus now - is a dedicated app for real-time event simultaneous streaming from multiple applications. It will also allow to remove dependency from protobuf protocol libraries.
 
 ## ✧ Known issues and limitations
-✧ Converting timestamp to nanosecond time only have local consistency. Long sessions (day and more) can go out of sync with system clock.  
 ✧ Currently can have only 256 unique event names per thread  
 ✧ Currently up to 256 opened but not closed ranges at a time are supported (mostly enough)  
-✧ No std support for now  
 ✧ Cannot specify UDP address to listen on  
 ✧ Proper usage of sparkles-macro::range_event_start!("name") emits warning  
 ✧ Timestamp wrap-around is not handled well (not an issue for 64-bit systems)  
@@ -97,9 +99,11 @@ Primary focus now - is a dedicated app for real-time event simultaneous streamin
 
 
 ## ✧ Crate features
-✧ **accurate-timestamps-x86** - Enable serialization for x86/x86_64 timestamps. Trade off timestamp accuracy for higher overhead (slightly).  
-✧ **self-tracing** - Add global buffer flushing events  
+✧ **accurate-timestamps-x86** - Enable serialization for x86/x86_64 timestamps. Small improvement accuracy for slightly higher overhead.
+✧ **self-tracing** - Add internal events for flushing global buffer
 ✧ **udp-streaming** - Real-time event streaming via UDP
+✧ **unstable-thread-id** - Remove dependency on `thread-id` crate. Requires nightly compiler.
+✧ **force-fallback-impl** - Use `Instant`-based implementation. Use this if your architecture is not supported and automatic detection failed.
 
 ｡ﾟﾟ･｡･ﾟﾟ｡  
 ﾟ。SkyGrel19 ✨  
