@@ -1,3 +1,5 @@
+mod raw_decoder;
+
 use std::collections::BTreeMap;
 use std::iter;
 use std::ops::Deref;
@@ -8,6 +10,8 @@ use log::{error, warn};
 use sparkles_core::protocol::packets::{ExternalEventNames, ExternalEvents};
 use crate::{InterpolationPoints, TracingEventId, TracingStats};
 use crate::parsed::ParsedExternalEvent;
+use crate::parser::external_parser::raw_decoder::{decode_raw_event, ForeignTracingEvent};
+use crate::parser::thread_parser::EventNames;
 
 #[derive(Default)]
 pub struct ExternalParserState {
@@ -17,6 +21,7 @@ pub struct ExternalParserState {
     started_ranges: BTreeMap<u8, (TracingEventId, u64)>,
 
     interpolation_points: InterpolationPoints,
+    unhandled_events: Vec<ForeignTracingEvent>,
 }
 
 pub enum ExternalParserEvent {
@@ -45,41 +50,8 @@ impl ExternalParserState {
                 warn!("ExternalEvents packet has incomplete event! Skipping...");
                 continue;
             }
-            let mut tm_bytes = [0u8; 8];
-            tm_bytes[8 - header.bytes_per_timestamp as usize..].copy_from_slice(&event_bytes[..header.bytes_per_timestamp as usize]);
-            let tm = start_tm + u64::from_be_bytes(tm_bytes);
-            let ev_id = event_bytes[header.bytes_per_timestamp as usize];
-            let pairing_id = event_bytes[header.bytes_per_timestamp as usize + 1];
 
-            if pairing_id == 0 {
-                parsed.push(ParsedExternalEvent::Instant{
-                    name_id: ev_id,
-                    tm: self.interpolation_points.project_tm(tm)
-                })
-            }
-            else {
-                let start_event = self.started_ranges.remove(&pairing_id);
-                if let Some((start_ev_id, start_tm)) = start_event {
-                    // Range end
-                    let end_name_id = if ev_id == 0 {
-                        None
-                    }
-                    else {
-                        Some(ev_id)
-                    };
-
-                    let parsed_event = ParsedExternalEvent::Range {
-                        name_id: start_ev_id,
-                        end_name_id,
-                        start: self.interpolation_points.project_tm(start_tm),
-                        end: self.interpolation_points.project_tm(tm),
-                    };
-                    parsed.push(parsed_event);
-                }
-                else {
-                    // New range start
-                    self.started_ranges.insert(pairing_id, (ev_id, tm));
-                }
+            if let Some(ev) = decode_raw_event(event_bytes, &header) {
             }
         }
 
@@ -88,6 +60,39 @@ impl ExternalParserState {
         }
         else {
             iter::empty()
+        }
+    }
+
+    fn handle_raw_event(&mut self, ev: ForeignTracingEvent, timestamp: u64) {
+        if pairing_id == 0 {
+            parsed.push(ParsedExternalEvent::Instant{
+                name_id: ev_id,
+                tm: self.interpolation_points.project_tm(tm)
+            })
+        }
+        else {
+            let start_event = self.started_ranges.remove(&pairing_id);
+            if let Some((start_ev_id, start_tm)) = start_event {
+                // Range end
+                let end_name_id = if ev_id == 0 {
+                    None
+                }
+                else {
+                    Some(ev_id)
+                };
+
+                let parsed_event = ParsedExternalEvent::Range {
+                    name_id: start_ev_id,
+                    end_name_id,
+                    start: self.interpolation_points.project_tm(start_tm),
+                    end: self.interpolation_points.project_tm(tm),
+                };
+                parsed.push(parsed_event);
+            }
+            else {
+                // New range start
+                self.started_ranges.insert(pairing_id, (ev_id, tm));
+            }
         }
     }
 

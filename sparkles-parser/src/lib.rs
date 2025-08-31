@@ -1,6 +1,5 @@
 #[cfg(feature="perfetto")]
 mod perfetto_format;
-pub mod tracing_decoder;
 pub mod parsed;
 pub mod packet_decoder;
 pub mod discovery_wrapper;
@@ -22,7 +21,7 @@ use crate::parser::thread_parser::{EventNames, ThreadParserEvent, ThreadParserSt
 
 // pub exports
 pub use discovery_wrapper::DiscoveryWrapper;
-use crate::interpolation::InterpolationPoints;
+use crate::interpolation::{InterpolationPoints, MonotonicInterpolationPoints};
 use crate::parser::external_parser::{ExternalParserEvent, ExternalParserState};
 
 pub static PARSER_BUF_SIZE: usize = 1_000_000;
@@ -48,7 +47,7 @@ pub struct SparklesParser {
     external_event_parsers: BTreeMap<u32, ExternalParserState>,
     local_packet_ranges: Vec<(usize, usize, u64, u64, u64)>,
     global_i: usize,
-    interpolation_points: InterpolationPoints,
+    interpolation_points: MonotonicInterpolationPoints,
     counters: ProtocolCounters
 }
 
@@ -100,7 +99,7 @@ impl SparklesParser {
 
             local_packet_ranges: Vec::new(),
             global_i: 0,
-            interpolation_points: InterpolationPoints::new(),
+            interpolation_points: MonotonicInterpolationPoints::new(),
             counters: ProtocolCounters::default(),
         }
     }
@@ -264,7 +263,7 @@ impl SparklesParser {
                 let parser_state = self.external_event_parsers.entry(ext_ord_id).or_default();
                 parser_state.add_interpolation_point(local_tm, external_tm);
             }
-            Packet::ExternalEvents(header, events) => 'handling: {
+            Packet::ExternalEvents(header, events) => {
                 let id = header.ext_ord_id;
                 let parser_state = self.external_event_parsers.entry(id).or_default();
 

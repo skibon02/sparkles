@@ -1,15 +1,18 @@
 use std::collections::BTreeMap;
 use std::mem;
+use std::mem::take;
 use std::ops::Deref;
 use std::rc::Rc;
-use std::time::Instant;
 use indexmap::IndexMap;
 use log::{debug, error, warn};
 use sparkles_core::local_storage::id_mapping::EventType;
 use sparkles_core::protocol::headers::LocalPacketHeader;
-use crate::tracing_decoder::StreamFrameDecoder;
-use crate::{ForeignRangeEnd, InterpolationPoints, TracingEventId, TracingStats};
+use tracing_decoder::StreamFrameDecoder;
+use crate::{ForeignRangeEnd, TracingEventId, TracingStats};
+use crate::interpolation::MonotonicInterpolationPoints;
 use crate::parsed::{ParsedEvent, ThreadInfoState};
+
+pub mod tracing_decoder;
 
 pub type EventNames = IndexMap<TracingEventId, (Rc<str>, EventType)>;
 
@@ -29,6 +32,7 @@ pub struct ThreadParserState {
 
     // start timestamp and duration for missed events packet
     missed_events: Vec<(u64, u64)>,
+    unhandled_events: Vec<TracingEvent>,
 
     // ---- TMP DATA ----
     state_machine: StreamFrameDecoder,
@@ -52,7 +56,7 @@ impl ThreadParserState {
     }
 
     pub fn take_foreign_range_ends(&mut self) -> Vec<ForeignRangeEnd> {
-        mem::take(&mut self.foreign_range_ends)
+        take(&mut self.foreign_range_ends)
     }
     pub fn store_foreign_ends(&mut self, foreign_range_ends: Vec<ForeignRangeEnd>) {
         self.foreign_range_ends = foreign_range_ends;
@@ -64,7 +68,7 @@ impl ThreadParserState {
     }
 
     #[must_use]
-    pub fn got_events(&mut self, header: LocalPacketHeader, events_bytes: Vec<u8>, interpolation_points: &InterpolationPoints) -> Vec<ThreadParserEvent> {
+    pub fn got_events(&mut self, header: LocalPacketHeader, events_bytes: Vec<u8>, interpolation_points: &MonotonicInterpolationPoints) -> Vec<ThreadParserEvent> {
         let thread_id = header.thread_ord_id;
 
         let mut res = vec![];
@@ -112,9 +116,11 @@ impl ThreadParserState {
         let mut cur_tm = header.start_timestamp;
         let mut first = true;
 
+        // Take unhandled events
+        let mut new_events = take(&mut self.unhandled_events).into_iter().chain(new_events.into_iter());
+
         let mut parsed_events = Vec::with_capacity(new_events_len / 2);
-        let mut unhandled_events = vec![];
-        for evt in new_events {
+        for evt in &mut new_events {
             let mut dif_tm_zero = false;
             if first {
                 first = false;
@@ -142,110 +148,17 @@ impl ThreadParserState {
             }
 
             let Some(tm) = interpolation_points.project_tm(cur_tm) else {
-                unhandled_events.push(evt);
-                continue;
+                self.unhandled_events.push(evt);
+                break;
             };
             let timestamp = tm + self.zero_diff_cnt * 10;
-            // Create ParsedEvent
-            match evt {
-                TracingEvent::Instant(id, _) => {
-                    let ev_name = if let Some((ev_name, ev_type)) = self.id_store.get(&id) {
-                        if ev_type != &EventType::Instant {
-                            error!("Assertion failed: Instant event type is not Instant!");
-                        }
-                        ev_name.clone()
-                    }
-                    else {
-                        error!("Did not find event name for id: {id}");
-                        Rc::from(format!("Unknown Instant {id}"))
-                    };
-                    let parsed = ParsedEvent::Instant {
-                        name_id: id,
-                        tm: timestamp
-                    };
-                    parsed_events.push(parsed);
-                }
-                TracingEvent::RangePart(id, _, ord_id) => {
-                    if let Some((ev_name, ev_type)) = self.id_store.get(&id) {
-                        if ev_type == &EventType::Instant {
-                            error!("Assertion failed: RangePart event has Instant type!");
-                        }
-                        else if let EventType::RangeEnd(start_id) = ev_type {
-                            if let Some((start_name, start_ev_type)) = self.id_store.get(start_id) {
-                                if *start_ev_type != EventType::RangeStart {
-                                    error!("Assertion failed: RangePart event has wrong RangeStart type!");
-                                }
-                                if let Some((ev_id, start_tm)) = self.cur_started_ranges.remove(&ord_id) {
-                                    if ev_id != *start_id {
-                                        error!("Assertion failed: RangePart event has wrong RangeEnd id!");
-                                    }
-                                    let parsed = ParsedEvent::Range {
-                                        name_id: *start_id,
-                                        end_name_id: Some(id),
-                                        start: start_tm,
-                                        end: timestamp,
-                                        start_thread_ord_id: None,
-                                    };
-                                    parsed_events.push(parsed);
-                                }
-                                else {
-                                    warn!("Did not find start event for RangePart id: {id}");
-                                }
-                            }
-                            else {
-                                warn!("Did not find start event for RangePart id: {id}");
-                            }
-                        }
-                        else {
-                            // Range start
-                            self.cur_started_ranges.insert(ord_id, (id, timestamp));
-                        }
-                    }
-                    else {
-                        error!("Did not find event name for id: {id}");
-                        let ev_name: Rc<str> = Rc::from(format!("Unknown RangePart {id}"));
-
-                        let parsed = ParsedEvent::Instant {
-                            name_id: id,
-                            tm: timestamp
-                        };
-                        parsed_events.push(parsed);
-                    };
-
-                }
-                TracingEvent::UnnamedRangeEnd(_, ord_id ) => {
-                    if let Some(start_info) = self.cur_started_ranges.remove(&ord_id) {
-                        if let Some((start_name, ev_type)) = self.id_store.get(&start_info.0) {
-                            if *ev_type != EventType::RangeStart {
-                                error!("Assertion failed: UnnamedRangeEnd event has non-RangeStart type!");
-                            }
-                            let parsed = ParsedEvent::Range {
-                                name_id: start_info.0,
-                                end_name_id: None,
-                                start: start_info.1,
-                                end: timestamp,
-                                start_thread_ord_id: None,
-                            };
-                            parsed_events.push(parsed);
-                        }
-                        else {
-                            warn!("Did not find start event for UnnamedRangeEnd id: {ord_id}. Skipping...");
-                        }
-                    }
-                    else {
-                        warn!("Did not find start event for UnnamedRangeEnd id: {ord_id}. Skipping...");
-                    }
-                }
-                TracingEvent::ForeignRangeEnd(id, _, ord_id, foreign_thread_id) => {
-                    self.foreign_range_ends.push(ForeignRangeEnd {
-                        event_id: id,
-                        timestamp,
-                        ord_id,
-                        foreign_thread_ord_id: foreign_thread_id,
-                    });
-                }
+            if let Some(parsed) = self.parse_raw_event(evt, timestamp) {
+                parsed_events.push(parsed);
             }
         }
+
+        // Put rest of unhandled events back
+        self.unhandled_events.extend(new_events);
 
         self.stats.new_events(new_events_len, header.start_timestamp, header.end_timestamp);
         self.state_machine.ensure_buf_end();
@@ -255,6 +168,113 @@ impl ThreadParserState {
         }
 
         res
+    }
+
+    fn parse_raw_event(&mut self, raw_event: TracingEvent, timestamp: u64) -> Option<ParsedEvent> {
+        match raw_event {
+            TracingEvent::Instant(id, _) => {
+                // let ev_name = if let Some((ev_name, ev_type)) = self.id_store.get(&id) {
+                //     if ev_type != &EventType::Instant {
+                //         error!("Assertion failed: Instant event type is not Instant!");
+                //     }
+                //     ev_name.clone()
+                // }
+                // else {
+                //     error!("Did not find event name for id: {id}");
+                //     Rc::from(format!("Unknown Instant {id}"))
+                // };
+                let parsed = ParsedEvent::Instant {
+                    name_id: id,
+                    tm: timestamp
+                };
+                Some(parsed)
+            }
+            TracingEvent::RangePart(id, _, ord_id) => {
+                if let Some((ev_name, ev_type)) = self.id_store.get(&id) {
+                    if ev_type == &EventType::Instant {
+                        error!("Assertion failed: RangePart event has Instant type!");
+                        None
+                    }
+                    else if let EventType::RangeEnd(start_id) = ev_type {
+                        if let Some((start_name, start_ev_type)) = self.id_store.get(start_id) {
+                            if *start_ev_type != EventType::RangeStart {
+                                error!("Assertion failed: RangePart event has wrong RangeStart type!");
+                            }
+                            if let Some((ev_id, start_tm)) = self.cur_started_ranges.remove(&ord_id) {
+                                if ev_id != *start_id {
+                                    error!("Assertion failed: RangePart event has wrong RangeEnd id!");
+                                }
+                                let parsed = ParsedEvent::Range {
+                                    name_id: *start_id,
+                                    end_name_id: Some(id),
+                                    start: start_tm,
+                                    end: timestamp,
+                                    start_thread_ord_id: None,
+                                };
+                                Some(parsed)
+                            }
+                            else {
+                                warn!("Did not find start event for RangePart id: {id}");
+                                None
+                            }
+                        }
+                        else {
+                            warn!("Did not find start event for RangePart id: {id}");
+                            None
+                        }
+                    }
+                    else {
+                        // Range start
+                        self.cur_started_ranges.insert(ord_id, (id, timestamp));
+                        None
+                    }
+                }
+                else {
+                    error!("Did not find event name for id: {id}");
+                    let ev_name: Rc<str> = Rc::from(format!("Unknown RangePart {id}"));
+
+                    let parsed = ParsedEvent::Instant {
+                        name_id: id,
+                        tm: timestamp
+                    };
+                    Some(parsed)
+                }
+            }
+            TracingEvent::UnnamedRangeEnd(_, ord_id ) => {
+                if let Some(start_info) = self.cur_started_ranges.remove(&ord_id) {
+                    if let Some((start_name, ev_type)) = self.id_store.get(&start_info.0) {
+                        if *ev_type != EventType::RangeStart {
+                            error!("Assertion failed: UnnamedRangeEnd event has non-RangeStart type!");
+                        }
+                        let parsed = ParsedEvent::Range {
+                            name_id: start_info.0,
+                            end_name_id: None,
+                            start: start_info.1,
+                            end: timestamp,
+                            start_thread_ord_id: None,
+                        };
+                        Some(parsed)
+                    }
+                    else {
+                        warn!("Did not find start event for UnnamedRangeEnd id: {ord_id}. Skipping...");
+                        None
+                    }
+                }
+                else {
+                    warn!("Did not find start event for UnnamedRangeEnd id: {ord_id}. Skipping...");
+                    None
+                }
+            }
+            TracingEvent::ForeignRangeEnd(id, _, ord_id, foreign_thread_id) => {
+                self.foreign_range_ends.push(ForeignRangeEnd {
+                    event_id: id,
+                    timestamp,
+                    ord_id,
+                    foreign_thread_ord_id: foreign_thread_id,
+                });
+                None
+            }
+        }
     }
 
     pub fn thread_info_state(&self) -> ThreadInfoState {
