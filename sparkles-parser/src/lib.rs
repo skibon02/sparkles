@@ -52,7 +52,7 @@ pub struct SparklesParser {
 }
 
 #[derive(Debug)]
-struct ForeignRangeEnd {
+pub struct ForeignRangeEnd {
     event_id: Option<TracingEventId>,
     timestamp: u64,
     ord_id: u8,

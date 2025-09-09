@@ -8,10 +8,9 @@ use auto_enums::auto_enum;
 use indexmap::IndexMap;
 use log::{error, warn};
 use sparkles_core::protocol::packets::{ExternalEventNames, ExternalEvents};
-use crate::{InterpolationPoints, TracingEventId, TracingStats};
+use crate::{InterpolationPoints, TracingEventId};
 use crate::parsed::ParsedExternalEvent;
-use crate::parser::external_parser::raw_decoder::{decode_raw_event, ForeignTracingEvent};
-use crate::parser::thread_parser::EventNames;
+use crate::parser::external_parser::raw_decoder::{decode_raw_event, RawForeignTracingEvent};
 
 #[derive(Default)]
 pub struct ExternalParserState {
@@ -21,7 +20,6 @@ pub struct ExternalParserState {
     started_ranges: BTreeMap<u8, (TracingEventId, u64)>,
 
     interpolation_points: InterpolationPoints,
-    unhandled_events: Vec<ForeignTracingEvent>,
 }
 
 pub enum ExternalParserEvent {
@@ -37,8 +35,6 @@ impl ExternalParserState {
     #[must_use]
     #[auto_enum(Iterator)]
     pub fn got_events(&mut self, header: ExternalEvents, events: &Vec<u8>) -> impl Iterator<Item=ExternalParserEvent> {
-        let start_tm = header.start_timestamp;
-
         if self.interpolation_points.is_empty() {
             error!("ExternalEvents packet received before ExternalSyncPoint! Dropping events...");
             return iter::empty();
@@ -52,6 +48,7 @@ impl ExternalParserState {
             }
 
             if let Some(ev) = decode_raw_event(event_bytes, &header) {
+                self.handle_raw_event(ev, &mut parsed);
             }
         }
 
@@ -63,35 +60,69 @@ impl ExternalParserState {
         }
     }
 
-    fn handle_raw_event(&mut self, ev: ForeignTracingEvent, timestamp: u64) {
-        if pairing_id == 0 {
-            parsed.push(ParsedExternalEvent::Instant{
-                name_id: ev_id,
-                tm: self.interpolation_points.project_tm(tm)
-            })
-        }
-        else {
-            let start_event = self.started_ranges.remove(&pairing_id);
-            if let Some((start_ev_id, start_tm)) = start_event {
-                // Range end
-                let end_name_id = if ev_id == 0 {
-                    None
-                }
-                else {
-                    Some(ev_id)
+    fn handle_raw_event(&mut self, ev: RawForeignTracingEvent, parsed: &mut Vec<ParsedExternalEvent>) -> Option<ParsedExternalEvent> {
+        match ev {
+            RawForeignTracingEvent::Instant {
+                name_id,
+                raw_tm,
+            } => {
+                let interpolated_tm = self.interpolation_points.project_tm(raw_tm);
+                let Some(tm) = interpolated_tm else {
+                    warn!("Not enough interpolation points! Dropping external instant event...");
+                    return None;
                 };
 
-                let parsed_event = ParsedExternalEvent::Range {
-                    name_id: start_ev_id,
-                    end_name_id,
-                    start: self.interpolation_points.project_tm(start_tm),
-                    end: self.interpolation_points.project_tm(tm),
-                };
-                parsed.push(parsed_event);
+                Some(ParsedExternalEvent::Instant{
+                    name_id,
+                    tm
+                })
             }
-            else {
-                // New range start
-                self.started_ranges.insert(pairing_id, (ev_id, tm));
+            RawForeignTracingEvent::RangePart {
+                pairing_id,
+                name_id: ev_id,
+                raw_tm,
+                is_end
+            } => {
+                let interpolated_tm = self.interpolation_points.project_tm(raw_tm);
+                if is_end {
+                    let Some(tm) = interpolated_tm else {
+                        warn!("Not enough interpolation points! Dropping external range event end...");
+                        return None;
+                    };
+
+                    let start_event = self.started_ranges.remove(&pairing_id);
+                    if let Some((start_ev_id, start_tm)) = start_event {
+                        // Range end
+                        let end_name_id = if ev_id == 0 {
+                            None
+                        }
+                        else {
+                            Some(ev_id)
+                        };
+
+                        let parsed_event = ParsedExternalEvent::Range {
+                            name_id: start_ev_id,
+                            end_name_id,
+                            start: start_tm,
+                            end: tm,
+                        };
+                        Some(parsed_event)
+                    }
+                    else {
+                        // No matching start event
+                        warn!("No matching start range part for external range event! ignoring...");
+                        None
+                    }
+                }
+                else {
+                    let Some(tm) = interpolated_tm else {
+                        warn!("Not enough interpolation points! Dropping external range event start...");
+                        return None;
+                    };
+                    // New range start
+                    self.started_ranges.insert(pairing_id, (ev_id, tm));
+                    None
+                }
             }
         }
     }

@@ -89,13 +89,17 @@ Supporting additional attached data is important feature, but it will take some 
 Primary focus now - is a dedicated app for real-time event simultaneous streaming from multiple applications. It will also allow to remove dependency from protobuf protocol libraries.
 
 ## ✧ Known issues and limitations
-✧ Currently can have only 256 unique event names per thread  
-✧ Currently up to 256 opened but not closed ranges at a time are supported (mostly enough)  
-✧ Cannot specify UDP address to listen on  
+✧ External events: 127 overlapping range events are supported per source
+✧ External events: 255 unique event names per source
+✧ External events: Missed events due to lack of time sync points are dropped
+✧ Events: 256 unique event names per thread  
+✧ Events: Up to 256 overlapping ranges at a time are supported
+✧ Events: Timestamp wrap-around is not handled well for 32-bit systems
+✧ UDP streaming: Realtime viewing events may feel laggy (~100ms intervals) because of waiting for time sync points
+✧ UDP streaming: Cannot specify UDP address to listen on  
+✧ UDP streaming: Naive handling for bad network conditions: if at least one packet lost, the whole tracing data packet is dropped.  
+✧ UDP streaming: Congestion control is not implemented
 ✧ Proper usage of sparkles-macro::range_event_start!("name") emits warning  
-✧ Timestamp wrap-around is not handled well (not an issue for 64-bit systems)  
-✧ Naive handling for bad network conditions: if at least one packet lost, the whole tracing data packet is dropped.  
-✧ Congestion control is not implemented for UDP streaming
 
 
 ## ✧ Crate features

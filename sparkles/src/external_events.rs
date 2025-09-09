@@ -68,6 +68,8 @@ impl ExternalEventsSource {
         }
     }
 
+    /// event_names: slice of (event_name_id, pairing_id_flag) tuples.
+    /// pairing_id: pairing_id_flag (1-127) ( | 0x80 for range end ). 0 for Instant event. Value 128 is invalid.
     pub fn push_events(&mut self, timestamps: &[u64], event_names: &[(u16, u8)]) {
         if timestamps.len() != event_names.len() {
             warn!("timestamps.len() must be equal to event_names.len() in ExternalEventsSource '{}'. Ignoring events.", self.name);
@@ -97,6 +99,9 @@ impl ExternalEventsSource {
 
         let mut buf = Vec::with_capacity(timestamps.len() * (3 + bytes_per_tm));
         for (timestamp, (ev_name, ev_pairing_id)) in timestamps.iter().zip(event_names.iter()) {
+            if *ev_pairing_id == 128 {
+                panic!("pairing_id 128 is invalid in ExternalEventsSource '{}'. Aborting.", self.name);
+            }
             let tm = (*timestamp - min_tm).to_be_bytes();
             let ev_id = ev_name.to_be_bytes();
             buf.extend_from_slice(&tm[..bytes_per_tm]);
