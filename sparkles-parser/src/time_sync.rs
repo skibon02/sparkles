@@ -1,16 +1,19 @@
 use std::collections::BTreeMap;
 
 #[derive(Default)]
-pub struct InterpolationPoints(BTreeMap<u64, u64>); // key: cpu timestamp or external timestamp, value: monotonic timestamp
+pub struct TimeSyncPoints(BTreeMap<u64, u64>); // key: cpu timestamp or external timestamp, value: monotonic timestamp
 
-impl InterpolationPoints {
+impl TimeSyncPoints {
     pub fn new() -> Self {
         Self(BTreeMap::new())
     }
 
-    pub fn add_interpolation_point(&mut self, monotonic_tm: u64, cur_tm: u64) {
-        self.0.insert(cur_tm, monotonic_tm);
+    /// Push two timestamps from source and destination time domains, captured in the same time.
+    /// `project_tm` can be used to convert time from source domain to destination domain.
+    pub fn add_time_sync_point(&mut self, dst_tm: u64, src_tm: u64) {
+        self.0.insert(src_tm, dst_tm);
     }
+    /// Returns average frequency of the source time domain
     pub fn get_avg_ticks_per_ns(&self) -> Option<f64> {
         let (&first_tm, &first_monotonic) = self.0.iter().next()?;
         let (&last_tm, &last_monotonic) = self.0.iter().next_back()?;
@@ -27,7 +30,8 @@ impl InterpolationPoints {
         self.0.len() < 2
     }
 
-    /// Projects cpu timestamp or external timestamp to monotonic timestamps using received sync points
+    /// Convert timestamp from source domain to destination domain.
+    /// If timestamp is out of known range, returns None.
     pub fn project_tm(&self, tm: u64) -> Option<u64> {
         let inter_points = &self.0;
         let closest_left = inter_points.range(..=tm).next_back();
@@ -43,6 +47,8 @@ impl InterpolationPoints {
         Some(projected as u64)
     }
 
+    /// Convert timestamp from source domain to destination domain.
+    /// If timestamp is out of known range, attempts to predict it from two latest time sync points
     pub fn project_tm_predict(&self, tm: u64) -> Option<u64> {
         let res = self.project_tm(tm);
         if res.is_some() {
@@ -63,21 +69,27 @@ impl InterpolationPoints {
     }
 }
 
-pub struct MonotonicInterpolationPoints(InterpolationPoints);
-impl MonotonicInterpolationPoints {
+pub struct MonotonicTimeSyncPoints(TimeSyncPoints);
+impl MonotonicTimeSyncPoints {
     pub fn new() -> Self {
-        Self(InterpolationPoints::new())
+        Self(TimeSyncPoints::new())
     }
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+    /// Returns average frequency of the source time domain
     pub fn get_avg_ticks_per_ns(&self) -> Option<f64> {
         self.0.get_avg_ticks_per_ns()
     }
-    pub fn add_interpolation_point(&mut self, monotonic_tm: u64, cur_tm: u64) {
-        assert!(self.0.0.last_entry().is_none_or(|e| cur_tm > *e.key() && monotonic_tm >= *e.get()));
-        self.0.add_interpolation_point(monotonic_tm, cur_tm);
+    /// Push two timestamps from source and destination time domains, captured in the same time.
+    /// `project_tm` can be used to convert time from source domain to destination domain.
+    pub fn add_time_sync_point(&mut self, dst_tm: u64, src_tm: u64) {
+        assert!(self.0.0.last_entry().is_none_or(|e| src_tm > *e.key() && dst_tm >= *e.get()));
+        self.0.add_time_sync_point(dst_tm, src_tm);
     }
+
+    /// Convert timestamp from source domain to destination domain.
+    /// If timestamp is out of known range, returns None.
     pub fn project_tm(&self, tm: u64) -> Option<u64> {
         self.0.project_tm(tm).or_else(||{
             // try to use future 2 points
@@ -92,6 +104,8 @@ impl MonotonicInterpolationPoints {
             Some(projected as u64)
         })
     }
+    /// Convert timestamp from source domain to destination domain.
+    /// If timestamp is out of known range, attempts to predict it from two latest time sync points
     pub fn project_tm_predict(&self, tm: u64) -> Option<u64> {
         self.0.project_tm_predict(tm)
     }

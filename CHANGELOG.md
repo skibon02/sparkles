@@ -43,7 +43,7 @@ Examples:
 - Implement parsing for new cross-thread events type.
 - Modify parser callback signature to receive single combined argument
 - Implement parsing for external events
-- Use simplified interpolation points for time domain synchronization
+- Use simplified time sync points for time domain synchronization
 
 ## Versions
 ### [0.1.8] sparkles (proto-1.0)
@@ -79,7 +79,7 @@ Examples:
 - Prepare library for creating custom parsers
 - Unify structure to work the same with UDP and file sources
 - Add "self-tracing" feature to analyze parser performance and packet receive timings
-- Improve time calculation by using timestamp frequency interpolation
+- Improve time calculation by using timestamp frequency interpolation from sync points
 - Receive and parse packets in separate threads
 
 ### [proto-1.0]
@@ -89,7 +89,7 @@ Examples:
 - Define packet type as a 32-byte pseudo-random pattern (sha256 of header name) so it can potentially be easier to locate when data is corrupted.
 - Introduce x.x versioning in protocol version. Both encoder and decoder know protocol version it was compiled with.
 - Remove `serde` dependency. Now pure `bincode` is used for packet encoding.
-- Timestamp frequency: send timestamp together with timestamp frequency for better time interpolation in parser.
+- Timestamp frequency: send timestamp together with timestamp frequency for better time synchronization in parser.
 - Use big-endian
 
 

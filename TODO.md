@@ -15,7 +15,7 @@ Ready:
 🌟 More explicit and recoverable packets with known pattern  
 🌟 Resistance to data loss during transmission  
 🌟 UDP real-time reader and parser library API  
-🌟 Better timestamp speed interpolation in parser  
+🌟 Better timestamp speed synchronization in parser  
 🌟 Sparkles-parser: read and parse in separate threads  
 🌟 Multicast discovery support
 🌟 Add support for `Send` ranges (start and end in separate threads)

@@ -4,7 +4,7 @@ pub mod parsed;
 pub mod packet_decoder;
 pub mod discovery_wrapper;
 pub mod parser;
-pub mod interpolation;
+pub mod time_sync;
 
 use std::collections::BTreeMap;
 use std::thread;
@@ -21,7 +21,7 @@ use crate::parser::thread_parser::{EventNames, ThreadParserEvent, ThreadParserSt
 
 // pub exports
 pub use discovery_wrapper::DiscoveryWrapper;
-use crate::interpolation::{InterpolationPoints, MonotonicInterpolationPoints};
+use crate::time_sync::{TimeSyncPoints, MonotonicTimeSyncPoints};
 use crate::parser::external_parser::{ExternalParserEvent, ExternalParserState};
 
 pub static PARSER_BUF_SIZE: usize = 1_000_000;
@@ -47,7 +47,8 @@ pub struct SparklesParser {
     external_event_parsers: BTreeMap<u32, ExternalParserState>,
     local_packet_ranges: Vec<(usize, usize, u64, u64, u64)>,
     global_i: usize,
-    interpolation_points: MonotonicInterpolationPoints,
+    // Synchronization points between monotonic clock and CPU clock
+    time_sync_points: MonotonicTimeSyncPoints,
     counters: ProtocolCounters
 }
 
@@ -99,7 +100,7 @@ impl SparklesParser {
 
             local_packet_ranges: Vec::new(),
             global_i: 0,
-            interpolation_points: MonotonicInterpolationPoints::new(),
+            time_sync_points: MonotonicTimeSyncPoints::new(),
             counters: ProtocolCounters::default(),
         }
     }
@@ -186,10 +187,10 @@ impl SparklesParser {
                 self.machine_info = Some(info);
             }
             Packet::SyncPoint(monotonic_tm, cur_tm) => {
-                self.interpolation_points.add_interpolation_point(monotonic_tm, cur_tm);
+                self.time_sync_points.add_time_sync_point(monotonic_tm, cur_tm);
             }
             Packet::DataBytes(packets) => {
-                if self.interpolation_points.is_empty() {
+                if self.time_sync_points.is_empty() {
                     error!("Timestamp frequency is not set! Dropping packet.");
                 }
                 
@@ -201,7 +202,7 @@ impl SparklesParser {
                     let thread_id = header.thread_ord_id;
                     let parser_state = self.event_parsers.entry(thread_id).or_default();
                     self.local_packet_ranges.push((global_i, local_i, thread_id, header.start_timestamp, header.end_timestamp));
-                    let events = parser_state.got_events(header, data, &self.interpolation_points);
+                    let events = parser_state.got_events(header, data, &self.time_sync_points);
                     for event in events {
                         on_new_event(SparklesParserEvent::ThreadParserEvent(event, parser_state.thread_info_state()) );
                     }
@@ -261,7 +262,7 @@ impl SparklesParser {
 
             Packet::ExternalSyncPoint(ext_ord_id, local_tm, external_tm) => {
                 let parser_state = self.external_event_parsers.entry(ext_ord_id).or_default();
-                parser_state.add_interpolation_point(local_tm, external_tm);
+                parser_state.add_time_sync_point(local_tm, external_tm);
             }
             Packet::ExternalEvents(header, events) => {
                 let id = header.ext_ord_id;
@@ -278,7 +279,7 @@ impl SparklesParser {
         }
     }
     pub fn print_stats(&self) {
-        let ticks_per_ns = self.interpolation_points.get_avg_ticks_per_ns().unwrap_or(0.0);
+        let ticks_per_ns = self.time_sync_points.get_avg_ticks_per_ns().unwrap_or(0.0);
         info!("Printing stats...");
         
         let mut total_events = 0;
@@ -397,8 +398,8 @@ impl SparklesParser {
 
         if cfg!(feature="local-packet-bounds") {
             for (global_i, local_i, thread_ord_id, start_cpu,end_cpu) in std::mem::take(&mut self.local_packet_ranges).into_iter() {
-                let start_tm = self.interpolation_points.project_tm(start_cpu);
-                let end_tm = self.interpolation_points.project_tm(end_cpu);
+                let start_tm = self.time_sync_points.project_tm(start_cpu);
+                let end_tm = self.time_sync_points.project_tm(end_cpu);
                 if let (Some(start), Some(end)) = (start_tm, end_tm) {
                     trace_res_file.add_range_event(&format!("Local packet #{global_i}.{local_i}"), 999666 + thread_ord_id, start, end);
                 }

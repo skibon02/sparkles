@@ -9,7 +9,7 @@ use sparkles_core::local_storage::id_mapping::EventType;
 use sparkles_core::protocol::headers::LocalPacketHeader;
 use tracing_decoder::StreamFrameDecoder;
 use crate::{ForeignRangeEnd, TracingEventId, TracingStats};
-use crate::interpolation::MonotonicInterpolationPoints;
+use crate::time_sync::MonotonicTimeSyncPoints;
 use crate::parsed::{ParsedEvent, ThreadInfoState};
 
 pub mod tracing_decoder;
@@ -68,7 +68,7 @@ impl ThreadParserState {
     }
 
     #[must_use]
-    pub fn got_events(&mut self, header: LocalPacketHeader, events_bytes: Vec<u8>, interpolation_points: &MonotonicInterpolationPoints) -> Vec<ThreadParserEvent> {
+    pub fn got_events(&mut self, header: LocalPacketHeader, events_bytes: Vec<u8>, time_sync_points: &MonotonicTimeSyncPoints) -> Vec<ThreadParserEvent> {
         let thread_id = header.thread_ord_id;
 
         let mut res = vec![];
@@ -147,7 +147,7 @@ impl ThreadParserState {
                 warn!("Parsing issue: Timestamp is outside local packet! diff: {}",  cur_tm - header.end_timestamp);
             }
 
-            let Some(tm) = interpolation_points.project_tm(cur_tm) else {
+            let Some(tm) = time_sync_points.project_tm(cur_tm) else {
                 self.unhandled_events.push(evt);
                 break;
             };

@@ -8,7 +8,7 @@ use auto_enums::auto_enum;
 use indexmap::IndexMap;
 use log::{error, warn};
 use sparkles_core::protocol::packets::{ExternalEventNames, ExternalEvents};
-use crate::{InterpolationPoints, TracingEventId};
+use crate::{TimeSyncPoints, TracingEventId};
 use crate::parsed::ParsedExternalEvent;
 use crate::parser::external_parser::raw_decoder::{decode_raw_event, RawForeignTracingEvent};
 
@@ -19,7 +19,7 @@ pub struct ExternalParserState {
 
     started_ranges: BTreeMap<u8, (TracingEventId, u64)>,
 
-    interpolation_points: InterpolationPoints,
+    time_sync_points: TimeSyncPoints,
 }
 
 pub enum ExternalParserEvent {
@@ -28,14 +28,14 @@ pub enum ExternalParserEvent {
 }
 
 impl ExternalParserState {
-    pub fn add_interpolation_point(&mut self, p0: u64, p1: u64) {
-        self.interpolation_points.add_interpolation_point(p0, p1);
+    pub fn add_time_sync_point(&mut self, local_tm: u64, external_tm: u64) {
+        self.time_sync_points.add_time_sync_point(local_tm, external_tm);
     }
 
     #[must_use]
     #[auto_enum(Iterator)]
     pub fn got_events(&mut self, header: ExternalEvents, events: &Vec<u8>) -> impl Iterator<Item=ExternalParserEvent> {
-        if self.interpolation_points.is_empty() {
+        if self.time_sync_points.is_empty() {
             error!("ExternalEvents packet received before ExternalSyncPoint! Dropping events...");
             return iter::empty();
         }
@@ -66,9 +66,9 @@ impl ExternalParserState {
                 name_id,
                 raw_tm,
             } => {
-                let interpolated_tm = self.interpolation_points.project_tm(raw_tm);
+                let interpolated_tm = self.time_sync_points.project_tm(raw_tm);
                 let Some(tm) = interpolated_tm else {
-                    warn!("Not enough interpolation points! Dropping external instant event...");
+                    warn!("Not enough time sync points! Dropping external instant event...");
                     return None;
                 };
 
@@ -83,10 +83,10 @@ impl ExternalParserState {
                 raw_tm,
                 is_end
             } => {
-                let interpolated_tm = self.interpolation_points.project_tm(raw_tm);
+                let interpolated_tm = self.time_sync_points.project_tm(raw_tm);
                 if is_end {
                     let Some(tm) = interpolated_tm else {
-                        warn!("Not enough interpolation points! Dropping external range event end...");
+                        warn!("Not enough time sync points! Dropping external range event end...");
                         return None;
                     };
 
@@ -116,7 +116,7 @@ impl ExternalParserState {
                 }
                 else {
                     let Some(tm) = interpolated_tm else {
-                        warn!("Not enough interpolation points! Dropping external range event start...");
+                        warn!("Not enough time sync points! Dropping external range event start...");
                         return None;
                     };
                     // New range start
