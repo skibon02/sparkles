@@ -159,6 +159,10 @@ impl SparklesParser {
         while let Ok(packet) = packets_rx.recv() {
             self.parse_single_packet(packet, &mut on_new_event);
         }
+        // parse remaining unhandled packets
+        for thread_state in self.event_parsers.values_mut() {
+            thread_state.parse_unhandled_events(&self.time_sync_points, true);
+        }
         self.counters = counters_rx.recv().unwrap();
 
         jh.join().unwrap();
@@ -190,10 +194,6 @@ impl SparklesParser {
                 self.time_sync_points.add_time_sync_point(monotonic_tm, cur_tm);
             }
             Packet::DataBytes(packets) => {
-                if self.time_sync_points.is_empty() {
-                    error!("Timestamp frequency is not set! Dropping packet.");
-                }
-                
                 let global_i = self.global_i;
                 self.global_i += 1;
                 for (local_i, (header, data)) in packets.into_iter().enumerate() {
@@ -262,7 +262,7 @@ impl SparklesParser {
 
             Packet::ExternalSyncPoint(ext_ord_id, local_tm, external_tm) => {
                 let parser_state = self.external_event_parsers.entry(ext_ord_id).or_default();
-                parser_state.add_time_sync_point(local_tm, external_tm);
+                parser_state.add_time_sync_point(external_tm, local_tm);
             }
             Packet::ExternalEvents(header, events) => {
                 let id = header.ext_ord_id;

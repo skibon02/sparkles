@@ -4,7 +4,7 @@ use ringbuf::producer::Producer;
 use ringbuf::storage::Heap;
 use ringbuf::traits::Observer;
 use crate::{TracingEventId, PARSER_BUF_SIZE};
-use crate::parser::thread_parser::TracingEvent;
+use crate::parser::thread_parser::RawTracingEvent;
 
 pub struct StreamFrameDecoder {
     state: ParsingState,
@@ -37,7 +37,7 @@ pub enum ParsingState {
 }
 
 impl StreamFrameDecoder {
-    pub fn try_decode_event(&mut self) -> Result<TracingEvent, bool> {
+    pub fn try_decode_event(&mut self) -> Result<RawTracingEvent, bool> {
         let available_bytes_len = self.buf.occupied_len();
 
         let (ev, new_state) = match mem::take(&mut self.state) {
@@ -69,7 +69,7 @@ impl StreamFrameDecoder {
                 let mut buf = [0u8; 8];
                 self.buf.pop_slice(&mut buf[..dif_tm_len]);
                 let dif_tm = u64::from_le_bytes(buf);
-                (Some(TracingEvent::Instant(ev, dif_tm)), ParsingState::NewFrame)
+                (Some(RawTracingEvent::Instant(ev, dif_tm)), ParsingState::NewFrame)
             }
             ParsingState::RangeOrdId(ev, dif_tm_len, has_foreign_thread) if available_bytes_len >= 1 => {
                 let ord_id = self.buf.try_pop().unwrap();
@@ -85,10 +85,10 @@ impl StreamFrameDecoder {
                     (None, ParsingState::ForeignThreadIdLen(ev_id, dif_tm, ord_id))
                 } else {
                     let ev = if let Some(id) = ev_id {
-                        Some(TracingEvent::RangePart(id, dif_tm, ord_id))
+                        Some(RawTracingEvent::RangePart(id, dif_tm, ord_id))
                     }
                     else {
-                        Some(TracingEvent::UnnamedRangeEnd(dif_tm, ord_id))
+                        Some(RawTracingEvent::UnnamedRangeEnd(dif_tm, ord_id))
                     };
                     (ev, ParsingState::NewFrame)
                 }
@@ -102,7 +102,7 @@ impl StreamFrameDecoder {
                 self.buf.pop_slice(&mut buf[..foreign_thread_id_bytes_len]);
                 let foreign_thread_id = u64::from_le_bytes(buf);
 
-                let ev = Some(TracingEvent::ForeignRangeEnd(ev_id, dif_tm, ord_id, foreign_thread_id));
+                let ev = Some(RawTracingEvent::ForeignRangeEnd(ev_id, dif_tm, ord_id, foreign_thread_id));
                 (ev, ParsingState::NewFrame)
             }
             state => {
@@ -121,7 +121,7 @@ impl StreamFrameDecoder {
         }
     }
 
-    pub fn decode_many(&mut self, bytes: &[u8]) -> Vec<TracingEvent> {
+    pub fn decode_many(&mut self, bytes: &[u8]) -> Vec<RawTracingEvent> {
         self.buf.push_slice(bytes);
         let mut events = Vec::new();
         // Try parse as many events as possible

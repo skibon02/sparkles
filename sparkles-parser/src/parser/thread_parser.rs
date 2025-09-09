@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::mem;
 use std::mem::take;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -9,7 +8,7 @@ use sparkles_core::local_storage::id_mapping::EventType;
 use sparkles_core::protocol::headers::LocalPacketHeader;
 use tracing_decoder::StreamFrameDecoder;
 use crate::{ForeignRangeEnd, TracingEventId, TracingStats};
-use crate::time_sync::MonotonicTimeSyncPoints;
+use crate::time_sync::{MonotonicTimeSyncPoints, TimeSyncPoints};
 use crate::parsed::{ParsedEvent, ThreadInfoState};
 
 pub mod tracing_decoder;
@@ -17,7 +16,7 @@ pub mod tracing_decoder;
 pub type EventNames = IndexMap<TracingEventId, (Rc<str>, EventType)>;
 
 #[derive(Debug, Copy, Clone)]
-pub enum TracingEvent {
+pub enum RawTracingEvent {
     Instant(TracingEventId, u64),
     RangePart(TracingEventId, u64, u8),
     UnnamedRangeEnd(u64, u8),
@@ -32,7 +31,7 @@ pub struct ThreadParserState {
 
     // start timestamp and duration for missed events packet
     missed_events: Vec<(u64, u64)>,
-    unhandled_events: Vec<TracingEvent>,
+    unhandled_events: Vec<(RawTracingEvent, u64)>,
 
     // ---- TMP DATA ----
     state_machine: StreamFrameDecoder,
@@ -116,21 +115,18 @@ impl ThreadParserState {
         let mut cur_tm = header.start_timestamp;
         let mut first = true;
 
-        // Take unhandled events
-        let mut new_events = take(&mut self.unhandled_events).into_iter().chain(new_events.into_iter());
-
-        let mut parsed_events = Vec::with_capacity(new_events_len / 2);
-        for evt in &mut new_events {
+        // 1) parse timestamp for new events, store them in unhandled events
+        for evt in new_events {
             let mut dif_tm_zero = false;
             if first {
                 first = false;
             }
             else {
                 let dif_tm = match evt {
-                    TracingEvent::Instant(_, dif_tm) => dif_tm,
-                    TracingEvent::RangePart(_, dif_tm, _) => dif_tm,
-                    TracingEvent::UnnamedRangeEnd(dif_tm, _) => dif_tm,
-                    TracingEvent::ForeignRangeEnd(_, dif_tm, _, _) => dif_tm,
+                    RawTracingEvent::Instant(_, dif_tm) => dif_tm,
+                    RawTracingEvent::RangePart(_, dif_tm, _) => dif_tm,
+                    RawTracingEvent::UnnamedRangeEnd(dif_tm, _) => dif_tm,
+                    RawTracingEvent::ForeignRangeEnd(_, dif_tm, _, _) => dif_tm,
                 };
                 if dif_tm == 0 {
                     dif_tm_zero = true;
@@ -147,22 +143,13 @@ impl ThreadParserState {
                 warn!("Parsing issue: Timestamp is outside local packet! diff: {}",  cur_tm - header.end_timestamp);
             }
 
-            let Some(tm) = time_sync_points.project_tm(cur_tm) else {
-                self.unhandled_events.push(evt);
-                break;
-            };
-            let timestamp = tm + self.zero_diff_cnt * 10;
-            if let Some(parsed) = self.parse_raw_event(evt, timestamp) {
-                parsed_events.push(parsed);
-            }
+            self.unhandled_events.push((evt, cur_tm));
         }
-
-        // Put rest of unhandled events back
-        self.unhandled_events.extend(new_events);
-
         self.stats.new_events(new_events_len, header.start_timestamp, header.end_timestamp);
         self.state_machine.ensure_buf_end();
 
+        // 2) Parse all unhandled events
+        let parsed_events = self.parse_unhandled_events(time_sync_points, false);
         if !parsed_events.is_empty() {
             res.push(ThreadParserEvent::NewEvents(parsed_events));
         }
@@ -170,9 +157,42 @@ impl ThreadParserState {
         res
     }
 
-    fn parse_raw_event(&mut self, raw_event: TracingEvent, timestamp: u64) -> Option<ParsedEvent> {
+    pub fn parse_unhandled_events(&mut self, time_sync_points: &MonotonicTimeSyncPoints, is_final: bool) -> Vec<ParsedEvent> {
+        let pos = if is_final {
+            self.unhandled_events.iter().position(|(_, tm)| time_sync_points.project_tm_predict(*tm).is_none())
+        }
+        else {
+            self.unhandled_events.iter().position(|(_, tm)| time_sync_points.project_tm(*tm).is_none())
+        };
+        let split_pos = pos.unwrap_or(self.unhandled_events.len());
+        let remaining_events = self.unhandled_events.split_off(split_pos);
+        let processable_events = take(&mut self.unhandled_events);
+        self.unhandled_events = remaining_events;
+
+        let mut parsed_events = Vec::with_capacity(processable_events.len() / 2);
+        let processable_events_len = processable_events.len();
+        for (evt, tm) in processable_events {
+            let Some(tm) = (if is_final {
+                time_sync_points.project_tm_predict(tm)
+            }
+            else {
+                time_sync_points.project_tm(tm)
+            }) else {
+                panic!("Timestamp must be convertible!. processable events len: {}, unhandled_events len: {}, split_pos: {}", processable_events_len, self.unhandled_events.len(), split_pos);
+            };
+
+            let timestamp = tm + self.zero_diff_cnt * 10;
+            if let Some(parsed) = self.parse_raw_event(evt, timestamp) {
+                parsed_events.push(parsed);
+            }
+        }
+
+        parsed_events
+    }
+
+    fn parse_raw_event(&mut self, raw_event: RawTracingEvent, timestamp: u64) -> Option<ParsedEvent> {
         match raw_event {
-            TracingEvent::Instant(id, _) => {
+            RawTracingEvent::Instant(id, _) => {
                 // let ev_name = if let Some((ev_name, ev_type)) = self.id_store.get(&id) {
                 //     if ev_type != &EventType::Instant {
                 //         error!("Assertion failed: Instant event type is not Instant!");
@@ -189,7 +209,7 @@ impl ThreadParserState {
                 };
                 Some(parsed)
             }
-            TracingEvent::RangePart(id, _, ord_id) => {
+            RawTracingEvent::RangePart(id, _, ord_id) => {
                 if let Some((ev_name, ev_type)) = self.id_store.get(&id) {
                     if ev_type == &EventType::Instant {
                         error!("Assertion failed: RangePart event has Instant type!");
@@ -240,7 +260,7 @@ impl ThreadParserState {
                     Some(parsed)
                 }
             }
-            TracingEvent::UnnamedRangeEnd(_, ord_id ) => {
+            RawTracingEvent::UnnamedRangeEnd(_, ord_id ) => {
                 if let Some(start_info) = self.cur_started_ranges.remove(&ord_id) {
                     if let Some((start_name, ev_type)) = self.id_store.get(&start_info.0) {
                         if *ev_type != EventType::RangeStart {
@@ -265,7 +285,7 @@ impl ThreadParserState {
                     None
                 }
             }
-            TracingEvent::ForeignRangeEnd(id, _, ord_id, foreign_thread_id) => {
+            RawTracingEvent::ForeignRangeEnd(id, _, ord_id, foreign_thread_id) => {
                 self.foreign_range_ends.push(ForeignRangeEnd {
                     event_id: id,
                     timestamp,

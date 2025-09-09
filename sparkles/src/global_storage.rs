@@ -211,7 +211,7 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
                 send_sync_point(&mut sender_chain, monotonic_tm, cur_tm);
             }
 
-            // Read value before flushing
+            // Read finalize_started value before flushing
             let is_finalizing = FINALIZE_STARTED.load(Ordering::Relaxed);
             if is_finalizing {
                 debug!("[sparkles] Finalize detected!");
@@ -223,6 +223,7 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
                 true
             };
 
+            // Take new events
             // this thing should be fast
             let (slices, failed_pages) = {
                 #[cfg(feature="self-tracing")]

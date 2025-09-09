@@ -28,8 +28,8 @@ pub enum ExternalParserEvent {
 }
 
 impl ExternalParserState {
-    pub fn add_time_sync_point(&mut self, local_tm: u64, external_tm: u64) {
-        self.time_sync_points.add_time_sync_point(local_tm, external_tm);
+    pub fn add_time_sync_point(&mut self, external_tm: u64, local_tm: u64) {
+        self.time_sync_points.add_time_sync_point(external_tm, local_tm);
     }
 
     #[must_use]
