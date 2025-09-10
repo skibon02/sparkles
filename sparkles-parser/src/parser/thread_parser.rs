@@ -149,36 +149,49 @@ impl ThreadParserState {
         self.state_machine.ensure_buf_end();
 
         // 2) Parse all unhandled events
-        let parsed_events = self.parse_unhandled_events(time_sync_points, false);
-        if !parsed_events.is_empty() {
+        if let Some(parsed_events) = self.parse_unhandled_events(time_sync_points, false) {
             res.push(ThreadParserEvent::NewEvents(parsed_events));
         }
 
         res
     }
 
-    pub fn parse_unhandled_events(&mut self, time_sync_points: &MonotonicTimeSyncPoints, is_final: bool) -> Vec<ParsedEvent> {
-        let pos = if is_final {
-            self.unhandled_events.iter().position(|(_, tm)| time_sync_points.project_tm_predict(*tm).is_none())
+    pub fn parse_unhandled_events(&mut self, time_sync_points: &MonotonicTimeSyncPoints, is_final: bool) -> Option<Vec<ParsedEvent>> {
+        let (start, end) = time_sync_points.src_bounds()?;
+
+        let processable_events = if is_final {
+            take(&mut self.unhandled_events)
         }
         else {
-            self.unhandled_events.iter().position(|(_, tm)| time_sync_points.project_tm(*tm).is_none())
-        };
-        let split_pos = pos.unwrap_or(self.unhandled_events.len());
-        let remaining_events = self.unhandled_events.split_off(split_pos);
-        let processable_events = take(&mut self.unhandled_events);
-        self.unhandled_events = remaining_events;
-
-        let mut parsed_events = Vec::with_capacity(processable_events.len() / 2);
-        let processable_events_len = processable_events.len();
-        for (evt, tm) in processable_events {
-            let Some(tm) = (if is_final {
-                time_sync_points.project_tm_predict(tm)
+            let pos = self.unhandled_events.iter().position(|(_, tm)| {*tm > end}).unwrap_or(self.unhandled_events.len());
+            if pos == 0 {
+                return None;
+            }
+            else if pos == self.unhandled_events.len() {
+                take(&mut self.unhandled_events)
             }
             else {
-                time_sync_points.project_tm(tm)
-            }) else {
-                panic!("Timestamp must be convertible!. processable events len: {}, unhandled_events len: {}, split_pos: {}", processable_events_len, self.unhandled_events.len(), split_pos);
+
+                let remaining_events = self.unhandled_events.split_off(pos);
+                let processable_events = take(&mut self.unhandled_events);
+                self.unhandled_events = remaining_events;
+                processable_events
+            }
+        };
+
+        let mut parsed_events = Vec::with_capacity(processable_events.len() / 2);
+        for (evt, tm) in processable_events {
+            let tm = if is_final {
+                time_sync_points.project_tm_predict(tm).unwrap()
+            }
+            else {
+                match time_sync_points.project_tm(tm) {
+                    Some(tm) => tm,
+                    None => {
+                        warn!("Parsing issue: Cannot project timestamp {}. time sync bounds: {start}-{end}", tm);
+                        continue;
+                    }
+                }
             };
 
             let timestamp = tm + self.zero_diff_cnt * 10;
@@ -187,7 +200,7 @@ impl ThreadParserState {
             }
         }
 
-        parsed_events
+        Some(parsed_events)
     }
 
     fn parse_raw_event(&mut self, raw_event: RawTracingEvent, timestamp: u64) -> Option<ParsedEvent> {

@@ -179,8 +179,6 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
         let info_header = SparklesMachineInfo::new(process_name, pid);
         send_machine_info(&mut sender_chain, info_header.clone());
 
-        thread::sleep(Duration::from_millis(1));
-
         let (monotonic_tm, cur_tm) = freq_detector.next_forced();
         send_sync_point(&mut sender_chain, monotonic_tm, cur_tm);
 
@@ -206,7 +204,7 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
                 send_machine_info(&mut sender_chain, info_header.clone());
             }
             else if let Some((monotonic_tm, cur_tm)) = freq_detector.next() {
-                let ticks_per_sec = freq_detector.ticks_per_sec;
+                let ticks_per_sec = freq_detector.cur_freq();
                 TICKS_PER_MS.store((ticks_per_sec / 1_000) as u32, Ordering::Relaxed);
                 send_sync_point(&mut sender_chain, monotonic_tm, cur_tm);
             }
@@ -274,6 +272,9 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
 
             if is_finalizing {
                 debug!("[internal] Finalize in process...");
+                thread::sleep(Duration::from_millis(1));
+                let (monotonic_tm, cur_tm) = freq_detector.next_forced();
+                send_sync_point(&mut sender_chain, monotonic_tm, cur_tm);
                 send_graceful_shutdown(&mut sender_chain);
                 break;
             }

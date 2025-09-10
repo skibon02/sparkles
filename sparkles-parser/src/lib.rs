@@ -161,7 +161,13 @@ impl SparklesParser {
         }
         // parse remaining unhandled packets
         for thread_state in self.event_parsers.values_mut() {
-            thread_state.parse_unhandled_events(&self.time_sync_points, true);
+            if let Some(events) = thread_state.parse_unhandled_events(&self.time_sync_points, true) {
+                on_new_event(SparklesParserEvent::ThreadParserEvent(ThreadParserEvent::NewEvents(events), thread_state.thread_info_state()) );
+            }
+            else {
+                error!("Don't have enough time sync points to parse any events in thread {}", thread_state.thread_name.as_deref()
+                        .unwrap_or(&thread_state.thread_info_state().thread_ord_id.to_string()));
+            }
         }
         self.counters = counters_rx.recv().unwrap();
 
