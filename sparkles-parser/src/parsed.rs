@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use crate::TracingEventId;
 
 #[derive(Clone, Debug)]
@@ -61,8 +62,13 @@ impl ParsedEvent {
     }
 }
 
-pub struct ThreadInfoState {
+pub struct ThreadInfo {
     pub thread_id: Option<u64>,
     pub thread_name: Option<String>,
     pub thread_ord_id: u64
+}
+
+pub struct ExternalChannelInfo {
+    pub ext_ord_id: u32,
+    pub channel_name: Option<Rc<str>>,
 }

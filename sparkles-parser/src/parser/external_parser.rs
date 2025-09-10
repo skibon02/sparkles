@@ -9,11 +9,11 @@ use indexmap::IndexMap;
 use log::{error, warn};
 use sparkles_core::protocol::packets::{ExternalEventNames, ExternalEvents};
 use crate::{TimeSyncPoints, TracingEventId};
-use crate::parsed::ParsedExternalEvent;
+use crate::parsed::{ExternalChannelInfo, ParsedExternalEvent};
 use crate::parser::external_parser::raw_decoder::{decode_raw_event, RawForeignTracingEvent};
 
-#[derive(Default)]
 pub struct ExternalParserState {
+    ext_ord_id: u32,
     channel_name: Option<Rc<str>>,
     id_store: IndexMap<TracingEventId, Rc<str>>,
 
@@ -28,6 +28,15 @@ pub enum ExternalParserEvent {
 }
 
 impl ExternalParserState {
+    pub fn new(ext_ord_id: u32) -> Self {
+        Self {
+            ext_ord_id,
+            channel_name: None,
+            id_store: IndexMap::new(),
+            started_ranges: BTreeMap::new(),
+            time_sync_points: TimeSyncPoints::new(),
+        }
+    }
     pub fn add_time_sync_point(&mut self, external_tm: u64, local_tm: u64) {
         self.time_sync_points.add_time_sync_point(external_tm, local_tm);
     }
@@ -156,6 +165,13 @@ impl ExternalParserState {
         }
         else {
             iter::empty()
+        }
+    }
+    
+    pub fn channel_info(&self) -> ExternalChannelInfo {
+        ExternalChannelInfo {
+            channel_name: self.channel_name.clone(),
+            ext_ord_id: self.ext_ord_id,
         }
     }
 }

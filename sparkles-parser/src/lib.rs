@@ -7,17 +7,18 @@ pub mod parser;
 pub mod time_sync;
 
 use std::collections::BTreeMap;
+use std::ops::{Deref, DerefMut};
 use std::thread;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
-use std::thread::ThreadId;
+use std::thread::{Thread, ThreadId};
 use std::time::{Duration, Instant};
 use indexmap::IndexMap;
 use log::{error, info, warn};
 use sparkles_core::consts::PROTOCOL_VERSION;
 use sparkles_core::protocol::headers::SparklesMachineInfo;
 use crate::packet_decoder::{Packet, PacketDecoder, PacketReadError, ProtocolCounters};
-use crate::parsed::{ParsedEvent, ThreadInfoState};
+use crate::parsed::{ExternalChannelInfo, ParsedEvent, ThreadInfo};
 use crate::parser::thread_parser::{EventNames, ThreadParserEvent, ThreadParserState};
 
 // pub exports
@@ -36,21 +37,61 @@ pub fn is_shutting_down() -> bool {
     SHUTDOWN_SIGNAL.load(std::sync::atomic::Ordering::SeqCst)
 }
 
-pub enum SparklesParserEvent {
-    ThreadParserEvent(ThreadParserEvent, ThreadInfoState),
-    ExternalParserEvent(ExternalParserEvent),
+pub enum SparklesParserEvent<'a> {
+    ThreadParserEvent(ThreadParserEvent, &'a ThreadInfo),
+    ExternalParserEvent(ExternalParserEvent, &'a ExternalChannelInfo),
 }
 
 pub struct SparklesParser {
     machine_info: Option<SparklesMachineInfo>,
 
-    event_parsers: BTreeMap<u64, ThreadParserState>,
-    external_event_parsers: BTreeMap<u32, ExternalParserState>,
+    event_parsers: EventParsers,
+    external_event_parsers: ExternalEventParsers,
     local_packet_ranges: Vec<(usize, usize, u64, u64, u64)>,
     global_i: usize,
     // Synchronization points between monotonic clock and CPU clock
     time_sync_points: MonotonicTimeSyncPoints,
     counters: ProtocolCounters
+}
+
+#[derive(Default)]
+pub struct EventParsers(BTreeMap<u64, ThreadParserState>);
+impl EventParsers {
+    pub fn entry(&mut self, thread_id: u64) -> &mut ThreadParserState {
+        self.0.entry(thread_id).or_insert(ThreadParserState::new(thread_id))
+    }
+}
+impl Deref for EventParsers {
+    type Target = BTreeMap<u64, ThreadParserState>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl DerefMut for EventParsers {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+#[derive(Default)]
+pub struct ExternalEventParsers(BTreeMap<u32, ExternalParserState>);
+impl ExternalEventParsers {
+    pub fn entry(&mut self, ext_ord_id: u32) -> &mut ExternalParserState {
+        self.0.entry(ext_ord_id).or_insert(ExternalParserState::new(ext_ord_id))
+    }
+    pub fn keys(&self) -> impl Iterator<Item=&u32> {
+        self.0.keys()
+    }
+}
+impl Deref for ExternalEventParsers {
+    type Target = BTreeMap<u32, ExternalParserState>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl DerefMut for ExternalEventParsers {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 #[derive(Debug)]
@@ -96,8 +137,8 @@ impl SparklesParser {
         ).forget();
         Self {
             machine_info: None,
-            event_parsers: BTreeMap::new(),
-            external_event_parsers: BTreeMap::new(),
+            event_parsers: EventParsers::default(),
+            external_event_parsers: ExternalEventParsers::default(),
 
             local_packet_ranges: Vec::new(),
             global_i: 0,
@@ -163,11 +204,11 @@ impl SparklesParser {
         // parse remaining unhandled packets
         for thread_state in self.event_parsers.values_mut() {
             if let Some(events) = thread_state.parse_unhandled_events(&self.time_sync_points, true) {
-                on_new_event(SparklesParserEvent::ThreadParserEvent(ThreadParserEvent::NewEvents(events), thread_state.thread_info_state()) );
+                on_new_event(SparklesParserEvent::ThreadParserEvent(ThreadParserEvent::NewEvents(events), &thread_state.thread_info()) );
             }
             else {
                 error!("Don't have enough time sync points to parse any events in thread {}", thread_state.thread_name.as_deref()
-                        .unwrap_or(&thread_state.thread_info_state().thread_ord_id.to_string()));
+                        .unwrap_or(&thread_state.thread_info().thread_ord_id.to_string()));
             }
         }
 
@@ -175,8 +216,7 @@ impl SparklesParser {
         let thread_ord_id_keys = self.event_parsers.keys().cloned().collect::<Vec<_>>();
         for thread_ord_id in thread_ord_id_keys {
             if let Some(foreign_events) = Self::process_foreign_ends(&mut self.event_parsers, thread_ord_id) {
-                let thread_info_state = self.event_parsers.get(&thread_ord_id).unwrap().thread_info_state();
-                on_new_event(SparklesParserEvent::ThreadParserEvent(ThreadParserEvent::NewEvents(foreign_events), thread_info_state));
+                on_new_event(SparklesParserEvent::ThreadParserEvent(ThreadParserEvent::NewEvents(foreign_events), &self.event_parsers.entry(thread_ord_id).thread_info()));
             }
         }
         self.counters = counters_rx.recv().unwrap();
@@ -217,16 +257,16 @@ impl SparklesParser {
                     let g = sparkles_macro::range_event_start!("Parse header");
                     let thread_id = header.thread_ord_id;
                     self.local_packet_ranges.push((global_i, local_i, thread_id, header.start_timestamp, header.end_timestamp));
-                    let parser_state = self.event_parsers.entry(thread_id).or_default();
+                    let parser_state = self.event_parsers.entry(thread_id);
                     let events = parser_state.got_events(header, data, &self.time_sync_points);
                     for event in events {
-                        on_new_event(SparklesParserEvent::ThreadParserEvent(event, parser_state.thread_info_state()) );
+                        on_new_event(SparklesParserEvent::ThreadParserEvent(event, &parser_state.thread_info()) );
                     }
 
                     // handle foreign events
                     if let Some(foreign_events) = Self::process_foreign_ends(&mut self.event_parsers, thread_id) {
-                        let parser_state = self.event_parsers.entry(thread_id).or_default();
-                        on_new_event(SparklesParserEvent::ThreadParserEvent(ThreadParserEvent::NewEvents(foreign_events), parser_state.thread_info_state()));
+                        let parser_state = self.event_parsers.entry(thread_id);
+                        on_new_event(SparklesParserEvent::ThreadParserEvent(ThreadParserEvent::NewEvents(foreign_events), &parser_state.thread_info()));
                     }
                 }
             }
@@ -243,23 +283,25 @@ impl SparklesParser {
             }
             Packet::ExternalEventNames(names) => {
                 let id = names.ext_ord_id;
-                let parser_state = self.external_event_parsers.entry(id).or_default();
+                let parser_state = self.external_event_parsers.entry(id);
+                let channel_info = parser_state.channel_info();
 
                 for event in parser_state.got_event_names(names) {
-                    on_new_event(SparklesParserEvent::ExternalParserEvent(event));
+                    on_new_event(SparklesParserEvent::ExternalParserEvent(event, &channel_info));
                 }
             }
 
             Packet::ExternalSyncPoint(ext_ord_id, local_tm, external_tm) => {
-                let parser_state = self.external_event_parsers.entry(ext_ord_id).or_default();
+                let parser_state = self.external_event_parsers.entry(ext_ord_id);
                 parser_state.add_time_sync_point(external_tm, local_tm);
             }
             Packet::ExternalEvents(header, events) => {
                 let id = header.ext_ord_id;
-                let parser_state = self.external_event_parsers.entry(id).or_default();
+                let parser_state = self.external_event_parsers.entry(id);
+                let channel_info = parser_state.channel_info();
 
                 for event in parser_state.got_events(header, &events) {
-                    on_new_event(SparklesParserEvent::ExternalParserEvent(event));
+                    on_new_event(SparklesParserEvent::ExternalParserEvent(event, &channel_info));
                 }
             }
 
@@ -269,9 +311,9 @@ impl SparklesParser {
         }
     }
 
-    fn process_foreign_ends(event_parsers: &mut BTreeMap<u64, ThreadParserState>, thread_id: u64) -> Option<Vec<ParsedEvent>>{
+    fn process_foreign_ends(event_parsers: &mut EventParsers, thread_id: u64) -> Option<Vec<ParsedEvent>>{
         // Process foreign range ends after regular events
-        let parser_state = event_parsers.entry(thread_id).or_default();
+        let parser_state = event_parsers.entry(thread_id);
         let foreign_ends = parser_state.take_foreign_range_ends();
 
         let mut foreign_events = vec![];
@@ -313,7 +355,7 @@ impl SparklesParser {
         info!("Printing stats...");
         
         let mut total_events = 0;
-        for (ord_id, thread) in &self.event_parsers {
+        for (ord_id, thread) in self.event_parsers.deref() {
             info!("\tThread: {:?}#{:?}", thread.thread_name, ord_id);
             let stats = thread.stats;
             
@@ -446,7 +488,7 @@ impl SparklesParser {
         Ok(bytes)
     }
     fn thread_parser_state(&mut self, thread_id: u64) -> &mut ThreadParserState {
-        self.event_parsers.entry(thread_id).or_default()
+        self.event_parsers.entry(thread_id)
     }
 }
 

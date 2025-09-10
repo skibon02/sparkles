@@ -9,7 +9,7 @@ use sparkles_core::protocol::headers::LocalPacketHeader;
 use tracing_decoder::StreamFrameDecoder;
 use crate::{ForeignRangeEnd, TracingEventId, TracingStats};
 use crate::time_sync::{MonotonicTimeSyncPoints, TimeSyncPoints};
-use crate::parsed::{ParsedEvent, ThreadInfoState};
+use crate::parsed::{ParsedEvent, ThreadInfo};
 
 pub mod tracing_decoder;
 
@@ -23,11 +23,10 @@ pub enum RawTracingEvent {
     ForeignRangeEnd(Option<TracingEventId>, u64, u8, u64),
 }
 
-#[derive(Default)]
 pub struct ThreadParserState {
+    thread_ord_id: u64,
     pub(crate) thread_name: Option<String>,
     thread_id: Option<u64>,
-    last_thread_ord_id: u64,
 
     // start timestamp and duration for missed events packet
     missed_events: Vec<(u64, u64)>,
@@ -50,6 +49,22 @@ pub enum ThreadParserEvent {
     EventNamesChanged(EventNames),
 }
 impl ThreadParserState {
+    pub fn new(thread_ord_id: u64) -> Self {
+        Self {
+            thread_ord_id,
+
+            thread_name: None,
+            thread_id: None,
+            missed_events: vec![],
+            unhandled_events: vec![],
+            state_machine: StreamFrameDecoder::default(),
+            cur_started_ranges: BTreeMap::new(),
+            foreign_range_ends: vec![],
+            zero_diff_cnt: 0,
+            id_store: IndexMap::new(),
+            stats: TracingStats::default(),
+        }
+    }
     pub fn remove_foreign_range(&mut self, foreign_end_ord_id: u8) -> Option<(TracingEventId, u64)> {
         self.cur_started_ranges.remove(&foreign_end_ord_id)
     }
@@ -77,7 +92,6 @@ impl ThreadParserState {
         if let Some(thread_name) = header.thread_info.new_thread_name.clone() {
             self.thread_name = Some(thread_name);
         }
-        self.last_thread_ord_id = thread_id;
 
         // Merge id store
         let mut something_changed = false;
@@ -310,11 +324,11 @@ impl ThreadParserState {
         }
     }
 
-    pub fn thread_info_state(&self) -> ThreadInfoState {
-        ThreadInfoState {
+    pub fn thread_info(&self) -> ThreadInfo {
+        ThreadInfo {
             thread_id: self.thread_id,
             thread_name: self.thread_name.clone(),
-            thread_ord_id: self.last_thread_ord_id,
+            thread_ord_id: self.thread_ord_id,
         }
     }
 }
