@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use std::thread;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
+use std::thread::ThreadId;
 use std::time::{Duration, Instant};
 use indexmap::IndexMap;
 use log::{error, info, warn};
@@ -169,6 +170,15 @@ impl SparklesParser {
                         .unwrap_or(&thread_state.thread_info_state().thread_ord_id.to_string()));
             }
         }
+
+        // Process foreign range ends
+        let thread_ord_id_keys = self.event_parsers.keys().cloned().collect::<Vec<_>>();
+        for thread_ord_id in thread_ord_id_keys {
+            if let Some(foreign_events) = Self::process_foreign_ends(&mut self.event_parsers, thread_ord_id) {
+                let thread_info_state = self.event_parsers.get(&thread_ord_id).unwrap().thread_info_state();
+                on_new_event(SparklesParserEvent::ThreadParserEvent(ThreadParserEvent::NewEvents(foreign_events), thread_info_state));
+            }
+        }
         self.counters = counters_rx.recv().unwrap();
 
         jh.join().unwrap();
@@ -206,42 +216,16 @@ impl SparklesParser {
                     #[cfg(feature="self-tracing")]
                     let g = sparkles_macro::range_event_start!("Parse header");
                     let thread_id = header.thread_ord_id;
-                    let parser_state = self.event_parsers.entry(thread_id).or_default();
                     self.local_packet_ranges.push((global_i, local_i, thread_id, header.start_timestamp, header.end_timestamp));
+                    let parser_state = self.event_parsers.entry(thread_id).or_default();
                     let events = parser_state.got_events(header, data, &self.time_sync_points);
                     for event in events {
                         on_new_event(SparklesParserEvent::ThreadParserEvent(event, parser_state.thread_info_state()) );
                     }
 
-
-                    // Process foreign range ends after regular events
-                    let mut foreign_events = Vec::new();
-                    let foreign_ends_to_process = parser_state.take_foreign_range_ends();
-                    let mut remaining_foreign_ends = Vec::new();
-
-                    for foreign_end in foreign_ends_to_process {
-                        if let Some(foreign_parser_state) = self.event_parsers.get_mut(&foreign_end.foreign_thread_ord_id) {
-                            if let Some((start_event_id, start_timestamp)) = foreign_parser_state.remove_foreign_range(foreign_end.ord_id) {
-                                let parsed_event = ParsedEvent::Range {
-                                    name_id: start_event_id,
-                                    end_name_id: foreign_end.event_id,
-                                    start: start_timestamp,
-                                    end: foreign_end.timestamp,
-                                    start_thread_ord_id: Some(foreign_end.foreign_thread_ord_id),
-                                };
-                                foreign_events.push(parsed_event);
-                            } else {
-                                remaining_foreign_ends.push(foreign_end);
-                            }
-                        } else {
-                            remaining_foreign_ends.push(foreign_end);
-                        }
-                    }
-
-                    let parser_state = self.event_parsers.get_mut(&thread_id).unwrap();
-                    parser_state.store_foreign_ends(remaining_foreign_ends);
-
-                    if !foreign_events.is_empty() {
+                    // handle foreign events
+                    if let Some(foreign_events) = Self::process_foreign_ends(&mut self.event_parsers, thread_id) {
+                        let parser_state = self.event_parsers.entry(thread_id).or_default();
                         on_new_event(SparklesParserEvent::ThreadParserEvent(ThreadParserEvent::NewEvents(foreign_events), parser_state.thread_info_state()));
                     }
                 }
@@ -284,6 +268,46 @@ impl SparklesParser {
             Packet::Hello => {}
         }
     }
+
+    fn process_foreign_ends(event_parsers: &mut BTreeMap<u64, ThreadParserState>, thread_id: u64) -> Option<Vec<ParsedEvent>>{
+        // Process foreign range ends after regular events
+        let parser_state = event_parsers.entry(thread_id).or_default();
+        let foreign_ends = parser_state.take_foreign_range_ends();
+
+        let mut foreign_events = vec![];
+        let mut remaining_foreign_ends = Vec::new();
+
+        for foreign_end in foreign_ends {
+            if let Some(foreign_parser_state) = event_parsers.get_mut(&foreign_end.foreign_thread_ord_id) {
+                if let Some((start_event_id, start_timestamp)) = foreign_parser_state.remove_foreign_range(foreign_end.ord_id) {
+                    let parsed_event = ParsedEvent::Range {
+                        name_id: start_event_id,
+                        end_name_id: foreign_end.event_id,
+                        start: start_timestamp,
+                        end: foreign_end.timestamp,
+                        start_thread_ord_id: Some(foreign_end.foreign_thread_ord_id),
+                    };
+                    foreign_events.push(parsed_event);
+                } else {
+                    remaining_foreign_ends.push(foreign_end);
+                }
+            } else {
+                remaining_foreign_ends.push(foreign_end);
+            }
+        }
+
+        // Store remaining foreign ends back to the parser state
+        let parser_state = event_parsers.get_mut(&thread_id).unwrap();
+        parser_state.store_foreign_ends(remaining_foreign_ends);
+
+        if !foreign_events.is_empty() {
+            Some(foreign_events)
+        } else {
+            None
+        }
+    }
+
+
     pub fn print_stats(&self) {
         let ticks_per_ns = self.time_sync_points.get_avg_ticks_per_ns().unwrap_or(0.0);
         info!("Printing stats...");
