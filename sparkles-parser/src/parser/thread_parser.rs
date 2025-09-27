@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::mem::take;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -7,20 +7,20 @@ use log::{debug, error, warn};
 use sparkles_core::local_storage::id_mapping::EventType;
 use sparkles_core::protocol::headers::LocalPacketHeader;
 use tracing_decoder::StreamFrameDecoder;
-use crate::{ForeignRangeEnd, TracingEventId, TracingStats};
-use crate::time_sync::{MonotonicTimeSyncPoints, TimeSyncPoints};
+use crate::{ForeignRangeEnd, EventNameId, TracingStats};
+use crate::time_sync::MonotonicTimeSyncPoints;
 use crate::parsed::{ParsedEvent, ThreadInfo};
 
 pub mod tracing_decoder;
 
-pub type EventNames = IndexMap<TracingEventId, (Rc<str>, EventType)>;
+pub type EventNamesStore = IndexMap<EventNameId, (Rc<str>, EventType)>;
 
 #[derive(Debug, Copy, Clone)]
 pub enum RawTracingEvent {
-    Instant(TracingEventId, u64),
-    RangePart(TracingEventId, u64, u8),
+    Instant(EventNameId, u64),
+    RangePart(EventNameId, u64, u8),
     UnnamedRangeEnd(u64, u8),
-    ForeignRangeEnd(Option<TracingEventId>, u64, u8, u64),
+    ForeignRangeEnd(Option<EventNameId>, u64, u8, u64),
 }
 
 pub struct ThreadParserState {
@@ -30,23 +30,23 @@ pub struct ThreadParserState {
 
     // start timestamp and duration for missed events packet
     missed_events: Vec<(u64, u64)>,
-    unhandled_events: Vec<(RawTracingEvent, u64)>,
+    unhandled_events: VecDeque<(RawTracingEvent, u64)>,
 
     // ---- TMP DATA ----
     state_machine: StreamFrameDecoder,
     // Helper for ranges handling
-    cur_started_ranges: BTreeMap<u8, (TracingEventId, u64)>,
+    cur_started_ranges: BTreeMap<u8, (EventNameId, u64)>,
     // Storage for foreign range ends to be processed later
     foreign_range_ends: Vec<ForeignRangeEnd>,
     zero_diff_cnt: u64,
 
-    id_store: EventNames,
+    id_store: EventNamesStore,
     pub(crate) stats: TracingStats,
 }
 
 pub enum ThreadParserEvent {
     NewEvents(Vec<ParsedEvent>),
-    EventNamesChanged(EventNames),
+    EventNamesChanged(EventNamesStore),
 }
 impl ThreadParserState {
     pub fn new(thread_ord_id: u64) -> Self {
@@ -56,7 +56,7 @@ impl ThreadParserState {
             thread_name: None,
             thread_id: None,
             missed_events: vec![],
-            unhandled_events: vec![],
+            unhandled_events: VecDeque::new(),
             state_machine: StreamFrameDecoder::default(),
             cur_started_ranges: BTreeMap::new(),
             foreign_range_ends: vec![],
@@ -65,7 +65,7 @@ impl ThreadParserState {
             stats: TracingStats::default(),
         }
     }
-    pub fn remove_foreign_range(&mut self, foreign_end_ord_id: u8) -> Option<(TracingEventId, u64)> {
+    pub fn remove_foreign_range(&mut self, foreign_end_ord_id: u8) -> Option<(EventNameId, u64)> {
         self.cur_started_ranges.remove(&foreign_end_ord_id)
     }
 
@@ -157,7 +157,7 @@ impl ThreadParserState {
                 warn!("Parsing issue: Timestamp is outside local packet! diff: {}",  cur_tm - header.end_timestamp);
             }
 
-            self.unhandled_events.push((evt, cur_tm));
+            self.unhandled_events.push_back((evt, cur_tm));
         }
         self.stats.new_events(new_events_len, header.start_timestamp, header.end_timestamp);
         self.state_machine.ensure_buf_end();
@@ -174,23 +174,16 @@ impl ThreadParserState {
         let (start, end) = time_sync_points.src_bounds()?;
 
         let processable_events = if is_final {
-            take(&mut self.unhandled_events)
+            Vec::from(take(&mut self.unhandled_events))
         }
         else {
-            let pos = self.unhandled_events.iter().position(|(_, tm)| {*tm > end}).unwrap_or(self.unhandled_events.len());
-            if pos == 0 {
+            let len_to_handle = self.unhandled_events.partition_point(|(_, tm)| {*tm <= end});
+            if len_to_handle == 0 {
                 return None;
             }
-            else if pos == self.unhandled_events.len() {
-                take(&mut self.unhandled_events)
-            }
-            else {
 
-                let remaining_events = self.unhandled_events.split_off(pos);
-                let processable_events = take(&mut self.unhandled_events);
-                self.unhandled_events = remaining_events;
-                processable_events
-            }
+            // make a split
+            self.unhandled_events.drain(0..len_to_handle).collect()
         };
 
         let mut parsed_events = Vec::with_capacity(processable_events.len() / 2);
@@ -214,7 +207,12 @@ impl ThreadParserState {
             }
         }
 
-        Some(parsed_events)
+        if !parsed_events.is_empty() {
+            Some(parsed_events)
+        }
+        else {
+            None
+        }
     }
 
     fn parse_raw_event(&mut self, raw_event: RawTracingEvent, timestamp: u64) -> Option<ParsedEvent> {

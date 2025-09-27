@@ -8,23 +8,23 @@ pub mod time_sync;
 
 use std::collections::BTreeMap;
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
 use std::thread;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
-use std::thread::{Thread, ThreadId};
 use std::time::{Duration, Instant};
 use indexmap::IndexMap;
 use log::{error, info, warn};
 use sparkles_core::consts::PROTOCOL_VERSION;
 use sparkles_core::protocol::headers::SparklesMachineInfo;
 use crate::packet_decoder::{Packet, PacketDecoder, PacketReadError, ProtocolCounters};
-use crate::parsed::{ExternalChannelInfo, ParsedEvent, ThreadInfo};
-use crate::parser::thread_parser::{EventNames, ThreadParserEvent, ThreadParserState};
+use crate::parsed::{ExternalChannelInfo, ParsedEvent, ParsedExternalEvent, ThreadInfo};
+use crate::parser::thread_parser::{EventNamesStore, ThreadParserEvent, ThreadParserState};
 
 // pub exports
 pub use discovery_wrapper::DiscoveryWrapper;
 use crate::time_sync::{TimeSyncPoints, MonotonicTimeSyncPoints};
-use crate::parser::external_parser::{ExternalParserEvent, ExternalParserState};
+use crate::parser::external_parser::{ExternalEventNamesStore, ExternalParserEvent, ExternalParserState};
 
 pub static PARSER_BUF_SIZE: usize = 1_000_000;
 static SHUTDOWN_SIGNAL: AtomicBool = AtomicBool::new(false);
@@ -96,7 +96,7 @@ impl DerefMut for ExternalEventParsers {
 
 #[derive(Debug)]
 pub struct ForeignRangeEnd {
-    event_id: Option<TracingEventId>,
+    event_id: Option<EventNameId>,
     timestamp: u64,
     ord_id: u8,
     foreign_thread_ord_id: u64,
@@ -212,6 +212,16 @@ impl SparklesParser {
             }
         }
 
+        for ext_state in self.external_event_parsers.values_mut() {
+            if let Some(events) = ext_state.parse_unhandled_events(true) {
+                on_new_event(SparklesParserEvent::ExternalParserEvent(ExternalParserEvent::NewEvents(events), &ext_state.channel_info()) );
+            }
+            else {
+                error!("Don't have enough time sync points to parse any events in external channel {:?}", ext_state.channel_info().channel_name.as_deref()
+                        .unwrap_or(&ext_state.channel_info().ext_ord_id.to_string()));
+            }
+        }
+
         // Process foreign range ends
         let thread_ord_id_keys = self.event_parsers.keys().cloned().collect::<Vec<_>>();
         for thread_ord_id in thread_ord_id_keys {
@@ -293,7 +303,7 @@ impl SparklesParser {
 
             Packet::ExternalSyncPoint(ext_ord_id, local_tm, external_tm) => {
                 let parser_state = self.external_event_parsers.entry(ext_ord_id);
-                parser_state.add_time_sync_point(external_tm, local_tm);
+                parser_state.add_time_sync_point(local_tm, external_tm);
             }
             Packet::ExternalEvents(header, events) => {
                 let id = header.ext_ord_id;
@@ -385,7 +395,8 @@ impl SparklesParser {
 
         let mut trace_res_file = PerfettoTraceFile::new();
 
-        let mut per_thread_info: HashMap<u64, (EventNames, String)> = HashMap::new();
+        let mut per_thread_info: HashMap<u64, (EventNamesStore, String)> = HashMap::new();
+        let mut per_channel_info: HashMap<u32, (ExternalEventNamesStore, Rc<str>)> = HashMap::new();
         let mut cross_thread_ranges = Vec::new();
         self.parse_to_end(packet_decoder, |event| {
             match event {
@@ -442,7 +453,51 @@ impl SparklesParser {
                         }
                     }
                 }
-                _ => {}
+                SparklesParserEvent::ExternalParserEvent(evt, channel_info) => {
+                    match evt {
+                        ExternalParserEvent::NewEvents(events) => {
+                            let thread_id = channel_info.ext_ord_id as u64 + 11_000_000;
+                            trace_res_file.set_thread_name(thread_id, Some(channel_info.channel_name.as_deref().unwrap_or("External channel")));
+
+                            let event_names = if let Some((names, _)) = per_channel_info.get(&(channel_info.ext_ord_id)) {
+                                names
+                            } else {
+                                warn!("Event names for external channel_ord_id={} not found! Using empty names.", channel_info.ext_ord_id);
+                                &IndexMap::new()
+                            };
+
+                            for ev in events {
+                                match ev {
+                                    ParsedExternalEvent::Instant {
+                                        name_id,
+                                        tm
+                                    } => {
+                                        let name = &event_names.get(&name_id).unwrap();
+                                        trace_res_file.add_point_event(name, thread_id, tm);
+                                    }
+                                    ParsedExternalEvent::Range {
+                                        name_id,
+                                        end_name_id,
+                                        start,
+                                        end,
+                                    } => {
+                                        let name = &event_names.get(&name_id).unwrap();
+                                        let display_name = if end_name_id.is_some_and(|id| id != name_id) {
+                                            let end_name = &event_names.get(&end_name_id.unwrap()).unwrap();
+                                            format!("{name} -> {end_name}")
+                                        } else {
+                                            name.to_string()
+                                        };
+                                        trace_res_file.add_range_event(&display_name, thread_id, start, end);
+                                    }
+                                }
+                            }
+                        }
+                        ExternalParserEvent::NewEventNames(event_names) => {
+                            per_channel_info.insert(channel_info.ext_ord_id, (event_names.clone(), channel_info.channel_name.clone().unwrap_or_else(|| "External channel".to_string().into())));
+                        }
+                    }
+                }
             }
         })?;
 
@@ -492,7 +547,8 @@ impl SparklesParser {
     }
 }
 
-pub type TracingEventId = u8;
+pub type EventNameId = u8;
+pub type ExternalEventNameId = u16;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub fn version() {

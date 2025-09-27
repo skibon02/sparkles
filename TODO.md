@@ -22,6 +22,8 @@ Ready:
 🌟 Viewer app (sparkles-gui)
 
 TODO:  
+⚙️ Add runtime name creation support
+⚙️ Add tick information for last thread flush
 ⚙️ External event sources support (GPU events specifically)
 ⚙️ Ensure stability if a lot of threads are spawned over time (additional memory allocation for per-thread data)
 ⚙️ Include git revision into build  

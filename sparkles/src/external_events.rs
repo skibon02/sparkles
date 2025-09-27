@@ -52,7 +52,7 @@ impl ExternalEventsSource {
 
     /// Get u16 value representing certain event name.
     /// If this name was not registered before, it will be registered and assigned a new ordinal ID.
-    pub fn encode_event_name(&mut self, name: StaticNameRepr) -> u16 {
+    pub fn map_event_name(&mut self, name: StaticNameRepr) -> u16 {
         if let Some((_, ord_id)) = self.event_names.get(&name.hash()) {
             *ord_id
         } else {
@@ -102,7 +102,7 @@ impl ExternalEventsSource {
             if *ev_pairing_id == 128 {
                 panic!("pairing_id 128 is invalid in ExternalEventsSource '{}'. Aborting.", self.name);
             }
-            let tm = (*timestamp - min_tm).to_be_bytes();
+            let tm = (*timestamp - min_tm).to_le_bytes();
             let ev_id = ev_name.to_be_bytes();
             buf.extend_from_slice(&tm[..bytes_per_tm]);
             buf.extend_from_slice(&ev_id);

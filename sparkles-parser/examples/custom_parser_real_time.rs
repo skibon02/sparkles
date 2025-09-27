@@ -3,7 +3,7 @@ use log::{info, LevelFilter};
 use simple_logger::SimpleLogger;
 use sparkles_parser::packet_decoder::PacketDecoder;
 use sparkles_parser::{SparklesParser, SparklesParserEvent};
-use sparkles_parser::parser::thread_parser::{EventNames, ThreadParserEvent};
+use sparkles_parser::parser::thread_parser::{EventNamesStore, ThreadParserEvent};
 
 fn main() {
     SimpleLogger::new().with_level(LevelFilter::Info).init().unwrap();
@@ -12,7 +12,7 @@ fn main() {
     let decoder = PacketDecoder::from_socket("127.0.0.1:38338");
     info!("Connected! Waiting for data...");
 
-    let mut per_thread_event_names: IndexMap<u64, EventNames> = IndexMap::new();
+    let mut per_thread_event_names: IndexMap<u64, EventNamesStore> = IndexMap::new();
     SparklesParser::new().parse_to_end(decoder, |event| {
         if let SparklesParserEvent::ThreadParserEvent(evt, info) = event {
             match evt {

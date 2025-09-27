@@ -3,7 +3,7 @@ use ringbuf::consumer::Consumer;
 use ringbuf::producer::Producer;
 use ringbuf::storage::Heap;
 use ringbuf::traits::Observer;
-use crate::{TracingEventId, PARSER_BUF_SIZE};
+use crate::{EventNameId, PARSER_BUF_SIZE};
 use crate::parser::thread_parser::RawTracingEvent;
 
 pub struct StreamFrameDecoder {
@@ -25,15 +25,15 @@ impl Default for StreamFrameDecoder {
 pub enum ParsingState {
     #[default]
     NewFrame,
-    DifTmLen(TracingEventId),
+    DifTmLen(EventNameId),
 
     /// id, dif_tm_len
-    DifTm(TracingEventId, usize),
+    DifTm(EventNameId, usize),
 
-    RangeOrdId(Option<TracingEventId>, usize, bool),
-    RangeTm(Option<TracingEventId>, usize, u8, bool),
-    ForeignThreadIdLen(Option<TracingEventId>, u64, u8),
-    ForeignThreadId(Option<TracingEventId>, u64, u8, usize)
+    RangeOrdId(Option<EventNameId>, usize, bool),
+    RangeTm(Option<EventNameId>, usize, u8, bool),
+    ForeignThreadIdLen(Option<EventNameId>, u64, u8),
+    ForeignThreadId(Option<EventNameId>, u64, u8, usize)
 }
 
 impl StreamFrameDecoder {
