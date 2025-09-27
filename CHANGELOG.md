@@ -20,9 +20,11 @@ For protocol used by both crates there are some guarantees based on version numb
 - Re-export `sparkles-macro` crate from `sparkles`
 - Add platform-specific implementation for monotonic stable clock source. Give access to `monotonic_source()` and `get_monotonic()`.
 - Switch to using `get_monotonic()` in timestamp freq detection.
+- Add external events support via `ExternalEventsSource`
 Examples:
 - Enable UDP multicast by default
 - Add `cross-thread-ranges` example
+- Add `external-events` example
 
 ### [Unreleased] sparkles-core
 - Breaking: Introduce `StaticNameRepr` and use it for storing str-hash pairs for event names. Modify API to use `StaticNameRepr` instead of 2 arguments.
@@ -44,6 +46,7 @@ Examples:
 - Modify parser callback signature to receive single combined argument
 - Implement parsing for external events
 - Use simplified time sync points for time domain synchronization
+- Implement buffering for events until time sync point is received
 
 ## Versions
 ### [0.1.8] sparkles (proto-1.0)
