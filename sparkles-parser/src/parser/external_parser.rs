@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::iter;
 use std::mem::take;
 use std::ops::Deref;
-use std::rc::Rc;
+use std::sync::Arc;
 use auto_enums::auto_enum;
 use indexmap::IndexMap;
 use log::{error, warn};
@@ -13,11 +13,11 @@ use crate::{TimeSyncPoints, ExternalEventNameId};
 use crate::parsed::{ExternalChannelInfo, ParsedExternalEvent};
 use crate::parser::external_parser::raw_decoder::{decode_raw_event, RawExternalTracingEvent};
 
-pub type ExternalEventNamesStore = IndexMap<ExternalEventNameId, Rc<str>>;
+pub type ExternalEventNamesStore = IndexMap<ExternalEventNameId, Arc<str>>;
 
 pub struct ExternalParserState {
     ext_ord_id: u32,
-    channel_name: Option<Rc<str>>,
+    channel_name: Option<Arc<str>>,
     id_store: ExternalEventNamesStore,
 
     started_ranges: BTreeMap<u8, (ExternalEventNameId, u64)>,
@@ -188,7 +188,7 @@ impl ExternalParserState {
             else {
                 something_changed = true;
             }
-            self.id_store.insert(id, Rc::from(name.deref()));
+            self.id_store.insert(id, Arc::from(name.deref()));
         }
 
         // Update channel name

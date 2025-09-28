@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::mem::take;
 use std::ops::Deref;
-use std::rc::Rc;
+use std::sync::Arc;
 use indexmap::IndexMap;
 use log::{debug, error, warn};
 use sparkles_core::local_storage::id_mapping::EventType;
@@ -13,7 +13,7 @@ use crate::parsed::{ParsedEvent, ThreadInfo};
 
 pub mod tracing_decoder;
 
-pub type EventNamesStore = IndexMap<EventNameId, (Rc<str>, EventType)>;
+pub type EventNamesStore = IndexMap<EventNameId, (Arc<str>, EventType)>;
 
 #[derive(Debug, Copy, Clone)]
 pub enum RawTracingEvent {
@@ -107,7 +107,7 @@ impl ThreadParserState {
             else {
                 something_changed = true;
             }
-            self.id_store.insert(id, (Rc::from(name.deref()), *r#type));
+            self.id_store.insert(id, (Arc::from(name.deref()), *r#type));
         }
         #[cfg(feature="self-tracing")]
         drop(g);
@@ -276,7 +276,7 @@ impl ThreadParserState {
                 }
                 else {
                     error!("Did not find event name for id: {id}");
-                    let ev_name: Rc<str> = Rc::from(format!("Unknown RangePart {id}"));
+                    let ev_name: Arc<str> = Arc::from(format!("Unknown RangePart {id}"));
 
                     let parsed = ParsedEvent::Instant {
                         name_id: id,

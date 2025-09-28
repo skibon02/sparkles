@@ -7,22 +7,21 @@
 #[path = "../examples_common.rs"]
 pub mod common;
 
-use std::hint::black_box;
-use std::{env, thread};
-use std::time::{Duration, Instant};
+use std::{thread};
+use std::time::{Duration};
 use clap::Parser;
-use log::info;
+use log::{info, LevelFilter};
 use simple_logger::SimpleLogger;
 use sparkles::{instant_event, range_event_start};
 use sparkles::external_events::ExternalEventsSource;
-use sparkles::monotonic::{get_monotonic, get_monotonic_nanos};
+use sparkles::monotonic::get_monotonic;
 use sparkles_core::{Timestamp, TimestampProvider};
 use sparkles_macro::static_name;
 use crate::common::Args;
 
 
 fn main() {
-    SimpleLogger::new().init().unwrap();
+    SimpleLogger::default().with_level(LevelFilter::Info).init().unwrap();
 
     let args = Args::parse();
     info!("Running with args: {args:?}");

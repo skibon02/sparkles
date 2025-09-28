@@ -11,7 +11,7 @@ use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::thread;
 use std::sync::atomic::AtomicBool;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
 use indexmap::IndexMap;
 use log::{error, info, warn};
@@ -395,8 +395,8 @@ impl SparklesParser {
 
         let mut trace_res_file = PerfettoTraceFile::new();
 
-        let mut per_thread_info: HashMap<u64, (EventNamesStore, String)> = HashMap::new();
-        let mut per_channel_info: HashMap<u32, (ExternalEventNamesStore, Rc<str>)> = HashMap::new();
+        let mut per_thread_info: HashMap<u64, (EventNamesStore, Arc<str>)> = HashMap::new();
+        let mut per_channel_info: HashMap<u32, (ExternalEventNamesStore, Arc<str>)> = HashMap::new();
         let mut cross_thread_ranges = Vec::new();
         self.parse_to_end(packet_decoder, |event| {
             match event {
@@ -449,7 +449,7 @@ impl SparklesParser {
                             }
                         }
                         ThreadParserEvent::EventNamesChanged(event_names) => {
-                            per_thread_info.insert(thread_info.thread_ord_id, (event_names.clone(), thread_info.thread_name.clone().unwrap_or_else(|| "Unknown".to_string())));
+                            per_thread_info.insert(thread_info.thread_ord_id, (event_names.clone(), thread_info.thread_name.clone().unwrap_or_else(|| "Unknown".to_string()).into()));
                         }
                     }
                 }
@@ -505,10 +505,10 @@ impl SparklesParser {
         for (start_name_id, end_name, start_tm, end_tm, start_thread_ord_id, end_thread_id) in cross_thread_ranges {
             let (start_name, thread_name) = if let Some((start_event_names, start_thread_name)) = per_thread_info.get(&start_thread_ord_id) {
                 if let Some((start_name, _)) = start_event_names.get(&start_name_id) {
-                    (start_name.as_ref(), start_thread_name.as_str())
+                    (start_name.as_ref(), start_thread_name.deref())
                 } else {
                     warn!("Could not find start event name for cross-thread range: start_name_id={}", start_name_id);
-                    ("Unknown", start_thread_name.as_str())
+                    ("Unknown", start_thread_name.deref())
                 }
             } else {
                 warn!("Could not find start thread info for cross-thread range: start_thread_ord_id={}", start_thread_ord_id);

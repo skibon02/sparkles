@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 use crate::{EventNameId, ExternalEventNameId};
 
 #[derive(Clone, Debug)]
@@ -71,5 +72,5 @@ pub struct ThreadInfo {
 
 pub struct ExternalChannelInfo {
     pub ext_ord_id: u32,
-    pub channel_name: Option<Rc<str>>,
+    pub channel_name: Option<Arc<str>>,
 }
