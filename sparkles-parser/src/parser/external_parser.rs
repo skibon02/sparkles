@@ -66,7 +66,7 @@ impl ExternalParserState {
         }
 
         // 2) parse unhandled events
-        if let Some(parsed) = self.parse_unhandled_events(false) {
+        if let Some(parsed) = self.parse_unhandled_events(false) && !parsed.is_empty() {
             iter::once(ExternalParserEvent::NewEvents(parsed))
         }
         else {
@@ -98,12 +98,7 @@ impl ExternalParserState {
             }
         }
 
-        if !parsed.is_empty() {
-            Some(parsed)
-        }
-        else {
-            None
-        }
+        Some(parsed)
     }
 
     fn handle_raw_event(&mut self, ev: RawExternalTracingEvent, is_final: bool) -> Option<ParsedExternalEvent> {

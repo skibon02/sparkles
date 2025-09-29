@@ -163,7 +163,7 @@ impl ThreadParserState {
         self.state_machine.ensure_buf_end();
 
         // 2) Parse all unhandled events
-        if let Some(parsed_events) = self.parse_unhandled_events(time_sync_points, false) {
+        if let Some(parsed_events) = self.parse_unhandled_events(time_sync_points, false) && !parsed_events.is_empty() {
             res.push(ThreadParserEvent::NewEvents(parsed_events));
         }
 
@@ -207,12 +207,7 @@ impl ThreadParserState {
             }
         }
 
-        if !parsed_events.is_empty() {
-            Some(parsed_events)
-        }
-        else {
-            None
-        }
+        Some(parsed_events)
     }
 
     fn parse_raw_event(&mut self, raw_event: RawTracingEvent, timestamp: u64) -> Option<ParsedEvent> {

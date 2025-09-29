@@ -11,14 +11,18 @@
 //! 3. Go to https://ui.perfetto.dev/ and drag'n'drop generated `trace.perf` file
 //! 4. Look for ranges labeled with `[worker_X] work_item_N` to see cross-thread spans
 
+#[path = "../examples_common.rs"]
+pub mod common;
+
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use log::LevelFilter;
+use clap::Parser;
+use log::{info, LevelFilter};
 use simple_logger::SimpleLogger;
-use sparkles::config::SparklesConfig;
 use sparkles::{instant_event, range_event_end, range_event_start};
+use crate::common::Args;
 
 struct WorkItem {
     id: u32,
@@ -27,13 +31,11 @@ struct WorkItem {
 
 fn main() {
     SimpleLogger::default().with_level(LevelFilter::Info).init().unwrap();
-    
-    // Initialize sparkles with file output
-    let _finalize_guard = sparkles::init(
-        SparklesConfig::default()
-            // Uncomment to also stream via UDP:
-            // .with_udp_multicast_default()
-    );
+
+    let args = Args::parse();
+    info!("Running with args: {args:?}");
+    let cfg = args.sparkles_cfg();
+    let finalize_guard = sparkles::init(cfg);
 
     sparkles::wait_client_connected();
     

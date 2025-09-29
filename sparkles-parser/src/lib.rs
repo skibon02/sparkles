@@ -8,7 +8,6 @@ pub mod time_sync;
 
 use std::collections::BTreeMap;
 use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
 use std::thread;
 use std::sync::atomic::AtomicBool;
 use std::sync::{mpsc, Arc};
@@ -203,7 +202,7 @@ impl SparklesParser {
         }
         // parse remaining unhandled packets
         for thread_state in self.event_parsers.values_mut() {
-            if let Some(events) = thread_state.parse_unhandled_events(&self.time_sync_points, true) {
+            if let Some(events) = thread_state.parse_unhandled_events(&self.time_sync_points, true) && !events.is_empty() {
                 on_new_event(SparklesParserEvent::ThreadParserEvent(ThreadParserEvent::NewEvents(events), &thread_state.thread_info()) );
             }
             else {
@@ -213,7 +212,7 @@ impl SparklesParser {
         }
 
         for ext_state in self.external_event_parsers.values_mut() {
-            if let Some(events) = ext_state.parse_unhandled_events(true) {
+            if let Some(events) = ext_state.parse_unhandled_events(true) && !events.is_empty() {
                 on_new_event(SparklesParserEvent::ExternalParserEvent(ExternalParserEvent::NewEvents(events), &ext_state.channel_info()) );
             }
             else {
