@@ -42,6 +42,9 @@ impl ExternalParserState {
             unhandled_events: VecDeque::new(),
         }
     }
+    pub fn ord_id(&self) -> u32 {
+        self.ext_ord_id
+    }
     pub fn add_time_sync_point(&mut self, local_tm: u64, external_tm: u64) {
         self.time_sync_points.add_time_sync_point(local_tm, external_tm);
     }
@@ -74,6 +77,9 @@ impl ExternalParserState {
         }
     }
 
+    pub fn unhandled_events_count(&self) -> usize {
+        self.unhandled_events.len()
+    }
     pub fn parse_unhandled_events(&mut self, is_final: bool) -> Option<Vec<ParsedExternalEvent>> {
         let (start, end) = self.time_sync_points.src_bounds()?;
 
@@ -83,7 +89,7 @@ impl ExternalParserState {
         else {
             let len_to_handle = self.unhandled_events.partition_point(|ev| {ev.raw_timestamp() <= end});
             if len_to_handle == 0 {
-                return None;
+                return Some(vec![]);
             }
 
             // make a split

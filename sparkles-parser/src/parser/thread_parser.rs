@@ -65,6 +65,10 @@ impl ThreadParserState {
             stats: TracingStats::default(),
         }
     }
+    pub fn ord_id(&self) -> u64 {
+        self.thread_ord_id
+    }
+
     pub fn remove_foreign_range(&mut self, foreign_end_ord_id: u8) -> Option<(EventNameId, u64)> {
         self.cur_started_ranges.remove(&foreign_end_ord_id)
     }
@@ -170,6 +174,9 @@ impl ThreadParserState {
         res
     }
 
+    pub fn unhandled_events_count(&self) -> usize {
+        self.unhandled_events.len()
+    }
     pub fn parse_unhandled_events(&mut self, time_sync_points: &MonotonicTimeSyncPoints, is_final: bool) -> Option<Vec<ParsedEvent>> {
         let (start, end) = time_sync_points.src_bounds()?;
 
@@ -179,7 +186,7 @@ impl ThreadParserState {
         else {
             let len_to_handle = self.unhandled_events.partition_point(|(_, tm)| {*tm <= end});
             if len_to_handle == 0 {
-                return None;
+                return Some(vec![]);
             }
 
             // make a split

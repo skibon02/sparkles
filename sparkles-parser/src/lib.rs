@@ -205,9 +205,9 @@ impl SparklesParser {
             if let Some(events) = thread_state.parse_unhandled_events(&self.time_sync_points, true) && !events.is_empty() {
                 on_new_event(SparklesParserEvent::ThreadParserEvent(ThreadParserEvent::NewEvents(events), &thread_state.thread_info()) );
             }
-            else {
-                error!("Don't have enough time sync points to parse any events in thread {}", thread_state.thread_name.as_deref()
-                        .unwrap_or(&thread_state.thread_info().thread_ord_id.to_string()));
+            let unhandled_events_count = thread_state.unhandled_events_count();
+            if unhandled_events_count > 0 {
+                warn!("Thread {} still has {unhandled_events_count} unhandled events after final parsing!", thread_state.ord_id());
             }
         }
 
@@ -215,9 +215,9 @@ impl SparklesParser {
             if let Some(events) = ext_state.parse_unhandled_events(true) && !events.is_empty() {
                 on_new_event(SparklesParserEvent::ExternalParserEvent(ExternalParserEvent::NewEvents(events), &ext_state.channel_info()) );
             }
-            else {
-                error!("Don't have enough time sync points to parse any events in external channel {:?}", ext_state.channel_info().channel_name.as_deref()
-                        .unwrap_or(&ext_state.channel_info().ext_ord_id.to_string()));
+            let unhandled_events_count = ext_state.unhandled_events_count();
+            if unhandled_events_count > 0 {
+                warn!("External channel {} still has {unhandled_events_count} unhandled events after final parsing!", ext_state.ord_id());
             }
         }
 
