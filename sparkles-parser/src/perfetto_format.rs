@@ -96,7 +96,7 @@ impl PerfettoTraceFile {
 
         self.trace.packet.push(packet);
     }
-    pub fn set_thread_name(&mut self, thread_id: u64, thread_name: Option<&str>) {
+    pub fn update_thread_name(&mut self, thread_id: u64, thread_name: Option<&str>) {
         let proc_uuid = self.proc_descriptor.uuid.unwrap();
         let entry = self.thread_descriptors.entry(thread_id);
         let entry = entry.or_insert_with(|| {

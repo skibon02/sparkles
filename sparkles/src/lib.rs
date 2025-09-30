@@ -23,7 +23,8 @@ use crate::config::SparklesConfig;
 use crate::global_storage::GlobalStorage;
 
 static GLOBAL_FLUSHING_RUNNING: AtomicBool = AtomicBool::new(false);
-static THREAD_LOCAL_NOTIFICATION: AtomicUsize = AtomicUsize::new(0);
+/// Incremented each time a new client connects. Used to notify thread-local storages about new connection
+static CONNECTED_NOTIFICATION: AtomicUsize = AtomicUsize::new(0);
 
 /// Capture timestamp of the current point in time and create an event with the given name.
 ///

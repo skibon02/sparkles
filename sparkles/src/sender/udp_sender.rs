@@ -146,7 +146,7 @@ impl Sender for UdpSender {
             }
         }
     }
-    fn with_timestamp_freq_request(mut self, timestamp_freq_request: Arc<AtomicBool>) -> Self
+    fn with_connected_notification(mut self, timestamp_freq_request: Arc<AtomicBool>) -> Self
     where
         Self: Sized,
     {

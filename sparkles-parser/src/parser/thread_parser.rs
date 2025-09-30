@@ -25,7 +25,7 @@ pub enum RawTracingEvent {
 
 pub struct ThreadParserState {
     thread_ord_id: u64,
-    pub(crate) thread_name: Option<String>,
+    thread_name: Option<Arc<str>>,
     thread_id: Option<u64>,
 
     // start timestamp and duration for missed events packet
@@ -45,6 +45,7 @@ pub struct ThreadParserState {
 }
 
 pub enum ThreadParserEvent {
+    NewThreadName(Arc<str>),
     NewEvents(Vec<ParsedEvent>),
     EventNamesChanged(EventNamesStore),
 }
@@ -87,14 +88,14 @@ impl ThreadParserState {
 
     #[must_use]
     pub fn got_events(&mut self, header: LocalPacketHeader, events_bytes: Vec<u8>, time_sync_points: &MonotonicTimeSyncPoints) -> Vec<ThreadParserEvent> {
-        let thread_id = header.thread_ord_id;
-
         let mut res = vec![];
 
         //update thread name
         self.thread_id = Some(header.thread_info.thread_id);
-        if let Some(thread_name) = header.thread_info.new_thread_name.clone() {
-            self.thread_name = Some(thread_name);
+        let new_thread_name = header.thread_info.new_thread_name.map(Arc::from);
+        if let Some(thread_name) = new_thread_name && self.thread_name.as_ref() != Some(&thread_name) {
+            self.thread_name = Some(thread_name.clone());
+            res.push(ThreadParserEvent::NewThreadName(thread_name));
         }
 
         // Merge id store

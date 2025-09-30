@@ -5,6 +5,7 @@ use log::warn;
 use parking_lot::Mutex;
 use sparkles_core::protocol::packets::{ExternalEventNames, ExternalEvents};
 use sparkles_core::StaticNameRepr;
+use crate::CONNECTED_NOTIFICATION;
 
 static LAST_EXT_ORD_ID: AtomicU32 = AtomicU32::new(0);
 
@@ -16,6 +17,7 @@ pub struct ExternalEventsSource {
     ext_ord_id: u32,
     event_names: HashMap<u32, (&'static str, u16)>,
     prev_events_len: usize,
+    connected_update_cnt: usize,
 }
 
 impl ExternalEventsSource {
@@ -27,6 +29,7 @@ impl ExternalEventsSource {
             ext_ord_id,
             event_names: HashMap::new(),
             prev_events_len: 0,
+            connected_update_cnt: CONNECTED_NOTIFICATION.load(Ordering::Relaxed),
         }
     }
 
@@ -76,6 +79,14 @@ impl ExternalEventsSource {
             return;
         }
 
+        let connected_update_cnt = CONNECTED_NOTIFICATION.load(Ordering::Relaxed);
+        if connected_update_cnt != self.connected_update_cnt {
+            self.connected_update_cnt = connected_update_cnt;
+            
+            // New connection, resend event names
+            self.prev_events_len = 0;
+        }
+        
         if self.event_names.len() != self.prev_events_len {
             self.prev_events_len = self.event_names.len();
 

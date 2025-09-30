@@ -18,7 +18,7 @@ use sparkles_core::protocol::packets::{send_external_event_names, send_external_
 use sparkles_core::protocol::sender::{ConfiguredSender, Sender, SenderChain};
 use sparkles_macro::static_name;
 use crate::config::SparklesConfig;
-use crate::{flush_thread_local, on_client_connect, GLOBAL_FLUSHING_RUNNING, THREAD_LOCAL_NOTIFICATION};
+use crate::{flush_thread_local, on_client_connect, GLOBAL_FLUSHING_RUNNING, CONNECTED_NOTIFICATION};
 use crate::external_events::{EXTERNAL_EVENTS_NAMES, EXTERNAL_EVENTS_PACKETS, EXTERNAL_EVENTS_SYNC_POINTS};
 use crate::monotonic::get_monotonic_nanos;
 use crate::sender::file_sender::FileSender;
@@ -196,8 +196,8 @@ fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
             }
 
             // Timestamp freq and machine info packets
-            if sender_chain.take_tm_freq_requested() {
-                THREAD_LOCAL_NOTIFICATION.fetch_add(1, Ordering::Relaxed);
+            if sender_chain.take_connected_notification() {
+                CONNECTED_NOTIFICATION.fetch_add(1, Ordering::Relaxed);
 
                 let (monotonic_tm, cur_tm) = freq_detector.next_forced();
                 send_sync_point(&mut sender_chain, monotonic_tm, cur_tm);

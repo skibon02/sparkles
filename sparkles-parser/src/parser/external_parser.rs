@@ -27,6 +27,7 @@ pub struct ExternalParserState {
 }
 
 pub enum ExternalParserEvent {
+    NewChannelName(Arc<str>),
     NewEvents(Vec<ParsedExternalEvent>),
     NewEventNames(ExternalEventNamesStore),
 }
@@ -172,35 +173,37 @@ impl ExternalParserState {
         }
     }
 
-    #[auto_enum(Iterator)]
     pub fn got_event_names(&mut self, names: ExternalEventNames) -> impl Iterator<Item=ExternalParserEvent> {
 
         // Update id store
-        let mut something_changed = false;
+        let mut id_store_changed = false;
         for (id, name) in names.event_names.iter().enumerate() {
             let id = id as ExternalEventNameId;
             if let Some(old_name) = self.id_store.get(&id) {
                 if old_name.as_ref() != name.deref() {
-                    something_changed = true;
+                    id_store_changed = true;
                     error!("ID store mismatch for external channel {:?}#{:?}! ID: {}, Old: {:?}, New: {:?}", self.channel_name, id,
                                             id, old_name, name);
                 }
             }
             else {
-                something_changed = true;
+                id_store_changed = true;
             }
             self.id_store.insert(id, Arc::from(name.deref()));
         }
 
-        // Update channel name
-        self.channel_name = Some(names.channel_name.deref().into());
+        let mut events = Vec::new();
 
-        if something_changed {
-            iter::once(ExternalParserEvent::NewEventNames(self.id_store.clone()))
+        // Update channel name
+        if self.channel_name.as_deref() != Some(names.channel_name.deref()) {
+            self.channel_name = Some(names.channel_name.clone());
+            events.push(ExternalParserEvent::NewChannelName(names.channel_name));
         }
-        else {
-            iter::empty()
+
+        if id_store_changed {
+            events.push(ExternalParserEvent::NewEventNames(self.id_store.clone()));
         }
+        events.into_iter()
     }
     
     pub fn channel_info(&self) -> ExternalChannelInfo {

@@ -65,7 +65,7 @@ impl ParsedExternalEvent {
 
 pub struct ThreadInfo {
     pub thread_id: Option<u64>,
-    pub thread_name: Option<String>,
+    pub thread_name: Option<Arc<str>>,
     pub thread_ord_id: u64
 }
 

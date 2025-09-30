@@ -365,7 +365,7 @@ impl SparklesParser {
         
         let mut total_events = 0;
         for (ord_id, thread) in self.event_parsers.deref() {
-            info!("\tThread: {:?}#{:?}", thread.thread_name, ord_id);
+            info!("\tThread: {:?}#{:?}", thread.thread_info().thread_name, ord_id);
             let stats = thread.stats;
             
             let events_per_sec = stats.total_events as f64 / ((stats.max_timestamp - stats.min_timestamp) as f64 / ticks_per_ns) * 1_000_000_000.0;
@@ -400,10 +400,12 @@ impl SparklesParser {
         self.parse_to_end(packet_decoder, |event| {
             match event {
                 SparklesParserEvent::ThreadParserEvent(evt, thread_info) => {
+                    let thread_id = thread_info.thread_id.unwrap_or(999);
                     match evt {
+                        ThreadParserEvent::NewThreadName(name) => {
+                        }
                         ThreadParserEvent::NewEvents(events) => {
-                            let thread_id = thread_info.thread_id.unwrap_or(999);
-                            trace_res_file.set_thread_name(thread_id, thread_info.thread_name.as_deref());
+                            trace_res_file.update_thread_name(thread_id, thread_info.thread_name.as_deref());
                             #[cfg(feature="local-packet-bounds")]
                             trace_res_file.set_thread_name(999666 + thread_info.thread_ord_id, Some("[not thread] local packets"));
 
@@ -448,15 +450,18 @@ impl SparklesParser {
                             }
                         }
                         ThreadParserEvent::EventNamesChanged(event_names) => {
-                            per_thread_info.insert(thread_info.thread_ord_id, (event_names.clone(), thread_info.thread_name.clone().unwrap_or_else(|| "Unknown".to_string()).into()));
+                            per_thread_info.insert(thread_info.thread_ord_id, (event_names.clone(), thread_info.thread_name.clone().unwrap_or_else(|| "Unknown thread".to_string().into())));
                         }
                     }
                 }
                 SparklesParserEvent::ExternalParserEvent(evt, channel_info) => {
+                    let thread_id = channel_info.ext_ord_id as u64 + 11_000_000;
                     match evt {
+                        ExternalParserEvent::NewChannelName(name) => {
+                            trace_res_file.update_thread_name(thread_id, Some(name.deref()) );
+                        }
                         ExternalParserEvent::NewEvents(events) => {
-                            let thread_id = channel_info.ext_ord_id as u64 + 11_000_000;
-                            trace_res_file.set_thread_name(thread_id, Some(channel_info.channel_name.as_deref().unwrap_or("External channel")));
+                            trace_res_file.update_thread_name(thread_id, Some(channel_info.channel_name.as_deref().unwrap_or("External channel")));
 
                             let event_names = if let Some((names, _)) = per_channel_info.get(&(channel_info.ext_ord_id)) {
                                 names

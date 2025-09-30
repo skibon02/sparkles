@@ -35,7 +35,7 @@ impl Sender for FileSender {
             self.file.write_all(d).unwrap();
         }
     }
-    fn with_timestamp_freq_request(self, _timestamp_freq_request: Arc<AtomicBool>) -> Self
+    fn with_connected_notification(self, _timestamp_freq_request: Arc<AtomicBool>) -> Self
     where
         Self: Sized,
     {

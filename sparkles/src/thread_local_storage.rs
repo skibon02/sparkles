@@ -5,7 +5,7 @@ use std::thread;
 use sparkles_core::config::LocalStorageConfig;
 use sparkles_core::local_storage::{GlobalStorageImpl, LocalStorage};
 use sparkles_core::protocol::headers::{LocalPacketHeader, ThreadInfo};
-use crate::{GLOBAL_FLUSHING_RUNNING, THREAD_LOCAL_NOTIFICATION};
+use crate::{GLOBAL_FLUSHING_RUNNING, CONNECTED_NOTIFICATION};
 use crate::global_storage::{GlobalStorage, GLOBAL_STORAGE, TICKS_PER_MS};
 
 #[derive(Default)]
@@ -42,7 +42,7 @@ impl GlobalStorageImpl for GlobalStorageRef {
     }
 
     fn take_new_update(&mut self) -> bool {
-        let new_update_cnt = THREAD_LOCAL_NOTIFICATION.load(Ordering::Relaxed);
+        let new_update_cnt = CONNECTED_NOTIFICATION.load(Ordering::Relaxed);
         if new_update_cnt > self.last_update_cnt {
             self.last_update_cnt = new_update_cnt;
             true

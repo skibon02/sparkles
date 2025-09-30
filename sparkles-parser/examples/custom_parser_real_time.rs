@@ -16,6 +16,9 @@ fn main() {
     SparklesParser::new().parse_to_end(decoder, |event| {
         if let SparklesParserEvent::ThreadParserEvent(evt, info) = event {
             match evt {
+                ThreadParserEvent::NewThreadName(name) => {
+                    info!("Thread {:?} got name: {name}", info.thread_ord_id);
+                }
                 ThreadParserEvent::NewEvents(evs) => {
                     info!("Got {} events in thread {:?}", evs.len(), info.thread_name);
                     let event_names = per_thread_event_names.entry(info.thread_ord_id).or_default();
