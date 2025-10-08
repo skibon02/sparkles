@@ -36,7 +36,7 @@ static CONNECTED_NOTIFICATION: AtomicUsize = AtomicUsize::new(0);
 ///
 /// Both variants are equivalent
 pub fn instant_event(name: StaticNameRepr) {
-    if IS_INIT.load(Ordering::SeqCst) {
+    if !IS_INIT.load(Ordering::SeqCst) {
         return;
     }
     thread_local_storage::with_thread_local_tracer(|tracer| {
@@ -61,7 +61,7 @@ impl RangeStartGuard {
     /// Both variants are equivalent
     pub fn end(mut self, name: StaticNameRepr) {
         self.ended = true;
-        if IS_INIT.load(Ordering::SeqCst) {
+        if !IS_INIT.load(Ordering::SeqCst) {
             return;
         }
         thread_local_storage::with_thread_local_tracer(|tracer| {
@@ -72,7 +72,7 @@ impl RangeStartGuard {
 
 impl Drop for RangeStartGuard {
     fn drop(&mut self) {
-        if IS_INIT.load(Ordering::SeqCst) {
+        if !IS_INIT.load(Ordering::SeqCst) {
             return;
         }
         if !self.ended {
@@ -90,7 +90,7 @@ impl Drop for RangeStartGuard {
 /// 2) `sparkles::range_event_start(sparkles::static_name!("range start name"))`
 #[must_use]
 pub fn range_event_start(name: StaticNameRepr) -> RangeStartGuard {
-    if IS_INIT.load(Ordering::SeqCst) {
+    if !IS_INIT.load(Ordering::SeqCst) {
         return RangeStartGuard {
             repr: RangeStartRepr::invalid(),
             ended: true,
@@ -106,7 +106,7 @@ pub fn range_event_start(name: StaticNameRepr) -> RangeStartGuard {
 
 /// Update current visible thread name. It will override the previous name when parsed
 pub fn set_cur_thread_name(name: String) {
-    if IS_INIT.load(Ordering::SeqCst) {
+    if !IS_INIT.load(Ordering::SeqCst) {
         return;
     }
     thread_local_storage::with_thread_local_tracer(|tracer| {
@@ -116,7 +116,7 @@ pub fn set_cur_thread_name(name: String) {
 
 /// Manually flush all events from thread-local buffer to the global buffer
 pub fn flush_thread_local() {
-    if IS_INIT.load(Ordering::SeqCst) {
+    if !IS_INIT.load(Ordering::SeqCst) {
         return;
     }
     thread_local_storage::with_thread_local_tracer(|tracer| {
