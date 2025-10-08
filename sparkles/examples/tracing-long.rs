@@ -13,7 +13,7 @@ use std::time::Duration;
 use clap::Parser;
 use log::{info, LevelFilter};
 use simple_logger::SimpleLogger;
-use sparkles_macro::{instant_event, range_event_start};
+use sparkles::{instant_event, range_event_start};
 use crate::common::Args;
 
 fn calc_sqrt(val: f64) -> f64 {
@@ -53,7 +53,7 @@ fn main() {
     let cfg = args.sparkles_cfg();
     let finalize_guard = sparkles::init(cfg
         .with_flush_threshold(32000)
-        .with_thread_flush_attempt_threshold(16000)
+        .with_flush_attempt_threshold(16000)
     );
     
     // Only relevant if using UDP sender

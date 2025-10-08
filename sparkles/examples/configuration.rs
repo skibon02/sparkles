@@ -9,7 +9,7 @@ use log::LevelFilter;
 use simple_logger::SimpleLogger;
 use sparkles::config::SparklesConfig;
 use sparkles::sender::file_sender::FileSenderConfig;
-use sparkles_macro::{instant_event, range_event_start};
+use sparkles::{instant_event, range_event_start};
 
 fn main() {
     SimpleLogger::default().with_level(LevelFilter::Debug).init().unwrap();
@@ -18,7 +18,7 @@ fn main() {
         // Provide custom name
         .with_file_sender(FileSenderConfig::SingleFile(PathBuf::from("trace.sprk")))
         // Increase thread-local flush threshold, so flushing to global storage will be less frequent
-        .with_thread_flush_attempt_threshold(100_000);
+        .with_flush_attempt_threshold(100_000);
     
     let finalize_guard = sparkles::init(config);
     let g = range_event_start!("main()");

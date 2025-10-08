@@ -1,6 +1,6 @@
 [package]
 name = "sparkles-macro"
-version = "0.1.6"
+version = "0.2.0"
 edition = "2021"
 license = "Apache-2.0"
 description = "Macro crate for sparkles tracing library"
@@ -14,3 +14,6 @@ syn = { version = "2.0.77", features = ["full"] }
 
 [lib]
 proc-macro = true
+
+[features]
+included-from-sparkles = []

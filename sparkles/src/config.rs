@@ -10,11 +10,17 @@ pub struct SparklesConfig {
     /// 50MB
     pub global_capacity: usize,
     
-    /// After reaching flush threshold, data will be available for sending (saving to file or sending over UDP)
+    /// After reaching sending threshold, data will be available for sending (saving to file or sending over UDP)
     /// 
     /// ## Default
     /// 64KB
-    pub flush_threshold: usize,
+    pub sending_threshold: usize,
+    
+    /// Timeout trigger for making data available for sending (saving to file or sending over UDP).
+    /// 
+    /// ## Default
+    /// 100ms
+    pub auto_send_ms: usize,
     
     /// Cleanup threshold for the global storage ring buffer. When the buffer reaches this threshold,
     /// it will start to clean up the oldest events
@@ -48,7 +54,8 @@ impl Default for SparklesConfig {
     fn default() -> Self {
         Self {
             global_capacity: 50*1024*1024,
-            flush_threshold: 64*1024,
+            sending_threshold: 64*1024,
+            auto_send_ms: 100,
             cleanup_threshold: 0.9,
             cleanup_bottom_threshold: 0.7,
             local_storage_config: Default::default(),
@@ -71,13 +78,13 @@ impl SparklesConfig {
         self
     }
 
-    /// After reaching flush threshold, data will be available for sending (saving to file or sending over UDP)
+    /// After reaching sending threshold, data will be available for sending (saving to file or sending over UDP)
     ///
     /// ## Default
     /// 64KB
     #[must_use]
-    pub fn with_flush_threshold(mut self, flush_threshold: usize) -> Self {
-        self.flush_threshold = flush_threshold;
+    pub fn with_sending_threshold(mut self, sending_min_size: usize) -> Self {
+        self.sending_threshold = sending_min_size;
         self
     }
 
@@ -112,8 +119,29 @@ impl SparklesConfig {
     /// ## Default
     /// 32KB
     #[must_use]
-    pub fn with_thread_flush_attempt_threshold(mut self, flush_attempt_threshold: usize) -> Self {
+    pub fn with_flush_attempt_threshold(mut self, flush_attempt_threshold: usize) -> Self {
         self.local_storage_config.flush_attempt_threshold = flush_attempt_threshold;
+        self
+    }
+
+    /// Timeout trigger for making data available for sending (saving to file or sending over UDP).
+    ///
+    /// ## Default
+    /// 100ms
+    #[must_use]
+    pub fn with_auto_send_ms(mut self, auto_send_ms: usize) -> Self {
+        self.auto_send_ms = auto_send_ms;
+        self
+    }
+    
+    /// Timeout trigger for flushing the local storage buffer.
+    /// Useful for real-time monitoring to minimize latency.
+    /// 
+    /// ## Default
+    /// 100ms
+    #[must_use]
+    pub fn with_auto_flush_ms(mut self, auto_flush_ms: usize) -> Self {
+        self.local_storage_config.auto_flush_ms = auto_flush_ms;
         self
     }
 
@@ -126,7 +154,7 @@ impl SparklesConfig {
     /// ## Default
     /// 1MB
     #[must_use]
-    pub fn with_thread_flush_threshold(mut self, flush_threshold: usize) -> Self {
+    pub fn with_flush_threshold(mut self, flush_threshold: usize) -> Self {
         self.local_storage_config.flush_threshold = flush_threshold;
         self
     }

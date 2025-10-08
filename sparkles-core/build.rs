@@ -11,6 +11,8 @@ fn main() -> std::io::Result<()> {
     let proto_version = (proto_version[0], proto_version[1]);
 
     fs::write(&out_file_path, format!("pub const PROTOCOL_VERSION: (u8, u8) = {proto_version:?};\n"))?;
+    println!("cargo:rerun-if-changed=PROTOCOL_VERSION");
+    println!("cargo:rerun-if-changed=build.rs");
 
 
     // 2. Check target

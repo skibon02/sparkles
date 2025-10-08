@@ -12,17 +12,41 @@ For protocol used by both crates there are some guarantees based on version numb
 - When major proto version is the same, but decoder's minor version is higher or equal than encoder's, correct parsing is guaranteed.
 
 ### [Unreleased] sparkles
+- Breaking: Switch to using `StaticNameRepr` for event names.
 - Add `unstable-thread-id` feature for platforms without `thread-id` implementation (requires nightly)
 - Fix panic on systems without process_name
-- Examples: Enable UDP multicast by default
+- Config: rename `flush_threshold` to `sending_threshold`
+- Config: add `auto_send_ms` for configuring maximum interval for sending trace data packets, improving responsiveness in real-time parsing scenarios.
+- Re-export `sparkles-macro` crate from `sparkles`
+- Add platform-specific implementation for monotonic stable clock source. Give access to `monotonic_source()` and `get_monotonic()`.
+- Switch to using `get_monotonic()` in timestamp freq detection.
+- Add external events support via `ExternalEventsSource`
+Examples:
+- Enable UDP multicast by default
+- Add `cross-thread-ranges` example
+- Add `external-events` example
 
 ### [Unreleased] sparkles-core
+- Breaking: Introduce `StaticNameRepr` and use it for storing str-hash pairs for event names. Modify API to use `StaticNameRepr` instead of 2 arguments.
 - Add RISC-V 32-bit architecture timestamp support
-- Improve target detection
+- Refactor target detection
 - Add `force-fallback-impl` feature to use `Instant`-based implementation instead of arch-specific
+- Add timeout flush trigger, improving responsiveness in real-time parsing scenarios.
+- Config: add `auto_flush_ms` for configuring maximum interval for flush trigger.
+- Range guard is now Send: You can start and end range event in different threads.
+- Put more stability in `IdMappingState::insert_and_get_id`: return 255 in case of overflow instead of returning wrong ids.
+
+### [Unreleased] sparkles-macro
+- Breaking: Rename `calc_hash` to `static_name`
+- Breaking: Modify macros tor return/use `StaticNameRepr`.
 
 ### [Unreleased] sparkles-parser
 - `SparklesParser` now will send arrays of parsed events to the callback instead of single event.
+- Implement parsing for new cross-thread events type.
+- Modify parser callback signature to receive single combined argument
+- Implement parsing for external events
+- Use simplified time sync points for time domain synchronization
+- Implement buffering for events until time sync point is received
 
 ## Versions
 ### [0.1.8] sparkles (proto-1.0)
@@ -58,7 +82,7 @@ For protocol used by both crates there are some guarantees based on version numb
 - Prepare library for creating custom parsers
 - Unify structure to work the same with UDP and file sources
 - Add "self-tracing" feature to analyze parser performance and packet receive timings
-- Improve time calculation by using timestamp frequency interpolation
+- Improve time calculation by using timestamp frequency interpolation from sync points
 - Receive and parse packets in separate threads
 
 ### [proto-1.0]
@@ -68,7 +92,7 @@ For protocol used by both crates there are some guarantees based on version numb
 - Define packet type as a 32-byte pseudo-random pattern (sha256 of header name) so it can potentially be easier to locate when data is corrupted.
 - Introduce x.x versioning in protocol version. Both encoder and decoder know protocol version it was compiled with.
 - Remove `serde` dependency. Now pure `bincode` is used for packet encoding.
-- Timestamp frequency: send timestamp together with timestamp frequency for better time interpolation in parser.
+- Timestamp frequency: send timestamp together with timestamp frequency for better time synchronization in parser.
 - Use big-endian
 
 

@@ -4,6 +4,13 @@ mod thread_local_storage;
 mod global_storage;
 pub mod sender;
 pub mod config;
+pub mod external_events;
+pub mod monotonic;
+
+pub use sparkles_macro::*;
+pub mod core {
+    pub use sparkles_core::*;
+}
 
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 use parking_lot::{Condvar, Mutex};
@@ -11,30 +18,46 @@ use log::{info, warn};
 pub use global_storage::finalize;
 
 use sparkles_core::local_storage::RangeStartRepr;
+use sparkles_core::StaticNameRepr;
 use crate::config::SparklesConfig;
 use crate::global_storage::GlobalStorage;
 
 static GLOBAL_FLUSHING_RUNNING: AtomicBool = AtomicBool::new(false);
-static THREAD_LOCAL_NOTIFICATION: AtomicUsize = AtomicUsize::new(0);
+/// Incremented each time a new client connects. Used to notify thread-local storages about new connection
+static CONNECTED_NOTIFICATION: AtomicUsize = AtomicUsize::new(0);
 
-/// Use `sparkles-macro::instant_event!("name")` instead
-pub fn instant_event(hash: u32, string: &'static str) {
+/// Capture timestamp of the current point in time and create an event with the given name.
+///
+/// Correct usage:
+/// 1) `sparkles::instant_event!("event name")`
+/// 2) `sparkles::instant_event(sparkles::static_name!("event
+/// name))`
+///
+/// Both variants are equivalent
+pub fn instant_event(name: StaticNameRepr) {
     thread_local_storage::with_thread_local_tracer(|tracer| {
-        tracer.event_instant(hash, string);
+        tracer.event_instant(name);
     });
 }
 
-/// The value is created using macro `sparkles-macro::range_event_start!("name")`
+/// The value is created using macro `sparkles::range_event_start!("event name")`
 pub struct RangeStartGuard {
     repr: RangeStartRepr,
     ended: bool,
 }
 
 impl RangeStartGuard {
-    /// Use `sparkles-macro::range_event_end!(guard, "name")` instead
-    pub fn end(mut self, hash: u32, string: &'static str) {
+    /// If you want to end the range event, simply drop it: `drop(g);`
+    ///
+    /// However, if you want to end the range with a custom name (for example representing operation end reason), you can use this method.
+    /// Correct usage:
+    /// 1) `sparkles::range_event_end!(guard, "range end name")`
+    /// 2) `guard.end(sparkles::static_name!("range end name"))`
+    ///
+    /// Both variants are equivalent
+    pub fn end(mut self, name: StaticNameRepr) {
         thread_local_storage::with_thread_local_tracer(|tracer| {
-            tracer.event_range_end(self.repr, hash, string);
+            tracer.event_range_end(self.repr, name);
         });
         self.ended = true;
     }
@@ -44,18 +67,22 @@ impl Drop for RangeStartGuard {
     fn drop(&mut self) {
         if !self.ended {
             thread_local_storage::with_thread_local_tracer(|tracer| {
-                tracer.event_range_end(self.repr, 0, "");
+                tracer.event_range_end(self.repr, StaticNameRepr::empty());
             });
         }
     }
 }
 
-/// Use `sparkles-macro::range_event_start!("name")` instead
+/// Begin a range event with the given name at current point in time.
+///
+/// Correct usage:
+/// 1) `sparkles::range_event_start!("range start name")`
+/// 2) `sparkles::range_event_start(sparkles::static_name!("range start name"))`
 #[must_use]
-pub fn range_event_start(hash: u32, string: &'static str) -> RangeStartGuard {
+pub fn range_event_start(name: StaticNameRepr) -> RangeStartGuard {
     thread_local_storage::with_thread_local_tracer(|tracer| {
         RangeStartGuard {
-            repr: tracer.event_range_start(hash, string),
+            repr: tracer.event_range_start(name),
             ended: false,
         }
     })
@@ -124,16 +151,6 @@ pub fn init_default() -> FinalizeGuard {
 
     FinalizeGuard
 }
-
-pub(crate) fn calculate_hash(s: &str) -> u32 {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher = DefaultHasher::new();
-    s.hash(&mut hasher);
-    hasher.finish() as u32
-}
-
 
 static SOMEONE_CONNECTED: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
 pub(crate) fn on_client_connect() {

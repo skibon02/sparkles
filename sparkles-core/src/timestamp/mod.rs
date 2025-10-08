@@ -46,8 +46,8 @@ compile_error!("Unsupported platform! Either std or cortex-m are currently suppo
 ///
 /// Maximum value is defined as unsigned integer composed of TIMESTAMP_VALID_BITS binary ones.
 pub trait TimestampProvider {
-    /// Numeric timestamp type, can be either u32 or u64.
-    type TimestampType: Copy + Sized + From<u64>;
+    /// Numeric timestamp type, currently always u64
+    type TimestampType: Copy + Sized;
 
     /// Returns current timestamp from provider.
     fn now() -> Self::TimestampType;

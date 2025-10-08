@@ -9,6 +9,12 @@ pub struct LocalStorageConfig {
     /// 
     /// Default: 1MB
     pub flush_threshold: usize,
+
+    /// Timeout trigger for flushing the local storage buffer.
+    /// Useful for real-time monitoring to minimize latency.
+    ///
+    /// Default: 100ms
+    pub auto_flush_ms: usize,
 }
 
 impl LocalStorageConfig {
@@ -17,6 +23,7 @@ impl LocalStorageConfig {
         Self {
             flush_attempt_threshold: 32*1024,
             flush_threshold: 1024*1024,
+            auto_flush_ms: 100,
         }
     }
 }

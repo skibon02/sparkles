@@ -12,7 +12,7 @@ use crate::protocol::packets::PacketType;
 /// multiple senders can be used to transfer events to remote client or long-term storage.
 pub trait Sender {
     fn send_packet(&mut self, packet_type: PacketType, data: &[&[u8]]);
-    fn with_timestamp_freq_request(self, timestamp_freq_request: Arc<AtomicBool>) -> Self
+    fn with_connected_notification(self, timestamp_freq_request: Arc<AtomicBool>) -> Self
     where
         Self: Sized;
     
@@ -34,18 +34,18 @@ pub trait ConfiguredSender: Sender + Sized {
 #[derive(Default)]
 pub struct SenderChain {
     senders: Vec<Box<dyn Sender>>,
-    timestamp_freq_request: Arc<AtomicBool>,
+    connected_notification: Arc<AtomicBool>,
 }
 
 impl SenderChain {
-    pub fn take_tm_freq_requested(&self) -> bool {
-        self.timestamp_freq_request.swap(false, Ordering::Relaxed)
+    pub fn take_connected_notification(&self) -> bool {
+        self.connected_notification.swap(false, Ordering::Relaxed)
     }
 }
 
 impl SenderChain {
     pub fn with_sender<T: Sender + 'static>(&mut self, sender: T) {
-        self.senders.push(Box::new(sender.with_timestamp_freq_request(self.timestamp_freq_request.clone())));
+        self.senders.push(Box::new(sender.with_connected_notification(self.connected_notification.clone())));
     }
 }
 
@@ -55,11 +55,11 @@ impl Sender for SenderChain {
             sender.send_packet(packet_type, data);
         }
     }
-    fn with_timestamp_freq_request(mut self, timestamp_freq_request: Arc<AtomicBool>) -> Self
+    fn with_connected_notification(mut self, connected_notification: Arc<AtomicBool>) -> Self
     where
         Self: Sized,
     {
-        self.timestamp_freq_request = timestamp_freq_request;
+        self.connected_notification = connected_notification;
         self
     }
     fn poll(&mut self) {

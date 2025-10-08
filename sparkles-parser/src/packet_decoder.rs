@@ -7,7 +7,7 @@ use enumset::EnumSet;
 use log::{debug, info, warn};
 use thiserror::Error;
 use sparkles_core::protocol::headers::{LocalPacketHeader, SparklesMachineInfo};
-use sparkles_core::protocol::packets::{PacketType, RequestPacketType};
+use sparkles_core::protocol::packets::{ExternalEventNames, ExternalEvents, PacketType, RequestPacketType};
 use sparkles_core::protocol::sender::PacketFlags;
 use crate::SHUTDOWN_SIGNAL;
 
@@ -15,10 +15,14 @@ pub enum Packet {
     MachineInfo(SparklesMachineInfo),
     DataBytes(Vec<(LocalPacketHeader, Vec<u8>)>),
     FailedPages(Vec<LocalPacketHeader>),
-    TimestampFreq(u64, u64),
+    SyncPoint(u64, u64),
     GracefulShutdown,
     ConnectionAccepted,
     Hello,
+    ExternalEvents(ExternalEvents, Vec<u8>),
+    ExternalEventNames(ExternalEventNames),
+    /// Ext ord id, local timestamp, external timestamp
+    ExternalSyncPoint(u32, u64, u64),
 }
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -448,13 +452,31 @@ fn parse_packet_from_data(packet_type: PacketType, data: &[u8]) -> ReadResult<Pa
             }
             Ok(Packet::FailedPages(failed_pages))
         }
-        PacketType::TimestampFreq => {
+        PacketType::SyncPoint => {
             let freq = u64::from_be_bytes(data[..8].try_into().unwrap());
             let cur_tm = u64::from_be_bytes(data[8..16].try_into().unwrap());
-            Ok(Packet::TimestampFreq(freq, cur_tm))
+            Ok(Packet::SyncPoint(freq, cur_tm))
         }
         PacketType::ConnectionAccepted => {
             Ok(Packet::ConnectionAccepted)
+        }
+        PacketType::ExternalEvents => {
+            let (header, sz) = bincode::decode_from_slice(data, bincode_config())?;
+            let data = data[sz..].to_vec();
+            Ok(Packet::ExternalEvents(header, data))
+        }
+        PacketType::ExternalEventNames => {
+            let (header, sz) = bincode::decode_from_slice(data, bincode_config())?;
+            if sz != data.len() {
+                warn!("[PacketDecoder] Assertion failed! ExternalEventsNames packet size mismatch!");
+            }
+            Ok(Packet::ExternalEventNames(header))
+        }
+        PacketType::ExternalSyncPoint => {
+            let ext_ord_id = u32::from_be_bytes(data[..4].try_into().unwrap());
+            let local_timestamp = u64::from_be_bytes(data[4..12].try_into().unwrap());
+            let external_timestamp = u64::from_be_bytes(data[12..20].try_into().unwrap());
+            Ok(Packet::ExternalSyncPoint(ext_ord_id, local_timestamp, external_timestamp))
         }
     }
 }

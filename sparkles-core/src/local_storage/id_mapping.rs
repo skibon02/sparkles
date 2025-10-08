@@ -8,6 +8,7 @@
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use bincode::{Decode, Encode};
+use crate::StaticNameRepr;
 
 #[derive(Copy, Clone, Encode, Decode, Debug, PartialEq)]
 pub enum EventType {
@@ -50,7 +51,7 @@ impl U32U8Map {
     }
 
     fn hash(&self, key: u32) -> usize {
-        (core::num::Wrapping(key).0 as usize).wrapping_mul(2654435761) % 256
+        (key.wrapping_mul(2654435761) >> 24) as usize
     }
 
     fn insert(&mut self, key: u32, value: u8) -> Result<(), &'static str> {
@@ -123,18 +124,22 @@ impl IdMappingState {
 
     /// Lookup ID for the provided hash, or insert tag and acquire a new ID
     #[inline(always)]
-    pub fn insert_and_get_id(&mut self, hash: u32, tag: &str, event_type: EventType) -> u8 {
+    pub fn insert_and_get_id(&mut self, name: StaticNameRepr, event_type: EventType) -> u8 {
         let offs = event_type.get_offs();
-        let hash = hash + offs;
+        let hash = name.hash() + offs;
         match self.id_map.get(hash) {
             Some(v) => {
                 v
             },
             None => {
+                if self.last_id == 255 {
+                    return 255;
+                }
                 let last_id = self.last_id;
                 self.last_id += 1;
+                // Unwrap is safe here, as we check for last_id == 255 above
                 self.id_map.insert(hash, last_id).unwrap();
-                self.tags_store.tags.push((tag.to_string(), event_type));
+                self.tags_store.tags.push((name.string.to_string(), event_type));
                 last_id
             }
         }

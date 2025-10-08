@@ -13,7 +13,7 @@ use std::time::Instant;
 use clap::Parser;
 use log::info;
 use simple_logger::SimpleLogger;
-use sparkles_macro::{instant_event, range_event_start};
+use sparkles::{instant_event, range_event_start};
 use crate::common::Args;
 
 fn calc_sqrt(val: f64) -> f64 {
