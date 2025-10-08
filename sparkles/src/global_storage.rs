@@ -142,7 +142,7 @@ impl GlobalStorage {
 fn spawn_sending_task(config: SparklesConfig) -> JoinHandle<()> {
     thread::Builder::new()
         .name("[Sparkles] Sender thread".to_string())
-        .stack_size(10_000)
+        .stack_size(16_000)
         .spawn(move || {
         debug!("[sparkles] Flush thread started!");
 
