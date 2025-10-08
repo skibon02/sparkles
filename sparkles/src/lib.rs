@@ -12,7 +12,7 @@ pub mod core {
     pub use sparkles_core::*;
 }
 
-use std::sync::atomic::{AtomicBool, AtomicUsize};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use parking_lot::{Condvar, Mutex};
 use log::{info, warn};
 pub use global_storage::finalize;
@@ -22,6 +22,7 @@ use sparkles_core::StaticNameRepr;
 use crate::config::SparklesConfig;
 use crate::global_storage::GlobalStorage;
 
+static IS_INIT: AtomicBool = AtomicBool::new(false);
 static GLOBAL_FLUSHING_RUNNING: AtomicBool = AtomicBool::new(false);
 /// Incremented each time a new client connects. Used to notify thread-local storages about new connection
 static CONNECTED_NOTIFICATION: AtomicUsize = AtomicUsize::new(0);
@@ -35,6 +36,9 @@ static CONNECTED_NOTIFICATION: AtomicUsize = AtomicUsize::new(0);
 ///
 /// Both variants are equivalent
 pub fn instant_event(name: StaticNameRepr) {
+    if IS_INIT.load(Ordering::SeqCst) {
+        return;
+    }
     thread_local_storage::with_thread_local_tracer(|tracer| {
         tracer.event_instant(name);
     });
@@ -56,15 +60,21 @@ impl RangeStartGuard {
     ///
     /// Both variants are equivalent
     pub fn end(mut self, name: StaticNameRepr) {
+        self.ended = true;
+        if IS_INIT.load(Ordering::SeqCst) {
+            return;
+        }
         thread_local_storage::with_thread_local_tracer(|tracer| {
             tracer.event_range_end(self.repr, name);
         });
-        self.ended = true;
     }
 }
 
 impl Drop for RangeStartGuard {
     fn drop(&mut self) {
+        if IS_INIT.load(Ordering::SeqCst) {
+            return;
+        }
         if !self.ended {
             thread_local_storage::with_thread_local_tracer(|tracer| {
                 tracer.event_range_end(self.repr, StaticNameRepr::empty());
@@ -80,6 +90,12 @@ impl Drop for RangeStartGuard {
 /// 2) `sparkles::range_event_start(sparkles::static_name!("range start name"))`
 #[must_use]
 pub fn range_event_start(name: StaticNameRepr) -> RangeStartGuard {
+    if IS_INIT.load(Ordering::SeqCst) {
+        return RangeStartGuard {
+            repr: RangeStartRepr::invalid(),
+            ended: true,
+        }
+    }
     thread_local_storage::with_thread_local_tracer(|tracer| {
         RangeStartGuard {
             repr: tracer.event_range_start(name),
@@ -90,6 +106,9 @@ pub fn range_event_start(name: StaticNameRepr) -> RangeStartGuard {
 
 /// Update current visible thread name. It will override the previous name when parsed
 pub fn set_cur_thread_name(name: String) {
+    if IS_INIT.load(Ordering::SeqCst) {
+        return;
+    }
     thread_local_storage::with_thread_local_tracer(|tracer| {
         tracer.set_cur_thread_name(name);
     });
@@ -97,6 +116,9 @@ pub fn set_cur_thread_name(name: String) {
 
 /// Manually flush all events from thread-local buffer to the global buffer
 pub fn flush_thread_local() {
+    if IS_INIT.load(Ordering::SeqCst) {
+        return;
+    }
     thread_local_storage::with_thread_local_tracer(|tracer| {
         tracer.flush(true);
     });
@@ -134,6 +156,7 @@ pub fn init(config: SparklesConfig) -> FinalizeGuard {
         warn!("Global storage was initialized before! Ignoring new config");
     }
     storage_lock.get_or_insert_with(|| GlobalStorage::new(config));
+    IS_INIT.store(true, Ordering::SeqCst);
 
     FinalizeGuard
 }
@@ -148,6 +171,7 @@ pub fn init(config: SparklesConfig) -> FinalizeGuard {
 pub fn init_default() -> FinalizeGuard {
     // Init global storage
     global_storage::GLOBAL_STORAGE.lock().get_or_insert_with(|| GlobalStorage::new(Default::default()));
+    IS_INIT.store(true, Ordering::SeqCst);
 
     FinalizeGuard
 }

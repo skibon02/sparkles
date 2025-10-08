@@ -317,3 +317,12 @@ pub struct RangeStartRepr {
 
     start_thread_id: u64,
 }
+impl RangeStartRepr {
+    pub fn invalid() -> Self {
+        Self {
+            range_start_id: 0,
+            range_ord_id: 0,
+            start_thread_id: 0,
+        }
+    }
+}
