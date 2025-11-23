@@ -129,12 +129,12 @@ static PERF_FREQUENCY: OnceLock<u64> = OnceLock::new();
 
 pub fn get_perf_frequency() -> u64 {
     *PERF_FREQUENCY.get_or_init(|| {
-        use winapi::um::profileapi::QueryPerformanceFrequency;
-        use winapi::shared::ntdef::LARGE_INTEGER;
-
         unsafe {
             #[cfg(target_os = "windows")]
             {
+                use winapi::um::profileapi::QueryPerformanceFrequency;
+                use winapi::shared::ntdef::LARGE_INTEGER;
+
                 let mut freq: LARGE_INTEGER = std::mem::zeroed();
                 if QueryPerformanceFrequency(&mut freq) != 0 {
                     *freq.QuadPart() as u64
