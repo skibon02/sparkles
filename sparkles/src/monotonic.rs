@@ -97,7 +97,7 @@ pub fn get_monotonic_nanos() -> u64 {
                 let counter = get_monotonic();
                 let frequency = get_perf_frequency_windows();
 
-                counter * 1_000_000_000 / frequency
+                counter * (1_000_000_000 / frequency)
             }
             #[cfg(not(target_os = "windows"))]
             {
