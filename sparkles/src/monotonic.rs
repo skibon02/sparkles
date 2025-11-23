@@ -95,7 +95,7 @@ pub fn get_monotonic_nanos() -> u64 {
             #[cfg(target_os = "windows")]
             {
                 let counter = get_monotonic();
-                let frequency = get_perf_frequency_windows();
+                let frequency = get_perf_frequency();
 
                 counter * (1_000_000_000 / frequency)
             }
@@ -125,22 +125,25 @@ fn fallback_get_monotonic() -> u64 {
 }
 
 // Windows-specific: Cache performance frequency for nanosecond conversion
-#[cfg(target_os = "windows")]
 static PERF_FREQUENCY: OnceLock<u64> = OnceLock::new();
 
-#[cfg(target_os = "windows")]
-pub fn get_perf_frequency_windows() -> u64 {
+pub fn get_perf_frequency() -> u64 {
     *PERF_FREQUENCY.get_or_init(|| {
         use winapi::um::profileapi::QueryPerformanceFrequency;
         use winapi::shared::ntdef::LARGE_INTEGER;
 
         unsafe {
-            let mut freq: LARGE_INTEGER = std::mem::zeroed();
-            if QueryPerformanceFrequency(&mut freq) != 0 {
-                *freq.QuadPart() as u64
-            } else {
-                1_000_000_000 // Fallback to 1 GHz if query fails
+            #[cfg(target_os = "windows")]
+            {
+                let mut freq: LARGE_INTEGER = std::mem::zeroed();
+                if QueryPerformanceFrequency(&mut freq) != 0 {
+                    *freq.QuadPart() as u64
+                } else {
+                    1_000_000_000 // Fallback to 1 GHz if query fails
+                }
             }
+            #[cfg(not(target_os = "windows"))]
+            1_000_000_000
         }
     })
 }
